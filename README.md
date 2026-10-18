@@ -49,8 +49,21 @@ to the years in question.
 
 ![153 newspaper clippings from 1819 to 1920, grouped by publication period.](docs/screenshots/5-archive.webp)
 
-Shots 1 and 2 show the bundled example; 3–5 are local collections run on the
-same engine.
+### 6. Browse a collection by colour
+
+Every image floats in 3D at its dominant colour: lightness runs up the axis
+and hue goes around the ring. Switch between OKLab, OKLCH, HSL, A–Z and axes
+you choose, and the images travel to their new places. Search and facets dim
+whatever falls outside, without moving anything. Click an image to fly to it
+and open it.
+
+![The bundled example's 297 frames in OKLCH: hue around a ring labelled from red to magenta, lightness from 0.00 at the bottom to 0.85 at the top.](docs/screenshots/6-colour.webp)
+
+Live link, with the example served as in [Try it](#try-it):
+`http://localhost:8080/?collection=/examples/psychodeli/collection.json&view=float&arrange=oklch`
+
+Shots 1, 2 and 6 show the bundled example; 3–5 are local collections run on
+the same engine.
 
 ## Try it
 
@@ -62,7 +75,8 @@ npx http-server -p 8080 .
 Then open:
 
 - `http://localhost:8080/?collection=/examples/psychodeli/collection.json`
-  for the wall. Search, choose facets, group, press **3D**, or open an item.
+  for the wall. Search, choose facets, group, press **3D** or **✺**, or open
+  an item.
 - `http://localhost:8080/wall/compare.html?collection=/examples/psychodeli/collection.json&observations=/examples/psychodeli/observations.json`
   for a comparison with two observations. Select one to see the items behind
   it.
