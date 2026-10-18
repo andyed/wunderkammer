@@ -461,6 +461,96 @@ const cases = [
     test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
   },
   {
+    name: 'float Axes declumps items off their attribute planes', file: 'wall/float-space.mjs',
+    from: "let free = coords.map(c => c.free);", to: "let free = [true, true, true];",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes moves planes when no colour axis is left', file: 'wall/float-space.mjs',
+    from: "  if (!free.some(Boolean)) free = coords.map(c => c.kind === 'continuous');\n", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes parks missing values at the axis start', file: 'wall/float-space.mjs',
+    from: "slot(`No ${label}`, -MISSING_GAP, missing);", to: "slot(`No ${label}`, 0, missing);",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes hue axis always starts at 0°', file: 'wall/float-space.mjs',
+    from: "hueStart = hueCut(placed.filter(c => c[1] >= GREY_CHROMA).map(c => c[2]));", to: "hueStart = 0;",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes spaces dates by rank', file: 'wall/float-space.mjs',
+    from: "else u[i] = mark.rank; });", to: "else u[i] = model.domain.indexOf(mark.valueLabel) / (model.domain.length - 1); });",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes gives greys a hue', file: 'wall/float-space.mjs',
+    from: "if (c && c[1] < GREY_CHROMA) greys.push(i);", to: "if (c && c[1] < 0) greys.push(i);",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes choice duplicates instead of swapping', file: 'wall/float-view.mjs',
+    from: "    if (other) next[other] = next[axis];\n", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes lost from permalink', file: 'wall/float-view.mjs',
+    from: "...(this.axes ? { axes: { ...this.axes } } : {}), ", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float live link drops the axes', file: 'wall/view-intent.mjs',
+    from: "  if (view.presentation.mode === 'float' && view.float.arrangement === 'axes') for (const axis of AXES) if (view.float.axes?.[axis]) p.set(axis, view.float.axes[axis]);\n", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float link with an impossible axis falls back silently', file: 'wall/wall.mjs',
+    from: "    if (bad) throw new Error(", to: "    if (false) throw new Error(",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float intent accepts two axes on one dimension', file: 'wall/view-intent.mjs',
+    from: "if (new Set(Object.values(axes)).size !== axisParams.length) invalid(", to: "if (false) invalid(",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float view schema accepts two axes on one dimension', file: 'wall/float-space.mjs',
+    from: "return new Set(keys.map(k => axes[k])).size === keys.length;", to: "return true;",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float intent applies axes to another arrangement', file: 'wall/view-intent.mjs',
+    from: "if (p.has('arrange') && p.get('arrange') !== 'axes') invalid(", to: "if (false) invalid(",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes choices survive',
+  },
+  {
+    name: 'float Axes greys stand between the camera and the data', file: 'wall/float-space.mjs',
+    from: "  depth.u = depth.u.map(behind); for (const s of depth.slots) s.u = behind(s.u);\n", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Fit ignores where labels are drawn', file: 'wall/float-view.mjs',
+    from: "      }) && ndc.every(([a, ox, oy, hw, hh]) => {", to: "      }) || ndc.every(([a, ox, oy, hw, hh]) => {",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Axes Depth title covers its slots', file: 'wall/float-space.mjs',
+    from: "[Math.max(1, ...depth.slots.map(s => s.u)) + 0.08, 'above', 24]];", to: "[1, 'above', 12]];",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float labels centre on their anchors', file: 'wall/float-view.mjs',
+    from: "      const [ox, oy] = labelOffset(label); x += ox; y += oy;", to: "",
+    test: 'tests/float-view.test.mjs', pattern: 'float Axes places each item',
+  },
+  {
+    name: 'float Fit shrinks the space until wide labels fit', file: 'wall/float-view.mjs',
+    from: "        return Math.abs(nx) <= 0.98 && Math.abs(ny + oy) + hh <= half;", to: "        return Math.abs(nx + ox) + hw <= 0.98 && Math.abs(ny + oy) + hh <= half;",
+    test: 'tests/float-view.test.mjs', pattern: 'float phone layout',
+  },
+  {
     name: 'sprite floating space ignores cells', file: 'wall/float-view.mjs',
     from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
     test: 'tests/collection-view.test.mjs', pattern: 'the floating space draws sprite-sheet cells',

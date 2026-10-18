@@ -3,7 +3,9 @@ import { test, before, after, afterEach } from 'node:test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { WORLD, RADIUS } from '../wall/float-space.mjs';
+import { WORLD, RADIUS, MISSING_GAP } from '../wall/float-space.mjs';
+import { validateView } from '../wall/view-schema.mjs';
+import { buildFacets } from '../wall/facet-counts.mjs';
 
 // Every cover is a flat field of its own palette colour, so a frame pixel can
 // be checked against the colour that placed the item.
@@ -15,16 +17,34 @@ const colours = [
   ['Light grey', 'cccccc', 'neutral'], ['Pink', 'ffc0cb', 'warm'], ['Brown', '8b4513', 'warm'], ['2 Fast lime', '32cd32', 'cool'],
   ['Éclair', 'f3e5ab', 'warm'],
 ];
-const clips = colours.map(([title, hex, family], i) => ({ id: `f${i}`, url: `urn:float:${hex}`, title, source: 'Fixture', tags: [], captured: '2025-01-14',
-  cover: `/covers/${hex}.svg`, palette: [`#${hex}`, '#123456'], props: { family: [family], dims: ['160x120'] } }));
-clips.push({ id: 'nopal', url: 'urn:float:nopalette', title: 'Unpainted', source: 'Fixture', tags: [], captured: '2025-01-14', cover: '/covers/445566.svg', props: { family: ['neutral'], dims: ['120x120'] } });
-const facets = {}; for (const clip of clips) for (const [key, values] of Object.entries(clip.props)) for (const value of values) { facets[key] ??= {}; facets[key][value] = (facets[key][value] || 0) + 1; }
+// Attributes for the Axes arrangement: capture dates unevenly spaced (so a
+// rank-spaced time axis would show), a year missing on three items, and a
+// ranked attribute. Dates are date-only, so Node and the page parse them alike.
+const DAY = 86400000, captured = i => new Date(Date.UTC(2025, 0, 6) + (i * 9 + (i % 4) * 4) * DAY).toISOString().slice(0, 10);
+const attributes = i => ({ ...(i % 7 === 3 ? {} : { year: String(2019 + i % 4) }), complexity: ['low', 'medium', 'high'][i % 3] });
+const clips = colours.map(([title, hex, family], i) => ({ id: `f${i}`, url: `urn:float:${hex}`, title, source: 'Fixture', tags: [], captured: captured(i),
+  cover: `/covers/${hex}.svg`, palette: [`#${hex}`, '#123456'], props: { family: [family], dims: ['160x120'], ...attributes(i) } }));
+// A burst: two shots taken the same day as Teal, in Teal's colour. They
+// coincide with it in every arrangement, so declumping has work to do.
+for (const n of [1, 2]) clips.push({ ...clips[11], id: `burst${n}`, url: `urn:float:burst${n}`, title: `Burst ${n}`, props: { ...clips[11].props } });
+clips.push({ id: 'nopal', url: 'urn:float:nopalette', title: 'Unpainted', source: 'Fixture', tags: [], captured: captured(21), cover: '/covers/445566.svg', props: { family: ['neutral'], dims: ['120x120'], ...attributes(21) } });
+// Facets as the server derives them, capture months included.
+const facets = buildFacets(clips);
 const key = hex => `urn:float:${hex}`;
 const coolCount = clips.filter(c => c.props.family.includes('cool')).length;
 // Ottosson's published OKLab coordinates for sRGB primaries: an oracle
 // independent of the code under test.
 const OKLAB = { ff0000: [0.627955, 0.224863, 0.125846], '00ff00': [0.866440, -0.233888, 0.179498], '0000ff': [0.452014, -0.032457, -0.311528],
   ffff00: [0.967983, -0.071369, 0.198570], ff00ff: [0.701674, 0.274566, -0.169156], '00ffff': [0.905399, -0.149444, -0.039398], ffffff: [1, 0, 0], '000000': [0, 0, 0] };
+// A second transcription of Ottosson's sRGB → OKLab, kept in the test and
+// checked against the published values above before it is trusted for the
+// fixture colours the table does not list.
+function testLab(hex) {
+  const lin = c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4, [r, g, b] = [0, 2, 4].map(k => lin(parseInt(hex.slice(k, k + 2), 16) / 255));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+const hueOf = ([, a, b]) => (Math.atan2(b, a) * 180 / Math.PI + 360) % 360;
 
 let browser, server, origin; const errors = [], writes = [];
 before(async () => {
@@ -66,7 +86,7 @@ async function clickItem(p, scene, k) {
 test('float arrangement places each item at its dominant colour in OKLab, OKLCH and HSL, and in title order for A–Z', async () => {
   const p = await open(); try {
     let { scene } = await debug(p);
-    assert.equal(scene.arrangement, 'oklab'); assert.equal(scene.itemCount, 22); assert.equal(scene.dimMode, 'brightness');
+    assert.equal(scene.arrangement, 'oklab'); assert.equal(scene.itemCount, clips.length); assert.equal(scene.dimMode, 'brightness');
     const k = scene.stretch; assert.ok(k >= 1 && k <= 4 && Number.isInteger(k * 2), `a/b stretch is a half step in [1, 4], got ${k}`);
     for (const [hex, [L, a, b]] of Object.entries(OKLAB)) near(scene.exact[key(hex)], [a * WORLD * k, (L - 0.5) * WORLD, b * WORLD * k], 2 * k, `OKLab #${hex}`);
     // Declumping may separate near-identical colours, but never by more than 0.6 of a tile edge.
@@ -121,6 +141,85 @@ test('float arrangement places each item at its dominant colour in OKLab, OKLCH 
     assert.ok(renders <= frames + 2, `${renders} renders in ${frames} animation frames: one render loop, not several`);
     for (const [id, t] of Object.entries(done.targets)) near(done.positions[id], t, 0.01, `${id} arrived`);
   } finally { await m.close(); }
+});
+
+test('float Axes places each item by its chosen dimensions, keeps attribute planes exact and gives missing values a labelled slot', async () => {
+  const p = await open('?view=float&arrange=axes&rail=0'); try {
+    let { scene } = await debug(p);
+    const axisOf = (axis, id) => p.selectOption(`.float-axes select[aria-label="${axis} axis"]`, id).then(() => settled(p)).then(() => debug(p)).then(d => d.scene);
+    const coord = (u, k) => k === 2 ? (0.5 - u) * WORLD : (u - 0.5) * WORLD, gap = MISSING_GAP;
+    const at = (id, k) => scene.exact[id][k], target = (id, k) => scene.targets[id][k];
+    // The fixture has capture dates, so time takes Across; lightness and hue follow.
+    assert.equal(scene.arrangement, 'axes'); assert.deepEqual(scene.axes, { across: 'captured', up: 'lightness', depth: 'hue' });
+    assert.equal(await p.locator('.float-axes').isVisible(), true);
+    // Across: capture time, linear (the fixture's dates are unevenly spaced, so rank spacing would fail).
+    const times = clips.map(c => Date.parse(c.captured)), t0 = Math.min(...times), t1 = Math.max(...times);
+    for (const clip of clips) near([at(clip.url, 0)], [coord((Date.parse(clip.captured) - t0) / (t1 - t0), 0)], 0.01, `${clip.title} capture time`);
+    // Up: absolute OKLab lightness, the same height as in the colour arrangements.
+    for (const [hex, [L]] of Object.entries(OKLAB)) near([at(key(hex), 1)], [coord(L, 1)], 2, `lightness #${hex}`);
+    // Depth: one turn of hue from the centre of the emptiest 30° window of the chromatic items.
+    for (const [hex, lab] of Object.entries(OKLAB)) near(testLab(hex), lab, 1e-4, `test transcription of OKLab for #${hex}`);
+    const labs = clips.filter(c => c.palette).map(c => [c.url, testLab(c.palette[0].slice(1))]), chromatic = labs.filter(([, l]) => Math.hypot(l[1], l[2]) >= 0.02);
+    let best = Infinity, start = 0;
+    for (let s0 = 0; s0 < 360; s0++) { const count = chromatic.filter(([, l]) => (hueOf(l) - s0 + 360) % 360 < 30).length; if (count < best) { best = count; start = s0; } }
+    const cut = Math.round((start + 15) / 5) * 5 % 360;
+    assert.equal(scene.axisInfo.depth.hueCut, cut, 'the hue axis starts in the emptiest 30° window');
+    for (const [hex, lab] of Object.entries(OKLAB)) if (Math.hypot(lab[1], lab[2]) >= 0.02) near([at(key(hex), 2)], [coord(((hueOf(lab) - cut + 360) % 360) / 360, 2)], 2, `hue #${hex}`);
+    // Greys have no hue: they wait in their own slot beyond the far end of the
+    // hue axis (behind, never between camera and data), and the palette-less item one slot further.
+    const greys = labs.filter(([, l]) => Math.hypot(l[1], l[2]) < 0.02).map(([id]) => id);
+    assert.equal(greys.length, 5);
+    for (const id of greys) near([at(id, 2)], [coord(1 + gap, 2)], 0.01, `${id} in the grey slot`);
+    near([at(key('nopalette'), 2), at(key('nopalette'), 1)], [coord(1 + 2 * gap, 2), coord(-gap, 1)], 0.01, 'no palette: beyond the greys, below the darkest');
+    assert.ok(scene.labels.includes('Grey, no hue · 5') && scene.labels.includes('No palette · 1'), 'both slots are labelled with their counts');
+    // Declumping moves items only along colour axes: capture time stays exact.
+    for (const clip of clips) assert.equal(target(clip.url, 0), at(clip.url, 0), `${clip.title} keeps its capture time`);
+    for (const [id, exact] of Object.entries(scene.exact)) assert.ok(Math.hypot(...exact.map((v, i) => v - scene.targets[id][i])) <= scene.edge * 0.6 + 1e-3, `${id} stays near its place`);
+    const burst = ['urn:float:2a9d8f', 'urn:float:burst1', 'urn:float:burst2'];
+    assert.ok(burst.every(id => scene.exact[id].join() === scene.exact[burst[0]].join()), 'the burst shares one exact place');
+    assert.ok(new Set(burst.map(id => scene.targets[id].join())).size === 3, 'and is drawn as three separate tiles');
+    for (const [id, t] of Object.entries(scene.targets)) near(scene.positions[id], t, 0.01, `${id} is drawn where it is placed`);
+    // Fit frames the axis titles and the slot labels where they are drawn,
+    // beside their axes, on the stage and clear of the toolbar.
+    const stage = await p.locator('.float-canvas').boundingBox(), bar = await p.locator('.float-toolbar').boundingBox();
+    for (const text of ['Across · capture date', 'Up · lightness (OKLab L)', 'Grey, no hue · 5', 'No palette · 1']) {
+      const label = p.locator('.float-label:not([hidden])', { hasText: text });
+      assert.equal(await label.count(), 1, `${text} is shown`);
+      const b = await label.boundingBox();
+      assert.ok(b.x >= stage.x && b.x + b.width <= stage.x + stage.width && b.y >= stage.y && b.y + b.height <= bar.y, `${text} is on the stage above the toolbar`);
+    }
+
+    // A ranked attribute is planes: one per value, evenly spaced, exact.
+    scene = await axisOf('Across', 'complexity');
+    assert.deepEqual(scene.axes, { across: 'complexity', up: 'lightness', depth: 'hue' });
+    const rank = { low: 0, medium: 1, high: 2 };
+    for (const clip of clips) near([target(clip.url, 0)], [coord((rank[clip.props.complexity] + 0.5) / 3, 0)], 0.001, `${clip.title} stands in its ${clip.props.complexity} plane`);
+    for (const label of ['low · 8', 'medium · 7', 'high · 9']) assert.ok(scene.labels.includes(label), label);
+
+    // Choosing a dimension another axis holds swaps the two.
+    scene = await axisOf('Across', 'lightness');
+    assert.deepEqual(scene.axes, { across: 'lightness', up: 'complexity', depth: 'hue' });
+    for (const [hex, [L]] of Object.entries(OKLAB)) near([at(key(hex), 0)], [coord(L, 0)], 2, `lightness across #${hex}`);
+    assert.equal(await p.locator('.float-axes select[aria-label="Up axis"]').inputValue(), 'complexity');
+
+    // A missing year waits before the axis, labelled; the rest are linear in year.
+    scene = await axisOf('Across', 'year');
+    const years = clips.filter(c => c.props.year).map(c => Number(c.props.year)), y0 = Math.min(...years), y1 = Math.max(...years);
+    for (const clip of clips) near([at(clip.url, 0)], [coord(clip.props.year ? (Number(clip.props.year) - y0) / (y1 - y0) : -gap, 0)], 0.01, `${clip.title} year`);
+    assert.ok(scene.labels.includes('No year · 3'));
+    // With no colour axis left, the planes still hold: only the year axis gives way.
+    scene = await axisOf('Up', 'complexity'); scene = await axisOf('Depth', 'family');
+    assert.deepEqual(scene.axes, { across: 'year', up: 'complexity', depth: 'family' });
+    const family = { cool: 0, neutral: 1, warm: 2 };
+    for (const clip of clips) {
+      near([target(clip.url, 1)], [coord((rank[clip.props.complexity] + 0.5) / 3, 1)], 0.001, `${clip.title} complexity plane`);
+      near([target(clip.url, 2)], [coord((family[clip.props.family[0]] + 0.5) / 3, 2)], 0.001, `${clip.title} family plane`);
+    }
+    assert.deepEqual(Object.values(scene.axisInfo).map(a => a.free), [true, false, false]);
+    // The colour arrangements hide the menus.
+    await p.locator('.float-arrange input[value=oklab]').check(); await settled(p);
+    assert.equal(await p.locator('.float-axes').isVisible(), false);
+  } finally { await p.close(); }
 });
 
 test('float fly-to: clicking an item flies to it and opens the detail pane; the item menu, keys and Fit reach every item', async () => {
@@ -190,7 +289,7 @@ test('float scope dims items outside the search and facets in place, without mov
     assert.equal(await p.locator('#detail.open').count(), 0, 'dimmed items do not take clicks');
     assert.equal(await p.locator('.float-items select option[value]:not([value=""])').count(), coolCount);
     await p.locator('.chip[data-facet=family][data-value=cool]').click();
-    await p.waitForFunction(() => window.wunderkammerFloatDebug().scene.scopeCount === 22); await settled(p);
+    await p.waitForFunction(n => window.wunderkammerFloatDebug().scene.scopeCount === n, clips.length); await settled(p);
     const widened = (await debug(p)).scene;
     assert.deepEqual(widened.positions, before.positions); assert.ok(Object.values(widened.opacity).every(o => o === 1));
   } finally { await p.close(); }
@@ -219,8 +318,47 @@ test('float arrangement and camera survive fresh exact links, live links, URL in
   const bad = await browser.newPage(); try {
     bad.on('pageerror', e => errors.push(e.message));
     await bad.goto(`${origin}/?view=float&arrange=rgb`); await bad.waitForSelector('#link-status:not([hidden])');
-    assert.match(await bad.locator('#link-message').textContent(), /arrange must be one of oklab, oklch, hsl, az/);
+    assert.match(await bad.locator('#link-message').textContent(), /arrange must be one of oklab, oklch, hsl, az, axes/);
   } finally { await bad.close(); }
+});
+
+test('float Axes choices survive exact and live links; a link naming an axis the collection cannot carry is refused', async () => {
+  const p = await open('?view=float&arrange=axes&across=year&up=hue&depth=family&rail=0'); let fresh; try {
+    let s = await debug(p);
+    assert.equal(s.scene.arrangement, 'axes'); assert.deepEqual(s.scene.axes, { across: 'year', up: 'hue', depth: 'family' });
+    assert.deepEqual(s.view.float.axes, { across: 'year', up: 'hue', depth: 'family' });
+    // The exact link carries the axes the reader chose after arriving.
+    await p.selectOption('.float-axes select[aria-label="Depth axis"]', 'complexity'); await settled(p);
+    await p.waitForFunction(() => location.hash.includes('s=')); await p.waitForTimeout(450);
+    fresh = await open(p.url()); s = await debug(fresh);
+    assert.deepEqual(s.scene.axes, { across: 'year', up: 'hue', depth: 'complexity' });
+    assert.deepEqual(s.scene.targets, (await debug(p)).scene.targets, 'the same positions after a fresh load');
+    // The live link names them as across, up and depth.
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await p.locator('#copy-live-view').click();
+    const live = new URL(await p.evaluate(() => navigator.clipboard.readText()));
+    assert.deepEqual(['arrange', 'across', 'up', 'depth'].map(k => live.searchParams.get(k)), ['axes', 'year', 'hue', 'complexity']);
+    // The view schema refuses two axes on one dimension.
+    const twice = structuredClone(s.view); twice.float.axes = { across: 'year', up: 'year' };
+    assert.throws(() => validateView(twice), /Invalid or unsupported view link/);
+  } finally { await fresh?.close(); await p.close(); }
+  // A partial link fills the other axes with the collection's defaults.
+  const partial = await open('?view=float&depth=complexity&rail=0'); try {
+    const { scene } = await debug(partial);
+    assert.equal(scene.arrangement, 'axes'); assert.deepEqual(scene.axes, { across: 'captured', up: 'lightness', depth: 'complexity' });
+  } finally { await partial.close(); }
+  for (const [query, message] of [
+    ['?view=float&arrange=axes&across=nosuch', /across=nosuch is not a dimension this collection can place on an axis/],
+    ['?view=float&arrange=axes&depth=dims', /depth=dims is not a dimension this collection can place on an axis/],
+    ['?view=float&across=year&up=year', /across, up and depth must name different dimensions/],
+    ['?view=float&arrange=hsl&across=year', /across, up and depth apply only to arrange=axes/],
+  ]) {
+    const bad = await browser.newPage(); try {
+      bad.on('pageerror', e => errors.push(e.message));
+      await bad.goto(`${origin}/${query}`); await bad.waitForSelector('#link-status:not([hidden])');
+      assert.match(await bad.locator('#link-message').textContent(), message, query);
+    } finally { await bad.close(); }
+  }
 });
 
 test('float phone layout keeps every control inside the viewport and reachable', async () => {
@@ -229,6 +367,14 @@ test('float phone layout keeps every control inside the viewport and reachable',
     const bar = await p.locator('.float-toolbar').boundingBox();
     assert.ok(bar.x >= 0 && bar.x + bar.width <= 390 && bar.y + bar.height <= 844, 'toolbar inside the viewport');
     for (const label of await p.locator('.float-arrange span').all()) { const b = await label.boundingBox(); assert.ok(b.width >= 44 && b.height >= 44, 'arrangement targets are at least 44 px'); }
+    await p.locator('.float-arrange label:has(input[value=axes])').tap(); await settled(p);
+    for (const select of await p.locator('.float-axes select').all()) {
+      const b = await select.boundingBox(); assert.ok(b.x >= 0 && b.x + b.width <= 390 && b.height >= 44, 'axis menus are inside the viewport and at least 44 px tall');
+    }
+    const axesBar = await p.locator('.float-toolbar').boundingBox(); assert.ok(axesBar.y + axesBar.height <= 844 && axesBar.y > 844 / 2, 'the toolbar with axis menus leaves the upper half of the stage');
+    // Fit frames the labels without shrinking the space to make wide ones fit the narrow stage.
+    const xs = Object.values((await debug(p)).scene.screen).map(([x]) => x);
+    assert.ok(Math.max(...xs) - Math.min(...xs) >= 1, `the space spans at least half the phone's width (${(Math.max(...xs) - Math.min(...xs)).toFixed(2)} of 2)`);
     await p.locator('.float-arrange label:has(input[value=az])').tap(); await settled(p);
     assert.equal((await debug(p)).scene.arrangement, 'az');
     await p.selectOption('.float-items select', key('00ffff')); await settled(p);
