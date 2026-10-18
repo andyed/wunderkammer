@@ -74,7 +74,7 @@ export const keyOfClip = (clip) => clip.url || `id:${clip.id}`;
  *
  * Vault media is already same-origin and is left alone.
  */
-function proxied(src) {
+export function proxied(src) {
   // Same-origin media needs no proxy: root-relative (the server) or relative
   // (the static demo, served from a sub-path). Only absolute remote URLs go through it.
   if (!/^[a-z][a-z0-9+.-]*:/i.test(src) && !src.startsWith('//')) return src;
@@ -88,7 +88,7 @@ function proxied(src) {
  * far tier's 64 px slot takes a 128 px derivative and the near tier's 256 px
  * slot a 640 px one, instead of both downscaling the same file.
  */
-function sourceFor(clip, px) {
+export function sourceFor(clip, px) {
   const variants = (Array.isArray(clip?.coverVariants) ? clip.coverVariants : [])
     .filter(v => typeof v?.src === 'string' && Number.isFinite(v.width) && v.width > 0)
     .sort((a, b) => a.width - b.width);

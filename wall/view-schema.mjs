@@ -1,4 +1,5 @@
 /** Portable view contract, shared by the browser and immutable snapshot endpoint. */
+import { ARRANGEMENTS } from './float-space.mjs';
 export const MAX_VIEW_BYTES = 4 * 1024 * 1024;
 export function canonical(value) {
   return JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v)
@@ -14,7 +15,7 @@ export function validateView(v) {
       || !obj(v.scope) || !str(v.scope.query) || !Array.isArray(v.scope.facets)
       || !v.scope.facets.every(f => Array.isArray(f) && f.length === 2 && str(f[0]) && Array.isArray(f[1]) && f[1].every(str))
       || !(v.scope.branches === null || Array.isArray(v.scope.branches) && v.scope.branches.every(b => obj(b) && str(b.label) && Array.isArray(b.keys) && b.keys.every(str)))
-      || !obj(v.presentation) || !['flat', '3d', 'aisle'].includes(v.presentation.mode) || !str(v.presentation.group)
+      || !obj(v.presentation) || !['flat', '3d', 'aisle', 'float'].includes(v.presentation.mode) || !str(v.presentation.group)
       || !['free', 'bounded', 'edge'].includes(v.presentation.pan)
       || !(v.presentation.sort === undefined || obj(v.presentation.sort) && str(v.presentation.sort.key) && ['asc', 'desc'].includes(v.presentation.sort.direction))
       || !obj(v.flat) || !obj(v.flat.view) || !['x', 'y', 'scale'].every(k => num(v.flat.view[k]))
@@ -43,7 +44,15 @@ export function validateView(v) {
         || Math.hypot(...a.position.map((n, i) => n - a.target[i])) > 1000
         || typeof a.fitted !== 'boolean' || !(a.selection === null || str(a.selection))) fail();
   }
+  if (v.float !== undefined && v.float !== null) {
+    const f = v.float, distance = vec(f.position) && vec(f.target) ? Math.hypot(...f.position.map((n, i) => n - f.target[i])) : NaN;
+    if (!obj(f) || f.version !== 1 || !ARRANGEMENTS.includes(f.arrangement)
+        || !vec(f.position) || !vec(f.target) || [...f.position, ...f.target].some(n => Math.abs(n) > 1e6)
+        || !(distance >= .1 && distance <= 1e5)
+        || typeof f.fitted !== 'boolean' || !(f.selection === null || str(f.selection))) fail();
+  }
   if (v.presentation.mode === 'aisle' && !v.aisle) fail();
+  if (v.presentation.mode === 'float' && !v.float) fail();
   if (v.presentation.mode === '3d' && !v.spatial) fail();
   if (new TextEncoder().encode(canonical(v)).length > MAX_VIEW_BYTES) throw new Error('View exceeds the 4 MiB limit');
   return v;

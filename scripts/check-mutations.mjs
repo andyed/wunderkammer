@@ -376,6 +376,85 @@ const cases = [
     from: ".digest('hex') !== page[2])", to: ".digest('hex') === null)",
     test: 'tests/check-public.test.mjs', pattern: 'whose bytes changed under its name',
   },
+  {
+    name: 'float positions swap OKLab a and b', file: 'wall/float-space.mjs',
+    from: 'x = lab[1] * WORLD * stretch; y = (L - 0.5) * WORLD; z = lab[2] * WORLD * stretch;',
+    to: 'x = lab[2] * WORLD * stretch; y = (L - 0.5) * WORLD; z = lab[1] * WORLD * stretch;',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
+  },
+  {
+    name: 'float arrangement change leaves items where they were', file: 'wall/float-view.mjs',
+    from: 'if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q); continue; }',
+    to: 'if (still) continue;',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
+  },
+  {
+    name: 'float arrangement change jumps instead of travelling', file: 'wall/float-view.mjs',
+    from: 'this.field.moveTo(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q);',
+    to: 'this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q);',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
+  },
+  {
+    name: 'float click opens without flying', file: 'wall/float-view.mjs',
+    from: 'if (fly) this.flyTo(key);', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float fly-to lands under the detail pane', file: 'wall/float-view.mjs',
+    from: 'const obscured = clamp(this.callbacks.obscuredRight?.() || 0, 0, this.width * 0.7);', to: 'const obscured = 0;',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float scope hides instead of dimming', file: 'wall/float-view.mjs',
+    from: "dim = this.dimMode === 'brightness' ? FLOAT_DIM : 0;", to: 'dim = 0;',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float scope never dims', file: 'wall/float-view.mjs',
+    from: 'opacity[i] = this.inScope[i] ? 1 : dim;', to: 'opacity[i] = 1;',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float scope re-places the space around the scope', file: 'wall/wall.mjs',
+    from: 'state.float.setClips(state.clips,state.filtered);', to: 'state.float.setClips(state.filtered,state.filtered);',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float dimming never reaches the GPU', file: 'wall/float-view.mjs',
+    from: 'gl_FragColor = vec4(shown * vOpacity, 1.0);', to: 'gl_FragColor = vec4(shown, 1.0);',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float frames skip sRGB output encoding', file: 'wall/float-view.mjs',
+    from: 'vec3 shown = linearToOutputTexel(vec4(${rgb}, 1.0)).rgb;', to: 'vec3 shown = ${rgb};',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float slot lookup floors an interpolated index', file: 'wall/float-view.mjs',
+    from: "'float slotIndex = floor(vSlot + 0.5);\\n  float row = floor((slotIndex + 0.5) / grid.x);\\n  float col = slotIndex - row * grid.x;'",
+    to: "'float col = mod(vSlot, grid.x);\\n  float row = floor(vSlot / grid.x);'",
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float dimmed items take clicks', file: 'wall/float-view.mjs',
+    from: '      if (!this.inScope[i]) continue;\n      this.centreOf(i, v);\n      const depth', to: '      this.centreOf(i, v);\n      const depth',
+    test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    name: 'float camera lost from permalink', file: 'wall/wall.mjs',
+    from: '    ...((state.floatSnapshot || state.float?.captureView()) ? {float:state.floatSnapshot || state.float?.captureView()} : {}),\n', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement and camera survive',
+  },
+  {
+    name: 'float live link drops the arrangement', file: 'wall/view-intent.mjs',
+    from: "  if (view.presentation.mode === 'float') p.set('arrange', view.float.arrangement);", to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement and camera survive',
+  },
+  {
+    name: 'sprite floating space ignores cells', file: 'wall/float-view.mjs',
+    from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
+    test: 'tests/collection-view.test.mjs', pattern: 'the floating space draws sprite-sheet cells',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));

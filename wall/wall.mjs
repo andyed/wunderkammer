@@ -67,8 +67,9 @@ const state = {
   mode: 'flat',
   get spatialOn() { return this.mode !== 'flat'; },
   aisle: null, aisleSnapshot: null,
+  float: null, floatSnapshot: null,
   spatialLoading: false,
-  flatDirty: false, spatialDirty: false, aisleDirty: true,
+  flatDirty: false, spatialDirty: false, aisleDirty: true, floatDirty: true,
   detailReturn: null, trayReturn: null,
   clipKey: null,
   viewState: new ViewStateStore(),
@@ -86,6 +87,8 @@ const el = {
   view3d: document.getElementById('view-3d'),
   viewAisle: document.getElementById('view-aisle'),
   aisleHost: document.getElementById('aisle-host'),
+  viewFloat: document.getElementById('view-float'),
+  floatHost: document.getElementById('float-host'),
   canvas: document.getElementById('canvas'),
   rail: document.getElementById('rail'),
   search: document.getElementById('search'),
@@ -146,7 +149,7 @@ let hydrating = false, links;
 const brush = createAttributeBrush({
   canvas: el.canvas, stage: el.stage,
   legendHost: document.getElementById('review-tip'),
-  getTiles: () => state.mode === 'aisle' ? [] : [...state.tileEls].map(([key, node]) => ({ node, clip: state.positions.get(key)?.clip })).filter(t => t.clip),
+  getTiles: () => state.mode === 'aisle' || state.mode === 'float' ? [] : [...state.tileEls].map(([key, node]) => ({ node, clip: state.positions.get(key)?.clip })).filter(t => t.clip),
   getClips: () => state.filtered, getSort: () => state.sort,
   getLabel: key => state.facetLabels[key] || (key === 'title' ? 'Title' : key),
   onSort: (key, direction) => setSort(key, direction),
@@ -188,6 +191,7 @@ function captureView() {
     flat: { view: { ...viewport.snapshot(), ...(state.flatDirty ? { fitted: true } : {}) }, stage: { w: r.width, h: r.height }, aspect: state.renderAspect },
     spatial,
     ...((state.aisleSnapshot || state.aisle?.captureView()) ? {aisle:state.aisleSnapshot || state.aisle?.captureView()} : {}),
+    ...((state.floatSnapshot || state.float?.captureView()) ? {float:state.floatSnapshot || state.float?.captureView()} : {}),
     ui: { lens: brush.getPinned(), ...(brush.getPinnedValue()!==null?{highlight:{key:brush.getPinned(),value:brush.getPinnedValue()}}:{}), mediaSource: state.detailMedia, rail: !el.rail.classList.contains('hidden'), context: state.contextVisible, scopeBar: !document.getElementById('scope-bar').hidden,
       focus: state.clips.find(c => c.id === state.selected) ? clipKey(state.clips.find(c => c.id === state.selected)) : state.unresolvedFocus,
       detailWidth: Number.isFinite(preferred) ? Math.min(1, preferred / window.innerWidth) : null },
@@ -209,6 +213,7 @@ async function restoreView(spec, { intent = false } = {}) {
     state.sort = spec.presentation.sort || { key: 'none', direction: 'asc' };
     brush.clear(); brush.setPinned(spec.ui.lens || null, spec.ui.highlight?.value ?? null);
     state.aisleSnapshot=spec.aisle || null;
+    state.floatSnapshot=spec.float || null;
     buildReviewControls();
     state.groupKey = spec.presentation.group; el.group.value = state.groupKey;
     if (el.group.value !== state.groupKey) { const option = document.createElement('option'); option.value = state.groupKey; option.textContent = state.groupKey; el.group.append(option); el.group.value = state.groupKey; }
@@ -231,7 +236,7 @@ async function restoreView(spec, { intent = false } = {}) {
     } else { state.unresolvedFocus = spec.ui.focus; warnings.push('Focused item is unavailable'); } }
     state.layoutAspect = spec.flat.view.fitted ? null : spec.flat.aspect;
     state.filtered = filterScope(state.clips, state);
-    state.flatDirty = state.spatialDirty = state.aisleDirty = true;
+    state.flatDirty = state.spatialDirty = state.aisleDirty = state.floatDirty = true;
     clearTrayReturn();
     state.clusters = contextClusters(state.clips, state.filtered, state.facetLabels, state.active);
     renderScope(); renderContext(); buildFacetRail();
@@ -247,6 +252,10 @@ async function restoreView(spec, { intent = false } = {}) {
       await toggleSpatial(true,'aisle');
       if(!state.aisle?.built)throw new Error('Aisle renderer could not be loaded');
       state.aisle.restoreView(spec.aisle);
+    }else if(spec.presentation.mode==='float'){
+      await toggleSpatial(true,'float');
+      if(!state.float?.built)throw new Error('Floating space could not be loaded');
+      state.float.restoreView(spec.float);state.floatSnapshot=null;
     }else await toggleSpatial(spec.presentation.mode==='3d');
     await frames();
     if (spec.flat.view.fitted) viewport.fit();
@@ -391,7 +400,7 @@ function applyFiltersNow({ restore = null } = {}) {
   perf.span('filter/scope-ui', () => { renderScope(); renderContext(); buildFacetRail(); });
   invalidatePreview(); clearTrayReturn();
   if (state.selected && !state.filtered.some(c => c.id === state.selected)) closeDetail();
-  state.flatDirty = state.spatialDirty = state.aisleDirty = true;
+  state.flatDirty = state.spatialDirty = state.aisleDirty = state.floatDirty = true;
   // Scope is authoritative now; a hidden presentation materializes on entry.
   if (state.spatialOn) { refreshSpatial(); updateReviewOrder(); renderCount(); }
   else render();
@@ -668,24 +677,30 @@ document.getElementById('scope-clear').addEventListener('click', () => {
  * it should pay for, and all of which would make the flat wall's first paint
  * slower for no reason.
  */
-function activeSpatial() { return state.mode==='aisle'?state.aisle:state.spatial; }
+function activeSpatial() { return state.mode==='aisle'?state.aisle:state.mode==='float'?state.float:state.spatial; }
+/** Sort and the attribute lens arrange or recolour the evidence; the 3D piles and the floating space place it by other rules. */
+const lensless = mode => mode==='3d' || mode==='float';
 async function toggleSpatial(on, kind='3d') {
   if (state.spatialLoading) return;
   const next=on?kind:'flat';
-  if (on && !(kind==='aisle'?state.aisle:state.spatial)) {
+  if (on && !(kind==='aisle'?state.aisle:kind==='float'?state.float:state.spatial)) {
     state.spatialLoading = true;
     try {
       const hooks={onOpen:openDetail,onHover:(clip,event)=>hoverPreview(clip,event),onInteraction:invalidatePreview,onHoverEnd:hoverEnd,hoverEnabled:()=>!!state.selected};
       if(kind==='aisle'){
         const {AisleView}=await import('./aisle-view.mjs');
         state.aisle=new AisleView(el.aisleHost,hooks);
+      }else if(kind==='float'){
+        const {FloatView}=await import('./float-view.mjs');
+        // The detail pane overlays the stage's right edge; fly-to lands beside it.
+        state.float=new FloatView(el.floatHost,{...hooks,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0});
       }else{
         const {SpatialView,keyOfClip}=await import('./spatial/spatial-view.mjs');
         state.clipKey=keyOfClip;state.spatial=new SpatialView(el.spHost,hooks);
         await loadViewState();
       }
     } catch(err) {
-      linkNotice(`Could not start ${kind==='aisle'?'the aisle':'the spatial view'}: ${err.message}. The current view remains available.`);
+      linkNotice(`Could not start ${kind==='aisle'?'the aisle':kind==='float'?'the floating space':'the spatial view'}: ${err.message}. The current view remains available.`);
       return;
     } finally { state.spatialLoading=false; }
   }
@@ -693,21 +708,24 @@ async function toggleSpatial(on, kind='3d') {
   document.getElementById('edge-feedback').hidden=on;
   document.getElementById('pan-behavior').disabled=on;
   state.mode=next;document.body.dataset.viewMode=next;
-  endPreview();state.spatial?._endHover?.();state.aisle?.cancelHover();
-  brush.setEnabled(next!=='3d');
-  for(const id of ['sort-key','sort-direction','attribute-lens'])document.getElementById(id).disabled=next==='3d';
+  endPreview();state.spatial?._endHover?.();state.aisle?.cancelHover();state.float?.cancelHover();
+  brush.setEnabled(!lensless(next));
+  for(const id of ['sort-key','sort-direction','attribute-lens'])document.getElementById(id).disabled=lensless(next);
   updateSortDirection();syncLensValue();renderContext();
   if(on)setBackgroundRevealed(false);
-  el.spHost.hidden=next!=='3d';el.aisleHost.hidden=next!=='aisle';
-  state.aisle?.setVisible(next==='aisle');
+  el.spHost.hidden=next!=='3d';el.aisleHost.hidden=next!=='aisle';el.floatHost.hidden=next!=='float';
+  state.aisle?.setVisible(next==='aisle');state.float?.setVisible(next==='float');
   el.canvas.style.visibility=on?'hidden':'';
-  for(const [button,mode] of [[el.view3d,'3d'],[el.viewAisle,'aisle']]){button.setAttribute('aria-pressed',String(next===mode));button.classList.toggle('on',next===mode);}
+  for(const [button,mode] of [[el.view3d,'3d'],[el.viewAisle,'aisle'],[el.viewFloat,'float']]){button.setAttribute('aria-pressed',String(next===mode));button.classList.toggle('on',next===mode);}
   if(!on){if(state.flatDirty){render();viewport.fit();}updateBackgroundVisibility();}
   syncOverview();
   if(on){
-    const refresh=(next==='aisle'?state.aisleDirty:state.spatialDirty)||!activeSpatial()?.built;
+    const refresh=(next==='aisle'?state.aisleDirty:next==='float'?state.floatDirty:state.spatialDirty)||!activeSpatial()?.built;
     if(refresh)refreshSpatial();
-    if(next==='aisle'){
+    if(next==='float'){
+      if(state.floatSnapshot){state.float.restoreView(state.floatSnapshot);state.floatSnapshot=null;}
+      el.floatHost.querySelector('canvas')?.focus({preventScroll:true});
+    }else if(next==='aisle'){
       if(state.aisleSnapshot){state.aisle.restoreView(state.aisleSnapshot);state.aisleSnapshot=null;}
       el.aisleHost.querySelector('canvas')?.focus({preventScroll:true});
     }else if(refresh)document.getElementById('sp-css3d')?.focus();
@@ -749,6 +767,13 @@ arrangeEl?.addEventListener('click', e => {
 });
 
 function refreshSpatial() {
+  if(state.mode==='float'){
+    // The whole corpus floats; scope only dims, so positions keep their meaning.
+    state.floatDirty=false;
+    state.float.setClips(state.clips,state.filtered);
+    state.float.setFocused?.(state.clips.find(c=>c.id===state.selected)?clipKey(state.clips.find(c=>c.id===state.selected)):null);
+    renderScopeEmpty();syncArrangement();return;
+  }
   if(state.mode==='aisle'){
     state.aisleDirty=false;
     state.aisle.setClips(state.filtered,state.groupKey,{sort:state.sort,labelFor:key=>state.facetLabels[key]||key});
@@ -793,7 +818,7 @@ async function loadViewState() {
 }
 
 async function saveViewState() {
-  if (!state.spatial || hydrating || state.mode==='aisle') return;
+  if (!state.spatial || hydrating || state.mode==='aisle' || state.mode==='float') return;
   try {
     const doc = mergePileState({
       ...state.spatial.serialize(),
@@ -1664,7 +1689,7 @@ function buildReviewControls() {
 }
 function syncLensValue() {
   const select=document.getElementById('lens-value'),key=brush.getPinned(),value=brush.getPinnedValue();
-  select.hidden=!key || state.mode==='3d';
+  select.hidden=!key || lensless(state.mode);
   if(!key){select.replaceChildren();return;}
   select.replaceChildren(new Option('All values',''));
   // Values use the filter's canonical form (captured dates are month prefixes).
@@ -1679,10 +1704,10 @@ function updateSortDirection() {
   const asc = state.sort.direction === 'asc';
   button.textContent = asc ? '↑' : '↓';
   button.setAttribute('aria-label', asc ? 'Sort ascending; reverse to descending' : 'Sort descending; reverse to ascending');
-  button.disabled = state.mode==='3d' || state.sort.key === 'none';
+  button.disabled = lensless(state.mode) || state.sort.key === 'none';
 }
 function setSort(key, direction = state.sort.direction) {
-  if (state.mode==='3d') return;
+  if (lensless(state.mode)) return;
   rememberScope();
   clearTrayReturn(); invalidatePreview();
   state.sort = { key, direction };state.aisleDirty=true;
@@ -1895,6 +1920,7 @@ function openDetailNow(clip, { sourceNode = null } = {}) {
   state.unresolvedFocus = null; state.detailMedia = null;
   state.selected = clip.id;
   state.aisle?.setFocused?.(clipKey(clip));
+  state.float?.setFocused?.(clipKey(clip));
   for (const [key, node] of state.tileEls) node.classList.toggle('selected', state.positions.get(key)?.clip.id === clip.id);
   for (const [key, node] of state.bgTileEls) node.classList.toggle('selected', state.bgPositions.get(key)?.clip.id === clip.id);
   renderDetail(clip);
@@ -2280,6 +2306,7 @@ document.getElementById('toggle-rail').addEventListener('click', () => {
 
 el.view3d.addEventListener('click', () => toggleSpatial(state.mode!=='3d'));
 el.viewAisle.addEventListener('click',()=>toggleSpatial(state.mode!=='aisle','aisle'));
+el.viewFloat.addEventListener('click',()=>toggleSpatial(state.mode!=='float','float'));
 window.addEventListener('keydown', (e) => {
   // '3' only when not typing — the search box owns every printable key.
   if (e.key === '3' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement || e.target.isContentEditable)
@@ -2366,5 +2393,6 @@ document.getElementById('copy-live-view').addEventListener('click',async()=>{try
 // Read-only diagnostics for the explicit-target rendering proof.
 window.wunderkammer = Object.freeze({ export: exportView });
 window.wunderkammerAisleDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.aisle?.getDiagnostics()||null});
+window.wunderkammerFloatDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.float?.getDiagnostics()||null});
 document.getElementById('new-view').addEventListener('click', () => { links.newView(); linkNotice(''); });
 boot();

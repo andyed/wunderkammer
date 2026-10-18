@@ -380,6 +380,32 @@ test('the 3D view draws sprite-sheet cells into its atlas', async () => {
   } finally { await page.close(); }
 });
 
+test('the floating space draws sprite-sheet cells into its atlas', async () => {
+  apiHits.length = 0; mediaHits.length = 0;
+  const page = await newPage();
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite.json&view=float`);
+    await ready(page);
+    await page.waitForFunction(() => { const s = window.wunderkammerFloatDebug?.().scene; return s?.built && s.farResident === s.itemCount && s.loading === 0; }, null, { timeout: 20000 });
+    const atlas = await page.evaluate(() => {
+      const v = window.__cwFloat, a = v.field.atlases, out = [];
+      for (let i = 0; i < v.count; i++) {
+        const r = a.far.slotRect(a.farSlot[i]);
+        out.push({ n: Number(v.clips[i].title.match(/Cover (\d+)/)[1]), rgb: [...a.far.ctx.getImageData(r.x + (r.w >> 1), r.y + (r.h >> 1), 1, 1).data.slice(0, 3)] });
+      }
+      return { failed: a._failed.size, out };
+    });
+    assert.equal(atlas.failed, 0);
+    assert.equal(atlas.out.length, 30);
+    for (const t of atlas.out) assert.ok(near(t.rgb, spriteColor(t.n)), `atlas tile for Cover ${t.n} is ${t.rgb}, its cell is ${spriteColor(t.n)}`);
+    assert.deepEqual(mediaHits, [], 'no per-item files');
+    assert.deepEqual(apiHits, []);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('compare.html shows sprite-sheet cells as evidence thumbnails and on the album walls', async () => {
   apiHits.length = 0; mediaHits.length = 0;
   const page = await newPage();
