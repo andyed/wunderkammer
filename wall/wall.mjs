@@ -32,6 +32,7 @@ import { ViewStateStore, mergePileState } from './view-state.mjs';
 import { perf } from './instrument.mjs';
 import { collectionSource, loadCollection, collectionViewState, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
+import { AXES, axisDimensions } from './float-space.mjs';
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
@@ -199,6 +200,12 @@ function captureView() {
 }
 async function restoreView(spec, { intent = false } = {}) {
   if (spec.corpus.id !== state.corpus.id) throw new Error('This link belongs to a different corpus');
+  // An axis this collection cannot carry is refused, never silently replaced by a default.
+  if (spec.float?.arrangement === 'axes' && spec.float.axes) {
+    const offered = new Set(axisDimensions(state.clips, attributeKeys(), key => state.facetLabels[key]).map(d => d.id));
+    const bad = AXES.find(axis => spec.float.axes[axis] !== undefined && !offered.has(spec.float.axes[axis]));
+    if (bad) throw new Error(`${bad}=${spec.float.axes[bad]} is not a dimension this collection can place on an axis`);
+  }
   hydrating = true; document.body.inert = true; document.body.dataset.restoring = 'true'; cancelAnimationFrame(filterFrame); viewport.resetEdge();
   const warnings = [];
   if (spec.corpus.revision !== state.corpus.revision) warnings.push('Corpus changed since this link was made');
@@ -693,7 +700,7 @@ async function toggleSpatial(on, kind='3d') {
       }else if(kind==='float'){
         const {FloatView}=await import('./float-view.mjs');
         // The detail pane overlays the stage's right edge; fly-to lands beside it.
-        state.float=new FloatView(el.floatHost,{...hooks,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0});
+        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0});
       }else{
         const {SpatialView,keyOfClip}=await import('./spatial/spatial-view.mjs');
         state.clipKey=keyOfClip;state.spatial=new SpatialView(el.spHost,hooks);
@@ -1674,8 +1681,10 @@ function buildGroupOptions() {
   }
 }
 
+/** Attributes a reader can sort, lens or place on a floating-space axis by, in facet order. */
+const attributeKeys = () => [...new Set([...facetOrder, ...Object.keys(state.facets)].filter(k => !FACET_BLOCKLIST.has(k) && Object.keys(state.facets[k] || {}).length))];
 function buildReviewControls() {
-  const keys = ['title', ...new Set([...facetOrder, ...Object.keys(state.facets)].filter(k => !FACET_BLOCKLIST.has(k) && Object.keys(state.facets[k] || {}).length))];
+  const keys = ['title', ...attributeKeys()];
   for (const [id, value, label] of [['sort-key', state.sort.key, 'Original order'], ['attribute-lens', brush.getPinned() || 'none', 'No lens']]) {
     const select = document.getElementById(id); select.replaceChildren();
     for (const key of ['none', ...keys, ...(!keys.includes(value) && value !== 'none' ? [value] : [])]) {

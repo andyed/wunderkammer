@@ -6,18 +6,48 @@
  * nearness is colour similarity; in A–Z it sits in reading order. HotSauce
  * floated a folder tree in 3D and the depth restated what the tree already
  * said. Here the third axis is a third colour coordinate, or, for A–Z, absent:
- * an alphabetical order has one dimension and the wall says so.
+ * an alphabetical order has one dimension and the wall says so. In Axes each
+ * axis carries one chosen dimension, a colour coordinate or an attribute, and
+ * an item without a value waits in a labelled slot before the axis starts.
  */
+import { attributeModel, attributeMark } from './attributes.mjs';
 
-/** World units per OKLab unit of lightness. */
+/** World units per OKLab unit of lightness, and the length of every Axes axis. */
 export const WORLD = 2000;
 /** Upper bound on the a/b stretch (see chromaStretch). */
 export const MAX_STRETCH = 4;
 /** Cylinder radius for OKLCH and HSL. */
 export const RADIUS = 700;
-export const ARRANGEMENTS = Object.freeze(['oklab', 'oklch', 'hsl', 'az']);
-export const ARRANGEMENT_LABELS = Object.freeze({ oklab: 'OKLab', oklch: 'OKLCH', hsl: 'HSL', az: 'A–Z' });
+export const ARRANGEMENTS = Object.freeze(['oklab', 'oklch', 'hsl', 'az', 'axes']);
+export const ARRANGEMENT_LABELS = Object.freeze({ oklab: 'OKLab', oklch: 'OKLCH', hsl: 'HSL', az: 'A–Z', axes: 'Axes' });
 export const isArrangement = value => ARRANGEMENTS.includes(value);
+
+/** The three Axes slots, in toolbar and URL order. */
+export const AXES = Object.freeze(['across', 'up', 'depth']);
+export const AXIS_LABELS = Object.freeze({ across: 'Across', up: 'Up', depth: 'Depth' });
+/** Colour dimensions, from `palette[0]`. These names are reserved: a facet
+ * with one of them as its key is not offered as an axis. */
+export const COLOUR_DIMENSIONS = Object.freeze(['lightness', 'chroma', 'hue']);
+const COLOUR_LABELS = { lightness: 'Lightness', chroma: 'Chroma', hue: 'Hue' };
+/** A categorical facet becomes planes only up to this many values: beyond it
+ * the planes are thinner than a tile and their labels collide. */
+export const MAX_PLANES = 12;
+/** Where an item without a value waits: this share of the axis length before
+ * the axis starts. The hue axis uses two slots, greys then no palette. */
+export const MISSING_GAP = 0.12;
+/** Below this OKLCH chroma a hue angle is noise (the reading order uses it too). */
+export const GREY_CHROMA = 0.02;
+const RESERVED = new Set(['__proto__', 'prototype', 'constructor']);
+/** A syntactically valid dimension id: a colour name or a facet key. */
+export const isAxisName = value => typeof value === 'string' && value.length > 0 && value.length <= 128 && value.trim() === value && !RESERVED.has(value);
+/** `{ across?, up?, depth? }` with valid, distinct dimension ids. Any slot may be
+ * left out; the view fills it with the collection's default. */
+export function validAxes(axes) {
+  if (!axes || typeof axes !== 'object' || Array.isArray(axes)) return false;
+  const keys = Object.keys(axes);
+  if (!keys.every(k => AXES.includes(k)) || !keys.every(k => isAxisName(axes[k]))) return false;
+  return new Set(keys.map(k => axes[k])).size === keys.length;
+}
 
 const HEX = /^#([0-9a-f]{6})$/i;
 /** `#rrggbb` → [r, g, b] in 0..1, or null. */
@@ -107,12 +137,13 @@ export function chromaStretch(labs) {
  *   order      — indices in the arrangement's own reading order (hue, or title)
  * plus bounds, labels and guide geometry for the renderer.
  */
-export function arrange(clips, arrangement, { edge = tileEdge(clips.length) } = {}) {
+export function arrange(clips, arrangement, { edge = tileEdge(clips.length), axes, labelFor } = {}) {
   if (!isArrangement(arrangement)) throw new Error(`Unknown arrangement: ${arrangement}`);
   const n = clips.length, positions = new Float32Array(n * 3), sizes = new Float32Array(n * 2);
   const labels = [], guides = [];
   let order, unplaced = [], stretch = 1;
   for (let i = 0; i < n; i++) { const [w, h] = sized(aspectOf(clips[i]), edge); sizes[i * 2] = w; sizes[i * 2 + 1] = h; }
+  if (arrangement === 'axes') return arrangeAxes(clips, positions, sizes, edge, axes, labelFor);
   if (arrangement === 'az') {
     order = alphabetical(clips, positions, sizes, edge, labels);
   } else {
@@ -205,6 +236,255 @@ function shelve(clips, indices, positions, exact, sizes, edge, labels) {
   labels.push({ text: `No palette · ${indices.length}`, kind: 'shelf', point: [-(cols / 2 + 0.6) * cell, top, 0] });
 }
 
+/* ------------------------------------------------------------------ Axes --- */
+
+const TIME_KEYS = ['captured', 'year', 'decade'];
+const keyLabel = (labelFor, key) => (typeof labelFor === 'function' && labelFor(key)) || key;
+/** The captured facet filters by month, but its axis places the exact time. */
+const axisLabel = (labelFor, key) => key === 'captured' ? 'capture date' : keyLabel(labelFor, key);
+
+/**
+ * One attribute as an axis, or null when it cannot be one. Ordered facets
+ * (attributeModel) with a numeric or date range are continuous; ranked ones
+ * (complexity, compression) and single-valued categoricals of 2–12 values are
+ * planes. A multi-valued categorical (colour family, genre) is refused: an
+ * item can stand in only one plane, and choosing one of its values would be
+ * arbitrary.
+ */
+export function attributeAxis(clips, key, label = key) {
+  if (!isAxisName(key) || COLOUR_DIMENSIONS.includes(key)) return null;
+  const model = attributeModel(clips, key, label);
+  if (model.domain.length < 2) return null;
+  if (model.kind === 'ordered') {
+    const continuous = model.min != null && model.max != null && model.max > model.min;
+    return { id: key, label, group: 'attribute', kind: continuous ? 'continuous' : 'planes', model };
+  }
+  if (model.domain.length > MAX_PLANES || model.multiValueRule) return null;
+  return { id: key, label, group: 'attribute', kind: 'planes', model };
+}
+
+/** Facet keys found on the clips themselves, for callers with no facet list. */
+export function clipAttributeKeys(clips) {
+  const keys = new Set(clips.some(c => c?.captured) ? ['captured'] : []);
+  for (const clip of clips) for (const key of Object.keys(clip?.props || {})) keys.add(key);
+  return [...keys];
+}
+
+/** Every dimension the collection can put on an axis: the three colour
+ * coordinates, then each attribute `attributeAxis` accepts, in `keys` order. */
+export function axisDimensions(clips, keys = clipAttributeKeys(clips), labelFor) {
+  const dims = COLOUR_DIMENSIONS.map(id => ({ id, label: COLOUR_LABELS[id], group: 'colour', kind: 'continuous' }));
+  for (const key of new Set(keys)) {
+    const dim = attributeAxis(clips, key, axisLabel(labelFor, key));
+    if (dim) dims.push({ id: dim.id, label: dim.label, group: 'attribute', kind: dim.kind });
+  }
+  return dims;
+}
+
+/**
+ * A full `{ across, up, depth }` from a partial request. A requested id the
+ * collection offers is kept; every other slot takes its default, skipping
+ * ids already used. Across defaults to time (captured, year, decade), then any
+ * other attribute, then chroma; up to lightness; depth to hue.
+ */
+export function resolveAxes(dims, requested = {}) {
+  const ids = dims.map(d => d.id), offered = new Set(ids), used = new Set(), out = {};
+  for (const axis of AXES) {
+    const want = requested?.[axis];
+    if (offered.has(want) && !used.has(want)) { out[axis] = want; used.add(want); }
+  }
+  const attributes = dims.filter(d => d.group === 'attribute');
+  const byKind = kind => attributes.filter(d => d.kind === kind).map(d => d.id);
+  const prefer = {
+    across: [...TIME_KEYS, ...byKind('continuous'), ...byKind('planes'), 'chroma', 'lightness', 'hue'],
+    up: ['lightness', 'chroma', 'hue', ...ids],
+    depth: ['hue', 'chroma', 'lightness', ...ids],
+  };
+  for (const axis of AXES) if (!out[axis]) {
+    const pick = prefer[axis].find(id => offered.has(id) && !used.has(id));
+    out[axis] = pick; used.add(pick);
+  }
+  return out;
+}
+
+/**
+ * The hue where the hue axis starts: the centre of the emptiest 30° window of
+ * the collection's chromatic items, so no populated hue family is split across
+ * the two ends of the axis. Rounded to 5°; ties go to the lowest angle.
+ */
+export function hueCut(hues) {
+  if (!hues.length) return 0;
+  const bins = new Array(360).fill(0);
+  for (const h of hues) bins[Math.floor(((h % 360) + 360) % 360)]++;
+  let best = Infinity, cut = 0;
+  for (let start = 0; start < 360; start++) {
+    let count = 0; for (let k = 0; k < 30; k++) count += bins[(start + k) % 360];
+    if (count < best) { best = count; cut = start + 15; }
+  }
+  return (Math.round(cut / 5) * 5) % 360;
+}
+
+/** Up to about six round values in [lo, hi]. */
+function niceTicks(lo, hi) {
+  const span = hi - lo; if (!(span > 0)) return [lo];
+  const raw = span / 5, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Number(v.toFixed(10)));
+  return out;
+}
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Month or year starts between two timestamps (milliseconds, UTC dates).
+ * Months are short ("Dec"); January also names its year. */
+function dateTicks(lo, hi) {
+  const a = new Date(lo), b = new Date(hi), months = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+  const out = [];
+  if (months <= 24) {
+    const step = months <= 12 ? 1 : 3;
+    for (let y = a.getUTCFullYear(), m = a.getUTCMonth(); ; m++) {
+      if (m > 11) { m = 0; y++; }
+      const t = Date.UTC(y, m, 1); if (t > hi) break;
+      if (t >= lo && m % step === 0) out.push([t, m ? MONTHS[m] : `${MONTHS[m]} ${y}`]);
+    }
+  } else {
+    for (const year of niceTicks(a.getUTCFullYear(), b.getUTCFullYear())) {
+      const t = Date.UTC(year, 0, 1); if (t >= lo && t <= hi) out.push([t, String(year)]);
+    }
+  }
+  return out;
+}
+
+/**
+ * One axis's coordinate for every clip, as u: 0 at the axis start, 1 at its
+ * end, negative in a missing-value slot. Also the slots, ticks, title, and
+ * whether declumping may move items along it (colour axes only).
+ */
+function axisCoordinates(clips, id, labelFor, colours) {
+  const n = clips.length, u = new Float64Array(n), slots = [], ticks = [];
+  const slot = (text, at, members) => { for (const i of members) u[i] = at; if (members.length) slots.push({ text: `${text} · ${members.length}`, u: at, count: members.length }); };
+  if (COLOUR_DIMENSIONS.includes(id)) {
+    const lch = colours.map(rgb => rgb ? oklch(oklab(rgb)) : null), placed = lch.filter(Boolean);
+    const none = [...lch.keys()].filter(i => !lch[i]);
+    let title, hueStart = null, greys = [];
+    if (id === 'lightness') {
+      // Absolute OKLab L, as in the colour arrangements: switching between
+      // them and Axes with lightness up moves no item vertically.
+      lch.forEach((c, i) => { if (c) u[i] = c[0]; });
+      if (placed.length) {
+        const lo = Math.min(...placed.map(c => c[0])), hi = Math.max(...placed.map(c => c[0]));
+        ticks.push({ u: hi, text: `L ${hi.toFixed(2)} · lightest` }, { u: lo, text: `L ${lo.toFixed(2)} · darkest` });
+        for (const v of [0.2, 0.4, 0.6, 0.8]) if (v > lo + 0.05 && v < hi - 0.05) ticks.push({ u: v, text: `L ${v.toFixed(1)}` });
+      }
+      title = 'lightness (OKLab L)';
+    } else if (id === 'chroma') {
+      // √ of chroma relative to the most saturated item: covers crowd at low
+      // chroma, and the root spreads them where differences can be read.
+      const cmax = Math.max(1e-6, ...placed.map(c => c[1]));
+      lch.forEach((c, i) => { if (c) u[i] = Math.sqrt(c[1] / cmax); });
+      ticks.push({ u: 1, text: `C ${cmax.toFixed(2)} · most saturated` }, { u: 0, text: 'C 0 · grey' });
+      for (const v of niceTicks(0, cmax)) if (v > cmax * 0.15 && v < cmax * 0.85) ticks.push({ u: Math.sqrt(v / cmax), text: `C ${v}` });
+      title = 'chroma (√ scale)';
+    } else {
+      // One turn of OKLCH hue from the collection's emptiest 30° window. A
+      // grey's hue is noise, so greys wait in their own slot.
+      hueStart = hueCut(placed.filter(c => c[1] >= GREY_CHROMA).map(c => c[2]));
+      lch.forEach((c, i) => { if (c && c[1] < GREY_CHROMA) greys.push(i); else if (c) u[i] = ((c[2] - hueStart + 360) % 360) / 360; });
+      ticks.push({ u: 0, text: `${hueStart}°` }, { u: 1, text: `${hueStart}° again` });
+      for (const [hue, deg] of OKLCH_HUES) ticks.push({ u: ((deg - hueStart + 360) % 360) / 360, text: `${hue} · ${deg}°` });
+      title = `hue (OKLCH) from ${hueStart}°`;
+    }
+    slot('Grey, no hue', -MISSING_GAP, greys);
+    slot('No palette', id === 'hue' ? -2 * MISSING_GAP : -MISSING_GAP, none);
+    return { u, slots, ticks, title, free: true, kind: 'continuous', ...(hueStart != null ? { hueCut: hueStart } : {}) };
+  }
+  const dim = attributeAxis(clips, id, axisLabel(labelFor, id));
+  if (!dim) throw new Error(`${id} cannot be placed on an axis`);
+  const { model, label } = dim, missing = [];
+  const several = model.multiValueRule ? (TIME_KEYS.includes(id) ? ', earliest of several' : ', lowest of several') : '';
+  if (dim.kind === 'continuous') {
+    // attributeMark's rank is (value − min) / (max − min): linear in time or number.
+    clips.forEach((clip, i) => { const mark = attributeMark(clip, model); if (mark.missing || mark.rank == null) missing.push(i); else u[i] = mark.rank; });
+    const at = value => (value - model.min) / (model.max - model.min);
+    if (id === 'captured') {
+      // The first and last dates, then month or year starts between them.
+      const day = t => new Date(t).toISOString().slice(0, 10);
+      ticks.push({ u: 0, text: `${day(model.min)} · first` }, { u: 1, text: `${day(model.max)} · last` });
+      for (const [t, text] of dateTicks(model.min, model.max)) ticks.push({ u: at(t), text });
+    }
+    else if (model.domain.length <= MAX_PLANES) for (const value of model.domain) ticks.push({ u: attributeMark({ [id]: value }, model).rank ?? 0, text: value });
+    else for (const v of niceTicks(model.min, model.max)) ticks.push({ u: at(v), text: String(v) });
+    if (ticks.length < 2) ticks.push({ u: 0, text: model.domain[0] }, { u: 1, text: model.domain.at(-1) });
+  } else {
+    // Planes: evenly spaced, in the model's order (ranked, or alphabetical).
+    const counts = new Map(model.domain.map(v => [v, 0])), k = model.domain.length;
+    clips.forEach((clip, i) => {
+      const mark = attributeMark(clip, model), index = mark.missing ? -1 : model.domain.indexOf(mark.valueLabel);
+      if (index < 0) { missing.push(i); return; }
+      u[i] = (index + 0.5) / k; counts.set(mark.valueLabel, counts.get(mark.valueLabel) + 1);
+    });
+    model.domain.forEach((value, index) => ticks.push({ u: (index + 0.5) / k, text: `${value} · ${counts.get(value)}` }));
+  }
+  slot(`No ${label}`, -MISSING_GAP, missing);
+  return { u, slots, ticks, title: `${label}${several}`, free: false, kind: dim.kind };
+}
+
+/**
+ * Axes: across = x, up = y, depth = z, each axis WORLD long, growing right,
+ * up and away from the camera; missing-value slots sit before the start of
+ * Across and Up, and beyond the far end of Depth. Attribute values are
+ * exact, so declumping moves items only along colour axes (falling back to
+ * continuous attribute axes, then to all three, when there is no colour axis).
+ */
+function arrangeAxes(clips, positions, sizes, edge, requested, labelFor) {
+  const n = clips.length, colours = clips.map(dominantColor);
+  const axes = requested && AXES.every(a => isAxisName(requested[a])) && validAxes(requested)
+    ? { ...requested } : resolveAxes(axisDimensions(clips, clipAttributeKeys(clips), labelFor), requested || {});
+  const coords = AXES.map(axis => axisCoordinates(clips, axes[axis], labelFor, colours));
+  // Depth's slots go beyond its far end instead of before its start: a large
+  // missing group (45% of one music library is grey) must not stand between
+  // the camera and everything else.
+  const depth = coords[2], behind = u => u < 0 ? 1 - u : u;
+  depth.u = depth.u.map(behind); for (const s of depth.slots) s.u = behind(s.u);
+  const world = [u => (u - 0.5) * WORLD, u => (u - 0.5) * WORLD, u => (0.5 - u) * WORLD];
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) positions[i * 3 + k] = world[k](coords[k].u[i]);
+  const exact = positions.slice(), all = [...Array(n).keys()];
+  let free = coords.map(c => c.free);
+  if (!free.some(Boolean)) free = coords.map(c => c.kind === 'continuous');
+  if (!free.some(Boolean)) free = [true, true, true];
+  const declumped = declump(positions, all, edge * 0.6, edge * 0.6, 4, free);
+  // Reading order: along Across, then top to bottom, then front to back.
+  const order = all.sort((a, b) => coords[0].u[a] - coords[0].u[b] || coords[1].u[b] - coords[1].u[a] || coords[2].u[a] - coords[2].u[b] || a - b);
+  // Each axis line runs along the box edge that faces the Fit camera (front,
+  // above, right), so ticks fall outside the cloud: Across on the front-bottom
+  // edge, Up on the front-left edge, Depth on the right-bottom edge going back.
+  const labels = [], guides = [];
+  const base = [[null, world[1](0), world[2](0)], [world[0](0), null, world[2](0)], [world[0](1), world[1](0), null]];
+  const along = (k, u) => base[k].map((v, j) => j === k ? world[k](u) : v);
+  // Labels sit beside their point on the axis, on the side away from the
+  // cloud, by a gap in screen pixels: a world offset would shrink with distance.
+  // Across's title ends at the axis's near end, its lowest point on screen,
+  // a row below the ticks; its slot labels run left from their slot. Depth's
+  // title stands beyond its slots, which share its far end.
+  const side = ['below', 'left', 'right'], slotSide = ['below-end', 'left', 'right'];
+  const titleAt = [[1, 'below-end', 40], [1, 'above', 12], [Math.max(1, ...depth.slots.map(s => s.u)) + 0.08, 'above', 24]];
+  // Labels are listed in priority order: placeLabels hides later ones that would overlap.
+  coords.forEach((c, k) => {
+    guides.push([along(k, 0), along(k, 1)]);
+    const [u, at, gap] = titleAt[k];
+    labels.push({ text: `${AXIS_LABELS[AXES[k]]} · ${c.title}`, kind: 'axis', point: along(k, u), side: at, gap });
+  });
+  coords.forEach((c, k) => {
+    for (const s of c.slots) {
+      guides.push([along(k, s.u - 0.025), along(k, s.u + 0.025)]);
+      labels.push({ text: s.text, kind: 'shelf', point: along(k, s.u), side: slotSide[k], gap: 8 });
+    }
+  });
+  coords.forEach((c, k) => { for (const t of c.ticks) labels.push({ text: t.text, kind: 'tick', point: along(k, t.u), side: side[k], gap: 8 }); });
+  const info = Object.fromEntries(AXES.map((axis, k) => [axis, { id: axes[axis], title: coords[k].title, kind: coords[k].kind, free: !!free[k],
+    missing: coords[k].slots.reduce((sum, s) => sum + s.count, 0), ...(coords[k].hueCut != null ? { hueCut: coords[k].hueCut } : {}) }]));
+  return { arrangement: 'axes', edge, stretch: 1, positions, exact, sizes, order, labels, guides, unplaced: 0, axes, axisInfo: info,
+    declumped, bounds: boundsOf(positions, sizes, n) };
+}
+
 const OKLCH_HUES = [['red', 29], ['yellow', 110], ['green', 142], ['cyan', 195], ['blue', 264], ['magenta', 328]];
 const HSL_HUES = [['red', 0], ['yellow', 60], ['green', 120], ['cyan', 180], ['blue', 240], ['magenta', 300]];
 /**
@@ -243,8 +523,9 @@ function colourGuides(arrangement, positions, placed, stretch, labels, guides) {
  * Bounded so a tile never leaves the neighbourhood its colour gives it:
  * no tile moves more than `cap` from its exact position.
  */
-export function declump(positions, indices, minDist, cap, iterations = 4) {
+export function declump(positions, indices, minDist, cap, iterations = 4, free = [1, 1, 1]) {
   if (!(minDist > 0) || indices.length < 2) return { moved: 0, maxShift: 0, meanShift: 0 };
+  const [fx, fy, fz] = free.map(f => f ? 1 : 0);
   const origin = new Map(indices.map(i => [i, [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]]]));
   const cell = minDist, keyOf = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
   for (let pass = 0; pass < iterations; pass++) {
@@ -259,17 +540,21 @@ export function declump(positions, indices, minDist, cap, iterations = 4) {
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
         for (const j of grid.get(`${cx + dx},${cy + dy},${cz + dz}`) || []) {
           if (j <= i) continue;
-          let vx = positions[i * 3] - positions[j * 3], vy = positions[i * 3 + 1] - positions[j * 3 + 1], vz = positions[i * 3 + 2] - positions[j * 3 + 2];
+          const gap = Math.hypot(positions[i * 3] - positions[j * 3], positions[i * 3 + 1] - positions[j * 3 + 1], positions[i * 3 + 2] - positions[j * 3 + 2]);
+          if (gap >= minDist) continue;
+          // Push only along free axes: an item in Axes never leaves its date,
+          // year or category plane.
+          let vx = (positions[i * 3] - positions[j * 3]) * fx, vy = (positions[i * 3 + 1] - positions[j * 3 + 1]) * fy, vz = (positions[i * 3 + 2] - positions[j * 3 + 2]) * fz;
           let d = Math.hypot(vx, vy, vz);
-          if (d >= minDist) continue;
           if (d < 1e-6) {
-            // Coincident: a fixed direction from the pair, so the result is
-            // the same on every load.
+            // Coincident on the free axes: a fixed direction from the pair, so
+            // the result is the same on every load.
             const a = (i * 12.9898 + j * 78.233) % (Math.PI * 2);
-            vx = Math.cos(a); vy = Math.sin(a) * 0.5; vz = Math.sin(a); d = Math.hypot(vx, vy, vz);
-            vx /= d; vy /= d; vz /= d; d = 0;
-          } else { vx /= d; vy /= d; vz /= d; }
-          const push = (minDist - d) / 2;
+            vx = Math.cos(a) * fx; vy = Math.sin(a) * 0.5 * fy; vz = Math.sin(a) * fz; d = Math.hypot(vx, vy, vz);
+            if (d < 1e-6) { vx = fx; vy = fx ? 0 : fy; vz = fx || fy ? 0 : fz; d = Math.hypot(vx, vy, vz) || 1; }
+          }
+          vx /= d; vy /= d; vz /= d;
+          const push = (minDist - gap) / 2;
           positions[i * 3] += vx * push; positions[i * 3 + 1] += vy * push; positions[i * 3 + 2] += vz * push;
           positions[j * 3] -= vx * push; positions[j * 3 + 1] -= vy * push; positions[j * 3 + 2] -= vz * push;
           pushed++;

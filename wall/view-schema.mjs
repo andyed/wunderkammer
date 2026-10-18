@@ -1,5 +1,5 @@
 /** Portable view contract, shared by the browser and immutable snapshot endpoint. */
-import { ARRANGEMENTS } from './float-space.mjs';
+import { ARRANGEMENTS, validAxes } from './float-space.mjs';
 export const MAX_VIEW_BYTES = 4 * 1024 * 1024;
 export function canonical(value) {
   return JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v)
@@ -46,7 +46,7 @@ export function validateView(v) {
   }
   if (v.float !== undefined && v.float !== null) {
     const f = v.float, distance = vec(f.position) && vec(f.target) ? Math.hypot(...f.position.map((n, i) => n - f.target[i])) : NaN;
-    if (!obj(f) || f.version !== 1 || !ARRANGEMENTS.includes(f.arrangement)
+    if (!obj(f) || f.version !== 1 || !ARRANGEMENTS.includes(f.arrangement) || !(f.axes === undefined || validAxes(f.axes))
         || !vec(f.position) || !vec(f.target) || [...f.position, ...f.target].some(n => Math.abs(n) > 1e6)
         || !(distance >= .1 && distance <= 1e5)
         || typeof f.fitted !== 'boolean' || !(f.selection === null || str(f.selection))) fail();

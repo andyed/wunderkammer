@@ -1,9 +1,9 @@
 import { validateView } from './view-schema.mjs';
-import { ARRANGEMENTS } from './float-space.mjs';
+import { ARRANGEMENTS, AXES, isAxisName } from './float-space.mjs';
 
 // A readable live intent projects into the same ViewSpec as an exact permalink.
 // It does not evaluate collection membership or carry frozen corpus revisions.
-const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail']);
+const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail', ...AXES]);
 const recognized = key => SINGLE.has(key) || key.startsWith('facet.') || key.startsWith('highlight.');
 const invalid = message => { throw new Error(`Invalid targeted view: ${message}`); };
 const field = value => {
@@ -73,12 +73,22 @@ export function applyViewIntent(url, defaultView) {
     view.aisle ??= { version: 1, travel: 0, spread: .65, position: [0, 4, 4], target: [0, 4, -6], fitted: true, selection: null };
     for (const key of ['travel', 'spread']) if (p.has(key)) { view.aisle[key] = bounded(p.get(key)); view.aisle.fitted = true; }
   }
-  if (view.presentation.mode === 'float' || p.has('arrange')) {
+  const axisParams = AXES.filter(axis => p.has(axis));
+  if (view.presentation.mode === 'float' || p.has('arrange') || axisParams.length) {
     // A live link names the arrangement; the camera is the receiver's Fit.
     view.float ??= { version: 1, arrangement: 'oklab', position: [0, 0, 4000], target: [0, 0, 0], fitted: true, selection: null };
     if (p.has('arrange')) {
       if (!ARRANGEMENTS.includes(p.get('arrange'))) invalid(`arrange must be one of ${ARRANGEMENTS.join(', ')}`);
       view.float.arrangement = p.get('arrange'); view.float.fitted = true;
+    }
+    // across, up and depth name Axes dimensions; any left out take the
+    // collection's defaults, so they imply arrange=axes and no other.
+    if (axisParams.length) {
+      if (p.has('arrange') && p.get('arrange') !== 'axes') invalid('across, up and depth apply only to arrange=axes');
+      const axes = {};
+      for (const axis of axisParams) { if (!isAxisName(p.get(axis))) invalid(`${axis} must name a dimension`); axes[axis] = p.get(axis); }
+      if (new Set(Object.values(axes)).size !== axisParams.length) invalid('across, up and depth must name different dimensions');
+      view.float.axes = axes; view.float.arrangement = 'axes'; view.float.fitted = true;
     }
   }
   if (view.presentation.mode === '3d' && !view.spatial) view.spatial = {
@@ -112,5 +122,6 @@ export function targetedViewURL(view, base) {
     p.set('travel', String(view.aisle.travel)); p.set('spread', String(view.aisle.spread));
   }
   if (view.presentation.mode === 'float') p.set('arrange', view.float.arrangement);
+  if (view.presentation.mode === 'float' && view.float.arrangement === 'axes') for (const axis of AXES) if (view.float.axes?.[axis]) p.set(axis, view.float.axes[axis]);
   return u;
 }

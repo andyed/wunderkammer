@@ -5,7 +5,8 @@
 .float-canvas:focus-visible { outline:3px solid #aaffaa; outline-offset:-4px; }
 .float-labels { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .float-label { position:absolute; left:0; top:0; display:block; max-width:220px; padding:4px 8px; border:1px solid #697476; border-radius:5px; background:#050510; color:#f3f3f7; font:600 14px/1.3 system-ui,sans-serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; will-change:transform; }
-.float-label-shelf { font-size:16px; }
+.float-label-shelf { font-size:16px; max-width:360px; }
+.float-label-axis { max-width:360px; }
 .float-label[hidden] { display:none; }
 .float-toolbar { position:absolute; bottom:34px; left:12px; right:12px; display:flex; flex-wrap:wrap; align-items:end; gap:8px 12px; max-width:920px; margin:auto; padding:10px 12px; border:1px solid #697476; border-radius:8px; background:#050510; font:16px/1.3 system-ui,sans-serif; }
 .float-toolbar label { display:flex; flex-direction:column; gap:4px; min-width:0; color:#f3f3f7; }
@@ -18,6 +19,12 @@
 .float-arrange label:last-of-type span { border-radius:0 5px 5px 0; }
 .float-arrange input:checked + span { background:#f3f3f7; color:#050510; font-weight:600; }
 .float-arrange input:focus-visible + span { outline:3px solid #aaffaa; outline-offset:2px; position:relative; z-index:1; }
+.float-axes { display:flex; gap:8px; flex:1 1 330px; min-width:0; }
+.float-axes[hidden] { display:none; }
+.float-axes label { flex:1 1 0; }
+/* Axis ticks are many and secondary: no frame, but the same opaque ground, so
+   a tick over a cover keeps its contrast. */
+.float-label-tick { border-color:transparent; padding:2px 6px; font-weight:500; }
 .float-items { flex:1 1 200px; }
 .float-toolbar select,.float-toolbar button { box-sizing:border-box; min-height:44px; min-width:44px; border:1px solid #697476; border-radius:5px; padding:8px; background:#141421; color:#f3f3f7; font:16px/1.3 system-ui,sans-serif; }
 .float-toolbar select { width:100%; text-overflow:ellipsis; }
@@ -38,6 +45,8 @@
   .float-arrange legend { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   .float-arrange label { flex:1 1 0; }
   .float-items { flex:1 1 0; }
+  .float-axes { flex:1 0 100%; gap:6px; }
+  .float-axes > label > span { font-size:14px; }
   .float-items > span { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   .float-help { display:none; }
 }

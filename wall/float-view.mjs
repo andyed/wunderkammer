@@ -21,7 +21,7 @@ import { sourceFor, proxied } from './spatial/spatial-view.mjs';
 import { spriteCovers } from './sprite-covers.mjs';
 import { clipKey } from './context-clusters.mjs';
 import { perf } from './instrument.mjs';
-import { ARRANGEMENTS, ARRANGEMENT_LABELS, isArrangement, arrange } from './float-space.mjs';
+import { ARRANGEMENTS, ARRANGEMENT_LABELS, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys } from './float-space.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
@@ -32,10 +32,13 @@ const element = (tag, className, text) => { const node = document.createElement(
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ease = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 /** Fit looks from the front, a little above and to the right, so all three
- * axes read. A–Z is a flat wall and is seen square on. */
+ * axes read. A–Z is a flat wall and is seen square on. Axes is seen more
+ * nearly from the front: Across, usually time, then reads level and long, and
+ * Depth recedes to the right along its own edge. */
 const FIT_DIRECTION = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(70), THREE.MathUtils.degToRad(32));
+const AXES_DIRECTION = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(74), THREE.MathUtils.degToRad(20));
 const FRONT = new THREE.Vector3(0, 0, 1);
-const fitDirection = arrangement => arrangement === 'az' ? FRONT : FIT_DIRECTION;
+const fitDirection = arrangement => arrangement === 'az' ? FRONT : arrangement === 'axes' ? AXES_DIRECTION : FIT_DIRECTION;
 
 /**
  * Three corrections to the vendored TileField fragment shader, applied to this
@@ -75,6 +78,19 @@ function patchFragment(material) {
   return true;
 }
 
+/**
+ * Where a label's centre sits relative to its anchor, in pixels. A label with
+ * a side sits beside its point, `gap` pixels away; `-start` and `-end` align
+ * its left or right edge with the point instead of centring it.
+ */
+function labelOffset({ side, gap = 0, width = 0, height = 0 }) {
+  if (!side) return [0, 0];
+  const [edge, align] = side.split('-'), dx = align === 'start' ? width / 2 : align === 'end' ? -width / 2 : 0;
+  if (edge === 'below') return [dx, gap + height / 2];
+  if (edge === 'above') return [dx, -gap - height / 2];
+  return [edge === 'left' ? -gap - width / 2 : gap + width / 2, 0];
+}
+
 /** Fetches in flight or queued, or canvas writes not yet on the GPU. Reads the
  * vendored atlas's private counters, as the 3D view's perf probe does. */
 const atlasBusy = a => a._inflight > 0 || a._farQueue.length > 0 || a._nearQueue.length > 0 || a.far._dirty || a.near._dirty;
@@ -83,6 +99,9 @@ export class FloatView {
   constructor(host, callbacks = {}) {
     this.host = host; this.callbacks = callbacks; this.visible = true; this.built = false;
     this.arrangement = 'oklab'; this.fitted = true; this.selection = null; this.count = 0;
+    // Axes: what was asked for (a link, a select) and what the collection
+    // resolves it to. The request survives a corpus change; the resolution not.
+    this.requestedAxes = {}; this.axes = null; this.dimensions = [];
     this.clips = []; this.keys = []; this.indexOf = new Map(); this.inScope = new Uint8Array(0); this.scopeCount = 0;
     this.layout = null; this.labels = []; this.listeners = []; this.frameTimes = []; this.renderCount = 0;
     this.host.classList.add('float-host'); this.host.replaceChildren();
@@ -107,11 +126,19 @@ export class FloatView {
       input.type = 'radio'; input.name = group; input.value = name;
       label.append(input, element('span', '', ARRANGEMENT_LABELS[name])); this.arrangeGroup.append(label); this.radios.set(name, input);
     }
+    // Three dimension menus, shown while Axes is the arrangement.
+    this.axesGroup = element('div', 'float-axes'); this.axesGroup.setAttribute('role', 'group'); this.axesGroup.setAttribute('aria-label', 'Axes');
+    this.axisSelects = new Map();
+    for (const axis of AXES) {
+      const label = element('label'), select = element('select');
+      select.setAttribute('aria-label', `${AXIS_LABELS[axis]} axis`);
+      label.append(element('span', '', AXIS_LABELS[axis]), select); this.axesGroup.append(label); this.axisSelects.set(axis, select);
+    }
     const selectLabel = element('label', 'float-items');
     this.itemSelect = element('select'); this.itemSelect.setAttribute('aria-label', 'Choose an item in this scope to fly to it'); selectLabel.append(element('span', '', 'Item'), this.itemSelect);
     this.inspectButton = element('button', '', 'Inspect'); this.inspectButton.type = 'button'; this.inspectButton.disabled = true;
     this.scopeNote = element('span', 'float-scope');
-    this.toolbar.append(this.arrangeGroup, selectLabel, this.inspectButton, this.scopeNote);
+    this.toolbar.append(this.arrangeGroup, this.axesGroup, selectLabel, this.inspectButton, this.scopeNote);
     this.help = element('p', 'float-help', 'Drag to orbit · Wheel dollies toward the pointer · W A S D fly, Q E down and up · Click or [ ] to fly to items · Home fits');
     try {
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -148,6 +175,7 @@ export class FloatView {
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
     this.host.append(this.overlay, this.status, this.toolbar, this.help);
     for (const input of this.radios.values()) this.listen(input, 'change', () => { if (input.checked) { this.setArrangement(input.value); this.interact(); } });
+    for (const [axis, select] of this.axisSelects) this.listen(select, 'change', () => { if (this.chooseAxis(axis, select.value)) this.interact(); });
     this.listen(this.itemSelect, 'change', () => { if (this.itemSelect.value) this.choose(this.itemSelect.value); });
     this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection, { fly: true }); } });
     this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection, { fly: true }); });
@@ -175,6 +203,9 @@ export class FloatView {
 
   build(corpus, keys, identity) {
     this.identity = identity; this.clips = corpus.slice(); this.keys = keys; this.count = corpus.length;
+    // Dimensions follow the corpus: the attributes it carries, offered in the wall's facet order.
+    const attributeKeys = this.callbacks.axisKeys?.() ?? clipAttributeKeys(this.clips);
+    this.dimensions = axisDimensions(this.clips, attributeKeys, this.callbacks.labelFor);
     this.indexOf = new Map(keys.map((key, i) => [key, i])); this.inScope = new Uint8Array(this.count).fill(1);
     this.field?.dispose(); this.field = null;
     if (!this.renderer) return;
@@ -194,7 +225,8 @@ export class FloatView {
     this.field.count = this.count; this.field.mesh.count = this.count;
     this.field.setRenderer(this.renderer);
     this.dimMode = patchFragment(this.field.material) ? 'brightness' : 'hidden';
-    this.layout = arrange(this.clips, this.arrangement);
+    this.resolveAxes();
+    this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());
     const q = this.camera.quaternion, p = this.layout.positions, s = this.layout.sizes;
     for (let i = 0; i < this.count; i++) this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q);
     this.field.layout(); this.applyLayoutDecor();
@@ -230,7 +262,45 @@ export class FloatView {
     const changed = name !== this.arrangement;
     this.arrangement = name; this.syncRadios();
     if (!this.field || !changed) return true;
-    this.layout = arrange(this.clips, name);
+    this.relayout({ animate });
+    return true;
+  }
+  /**
+   * Put one dimension on one axis. A dimension already on another axis swaps
+   * with this axis's current one, so the three axes always differ.
+   */
+  chooseAxis(axis, id, { animate = true } = {}) {
+    if (!AXES.includes(axis) || !this.axes || !this.dimensions.some(d => d.id === id)) { this.syncRadios(); return false; }
+    if (this.axes[axis] === id) return false;
+    const next = { ...this.axes }, other = AXES.find(a => a !== axis && next[a] === id);
+    if (other) next[other] = next[axis];
+    next[axis] = id;
+    this.requestedAxes = next; this.axes = next; this.syncRadios();
+    if (this.field && this.arrangement === 'axes') this.relayout({ animate });
+    return true;
+  }
+  /** Request axes (a link): ids the collection lacks fall back to its defaults. */
+  setAxes(requested, { animate = true } = {}) {
+    if (requested !== undefined && !validAxes(requested)) return false;
+    this.requestedAxes = { ...(requested || {}) };
+    const before = JSON.stringify(this.axes); this.resolveAxes(); this.syncRadios();
+    if (this.field && this.arrangement === 'axes' && JSON.stringify(this.axes) !== before) this.relayout({ animate });
+    return true;
+  }
+  resolveAxes() { this.axes = resolveAxes(this.dimensions, this.requestedAxes); this.fillAxisMenus(); }
+  arrangeOptions() { return { axes: this.axes, labelFor: this.callbacks.labelFor }; }
+  fillAxisMenus() {
+    for (const [axis, select] of this.axisSelects) {
+      const groups = [['colour', 'Dominant colour'], ['attribute', 'Attributes']].map(([group, label]) => {
+        const node = document.createElement('optgroup'); node.label = label;
+        for (const d of this.dimensions.filter(d => d.group === group)) node.append(new Option(d.label, d.id));
+        return node;
+      }).filter(node => node.children.length);
+      select.replaceChildren(...groups); select.value = this.axes?.[axis] || '';
+    }
+  }
+  relayout({ animate = true } = {}) {
+    this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());
     const p = this.layout.positions, s = this.layout.sizes, q = this.camera.quaternion, still = !animate || reducedMotion();
     for (let i = 0; i < this.count; i++) {
       if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q); continue; }
@@ -240,9 +310,12 @@ export class FloatView {
     this.applyLayoutDecor();
     if (this.fitted) this.fitView({ animate: !still, quiet: true });
     this.invalidate();
-    return true;
   }
-  syncRadios() { for (const [name, input] of this.radios) input.checked = name === this.arrangement; }
+  syncRadios() {
+    for (const [name, input] of this.radios) input.checked = name === this.arrangement;
+    this.axesGroup.hidden = this.arrangement !== 'axes';
+    for (const [axis, select] of this.axisSelects) select.value = this.axes?.[axis] || '';
+  }
 
   applyLayoutDecor() {
     const points = (this.layout?.guides || []).flat().flat();
@@ -251,8 +324,10 @@ export class FloatView {
     this.overlay.replaceChildren(); this.labels = [];
     for (const label of this.layout?.labels || []) {
       const node = element('span', `float-label float-label-${label.kind}`, label.text); this.overlay.append(node);
-      this.labels.push({ point: new THREE.Vector3().fromArray(label.point), node, kind: label.kind });
+      this.labels.push({ point: new THREE.Vector3().fromArray(label.point), node, kind: label.kind, side: label.side, gap: label.gap || 0 });
     }
+    // Measured once, now, so Fit can frame each label's own box.
+    for (const label of this.labels) { label.width = label.node.offsetWidth; label.height = label.node.offsetHeight; }
     const maxDistance = (this.layout?.bounds.radius || 1000) * 8;
     if (this.controls) this.controls.maxDistance = maxDistance;
     this.camera.far = Math.max(60000, maxDistance * 2); this.camera.updateProjectionMatrix();
@@ -322,18 +397,27 @@ export class FloatView {
     this.fitted = true;
     if (!this.layout || !this.width) { if (!quiet) this.interact(); return; }
     const c = new THREE.Vector3().fromArray(this.layout.bounds.centre), probe = this.camera.clone(), direction = fitDirection(this.arrangement);
-    // Frame what is drawn: every tile at its destination, and the guide labels.
+    // Frame what is drawn: every tile at its destination, and the guide labels
+    // as the boxes placeLabels will draw, beside their anchors, in pixels.
     const points = [], sizes = this.layout.sizes, p = this.layout.positions;
     for (let i = 0; i < this.count; i++) points.push([p[i * 3], p[i * 3 + 1], p[i * 3 + 2], sizes[i * 2] / 2, sizes[i * 2 + 1] / 2]);
-    for (const label of this.layout.labels) points.push([...label.point, 60, 14]);
     const free = this.freeBand(), half = (free.top - free.bottom) / 2, focal = 1 / Math.tan(THREE.MathUtils.degToRad(probe.fov / 2));
+    const ndc = this.labels.map(label => {
+      const w = label.width || 8 * label.node.textContent.length + 16, h = label.height || 26, [ox, oy] = labelOffset({ ...label, width: w, height: h });
+      return [label.point, 2 * ox / this.width, -2 * oy / this.height, w / this.width, h / this.height];
+    });
     const fits = d => {
       probe.position.copy(c).addScaledVector(direction, d); probe.lookAt(c); probe.updateMatrixWorld(true);
       const e = probe.matrixWorldInverse.elements;
+      const project = (x, y, z) => { const depth = -(e[2] * x + e[6] * y + e[10] * z + e[14]); return [depth, (e[0] * x + e[4] * y + e[8] * z + e[12]) * focal / (depth * probe.aspect), (e[1] * x + e[5] * y + e[9] * z + e[13]) * focal / depth]; };
       return points.every(([x, y, z, hw, hh]) => {
-        const depth = -(e[2] * x + e[6] * y + e[10] * z + e[14]); if (depth <= probe.near) return false;
-        const cx = e[0] * x + e[4] * y + e[8] * z + e[12], cy = e[1] * x + e[5] * y + e[9] * z + e[13];
-        return (Math.abs(cx) + hw) * focal / (depth * probe.aspect) <= 0.94 && (Math.abs(cy) + hh) * focal / depth <= half;
+        const [depth, nx, ny] = project(x, y, z); if (depth <= probe.near) return false;
+        return Math.abs(nx) + hw * focal / (depth * probe.aspect) <= 0.94 && Math.abs(ny) + hh * focal / depth <= half;
+      }) && ndc.every(([a, ox, oy, hw, hh]) => {
+        const [depth, nx, ny] = project(a.x, a.y, a.z); if (depth <= probe.near) return false;
+        // placeLabels keeps a label's width on the stage itself; Fit needs the
+        // anchor on screen and the label's rows inside the band.
+        return Math.abs(nx) <= 0.98 && Math.abs(ny + oy) + hh <= half;
       });
     };
     let lo = 1, hi = this.layout.bounds.radius * 20; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
@@ -444,13 +528,20 @@ export class FloatView {
   /* ------------------------------------------------------------ state --- */
 
   capture() {
-    return { version: 1, arrangement: this.arrangement, position: this.camera.position.toArray(),
+    return { version: 1, arrangement: this.arrangement, ...(this.axes ? { axes: { ...this.axes } } : {}), position: this.camera.position.toArray(),
       target: this.controls?.target.toArray() || [0, 0, 0], fitted: this.fitted, selection: this.selection };
   }
   restore(state) {
     if (!state || state.version !== 1 || !isArrangement(state.arrangement) || !vector(state.position) || !vector(state.target)) return false;
+    if (state.axes !== undefined && !validAxes(state.axes)) return false;
     const distance = new THREE.Vector3().fromArray(state.position).distanceTo(new THREE.Vector3().fromArray(state.target));
     if (distance < .1 || distance > 1e5) return false;
+    // Axes first, quietly: the arrangement change below then lays out once.
+    const relaid = this.arrangement === state.arrangement && state.arrangement === 'axes';
+    if (state.axes !== undefined) {
+      if (relaid) this.setAxes(state.axes, { animate: false });
+      else { this.requestedAxes = { ...state.axes }; if (this.field) this.resolveAxes(); this.syncRadios(); }
+    }
     this.setArrangement(state.arrangement, { animate: false });
     this.selection = this.indexOf.has(state.selection) ? state.selection : null;
     this.itemSelect.value = this.inScopeKey(this.selection) ? this.selection : ''; this.inspectButton.disabled = !this.selection;
@@ -548,19 +639,25 @@ export class FloatView {
     this.placeLabels();
   }
   placeLabels() {
-    const occupied = [], point = new THREE.Vector3();
+    const point = new THREE.Vector3(), t = this.toolbar;
+    // The toolbar counts as taken: a label half under it reads as broken.
+    const occupied = t.offsetWidth ? [{ x: t.offsetLeft + t.offsetWidth / 2, y: t.offsetTop + t.offsetHeight / 2, w: t.offsetWidth / 2, h: t.offsetHeight / 2 }] : [];
     for (const label of this.labels) {
       const { point: anchor, node } = label;
       point.copy(anchor).project(this.camera);
-      let x = (point.x + 1) / 2 * this.width; const y = (1 - point.y) / 2 * this.height;
+      let x = (point.x + 1) / 2 * this.width, y = (1 - point.y) / 2 * this.height;
+      // Measured once, as a label's text never changes. Labels are listed in
+      // priority order, and a later one that would touch an earlier one hides.
+      if (!label.width) { node.hidden = false; label.width = node.offsetWidth; label.height = node.offsetHeight; }
+      // A label with a side sits beside its point rather than centred on it.
+      const [ox, oy] = labelOffset(label); x += ox; y += oy;
+      x = clamp(x, label.width / 2 + 4, Math.max(label.width / 2 + 4, this.width - label.width / 2 - 4));
+      const box = { x, y, w: label.width / 2 + 4, h: label.height / 2 + 2 };
       const visible = point.z > -1 && point.z < 1 && x > 8 && x < this.width - 8 && y > 8 && y < this.height - 8
-        && !occupied.some(p => Math.abs(p.y - y) < 30 && Math.abs(p.x - x) < 150);
+        && !occupied.some(o => Math.abs(o.y - y) < o.h + box.h && Math.abs(o.x - x) < o.w + box.w);
       node.hidden = !visible;
       if (!visible) continue;
-      // Keep the whole label on the stage; its width is measured once, as its text never changes.
-      label.width ||= node.offsetWidth;
-      x = clamp(x, label.width / 2 + 4, Math.max(label.width / 2 + 4, this.width - label.width / 2 - 4));
-      node.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`; occupied.push({ x, y });
+      node.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`; occupied.push(box);
     }
   }
 
@@ -622,6 +719,7 @@ export class FloatView {
       opacity: f ? byKey(i => r(f.aOpacity.array[i])) : {}, screen, stretch: this.layout?.stretch ?? 1,
       moving: f?.moving || 0, flying: !!this.tween, edge: this.layout?.edge || 0, declumped: this.layout?.declumped || null,
       unplaced: this.layout?.unplaced || 0, labels: this.labels.map(l => l.node.textContent),
+      axes: this.axes, axisInfo: this.layout?.axisInfo || null, dimensions: this.dimensions.map(d => d.id),
       state: this.capture(), selection: this.selection, renderCount: this.renderCount, farResident,
       failed: f?.atlases._failed?.size ?? 0, loading: f ? (f.atlases._inflight || 0) + f.atlases._farQueue.length + f.atlases._nearQueue.length + (f.atlases.far._dirty || f.atlases.near._dirty ? 1 : 0) : 0,
       pickTargets, frameTimes: this.frameTimes.slice() };
