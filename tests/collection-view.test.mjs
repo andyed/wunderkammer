@@ -28,6 +28,18 @@ const cmpObservations = () => ({ format: 'wunderkammer.observations', version: 1
   comparison: { version: 1, question: 'Is pop as common in the 1990s as in the 1970s?', corpus: { id: 'fixture:collection', revision: 'r1' },
     scope: { query: '', facets: {} }, groupBy: 'decade', groups: ['1970s', '1990s'], measure: 'genre', metric: 'share', categoryLimit: 8, sort: 'name' },
   observations: [{ id: 'pop-even', text: 'Pop is half of each decade.', evidence: { cells: [{ value: 'pop', cohort: '1970s' }, { value: 'pop', cohort: '1990s' }] } }] });
+// Like the Psychodeli example: years and colour families, no decade or genre,
+// so no music starting point applies. 2025 is even i, 2026 odd i: 15 each.
+const framesDoc = (nouns = null) => ({
+  format: 'wunderkammer.collection', version: 1, corpus: { id: 'fixture:frames', revision: 'r1' },
+  ui: { title: 'Fixture frames', ...(nouns ? { nouns } : {}) },
+  clips: Array.from({ length: 30 }, (_, i) => ({
+    id: `f${i}`, title: `Frame ${String(i).padStart(2, '0')}`, kind: 'image', cover: `media/${i % 3}.svg`,
+    props: { year: i % 2 ? '2026' : '2025', color: [['green', 'purple', 'blue'][i % 3]] },
+  })),
+});
+const FRAMES = '/wall/compare.html?groupBy=year&group=2025&group=2026&measure=color&collection=';
+const MUSIC_WORDS = /\balbums?\b|\bcovers?\b|\bracks?\b|\bartists?\b|\bgenres?\b|\bdecades?\b|\bspike\b/i;
 const bad = () => {
   const d = doc(); d.format = 'wunderkammer'; d.clips[0].sourceUrl = 'javascript:alert(1)'; d.clips[4].captured = 'May 1994';
   return d;
@@ -110,6 +122,8 @@ before(async () => {
     }
     if (p === '/data/cmp.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(cmpDoc())); return; }
     if (p === '/data/cmp-obs.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(cmpObservations())); return; }
+    if (p === '/data/frames.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(framesDoc())); return; }
+    if (p === '/data/frames-nouns.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(framesDoc({ item: 'frame', items: 'frames' }))); return; }
     if (p === '/data/bad.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(bad())); return; }
     if (p === '/data/sprite.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteDoc())); return; }
     if (p === '/data/sprite-files.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles())); return; }
@@ -302,6 +316,50 @@ test('compare.html runs a collection, its comparison and observations with no se
     } finally { await again.close(); }
     assert.deepEqual(apiHits, []);
     assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('compare.html gives a collection without music attributes neutral nouns, no badge and no starting points', async () => {
+  const page = await newPage();
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto(`${origin}${FRAMES}/data/frames.json`);
+    await page.waitForSelector('body[data-comparison-ready="true"]');
+    assert.equal(await page.locator('.compare-header .experiment').count(), 0, 'no prototype badge');
+    assert.equal(await page.locator('#preset-control').isHidden(), true, 'no starting point applies');
+    assert.equal(await page.locator('#preset option').count(), 0);
+    assert.equal(await page.locator('#scene-title').textContent(), 'Walls');
+    assert.equal(await page.locator('[data-view="walls"]').textContent(), 'Walls');
+    assert.equal(await page.locator('#scene-summary').textContent(), '30 items · 2 groups');
+    assert.equal(await page.locator('#compare-search').getAttribute('placeholder'), 'Search titles, sources, notes…');
+    await page.waitForSelector('body[data-scene-ready="true"]', { timeout: 20000 });
+    assert.deepEqual(await page.locator('.comparison-scene-label--wall').allTextContents(), ['2025 · 15 items', '2026 · 15 items']);
+    assert.doesNotMatch(await page.locator('#comparison-stage canvas').getAttribute('aria-label'), MUSIC_WORDS);
+    for (const selector of ['.compare-header', '.question-bar', '.depth-panel']) {
+      assert.doesNotMatch(await page.locator(selector).innerText(), MUSIC_WORDS, selector);
+    }
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('compare.html names the items with ui.nouns and offers only the starting points a collection has', async () => {
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}${FRAMES}/data/frames-nouns.json`);
+    await page.waitForSelector('body[data-comparison-ready="true"]');
+    assert.equal(await page.locator('#scene-title').textContent(), 'Frame walls');
+    assert.equal(await page.locator('[data-view="walls"]').textContent(), 'Frame walls');
+    assert.equal(await page.locator('#scene-summary').textContent(), '30 frames · 2 groups');
+    await page.waitForSelector('body[data-scene-ready="true"]', { timeout: 20000 });
+    assert.deepEqual(await page.locator('.comparison-scene-label--wall').allTextContents(), ['2025 · 15 frames', '2026 · 15 frames']);
+    assert.match(await page.locator('#comparison-stage canvas').getAttribute('aria-label'), /^Frame walls\. .*Select any frame to inspect it/);
+    // Decades and genres, in lowercase and without jazz, and no colour: only the genre comparison.
+    await page.goto(`${origin}/wall/compare.html?collection=/data/cmp.json`);
+    await page.waitForSelector('body[data-comparison-ready="true"]');
+    assert.equal(await page.locator('#preset-control').isVisible(), true);
+    assert.deepEqual(await page.locator('#preset option').allTextContents(), ['Genre across decades']);
+    assert.equal(await page.locator('#scene-summary').textContent(), '30 items · 3 groups');
   } finally { await page.close(); }
 });
 

@@ -375,6 +375,55 @@ const cases = [
     name: 'sprite gate skips the content hash', file: 'scripts/check-public.mjs',
     from: ".digest('hex') !== page[2])", to: ".digest('hex') === null)",
     test: 'tests/check-public.test.mjs', pattern: 'whose bytes changed under its name',
+  },  {
+    name: 'wording: the prototype badge is back in the header', file: 'wall/compare.html',
+    from: '<span>/ compare</span></a>', to: '<span>/ compare</span></a><span class="experiment">Local spike</span>',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'wording: starting points offered without the attributes they name', file: 'wall/comparison-copy.mjs',
+    from: '.filter(point => Object.entries(point.needs).every(([key, need]) => satisfies(present(key), need)))', to: '.filter(() => true)',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'wording: starting points ignore the values they name', file: 'wall/comparison-copy.mjs',
+    from: 'Array.isArray(need) ? need.every(value => present.has(value))', to: 'Array.isArray(need) ? true',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html names the items with ui.nouns',
+  },
+  {
+    name: 'wording: the starting-point menu shows with nothing in it', file: 'wall/comparison-app.mjs',
+    from: "$('preset-control').hidden=!points.length;", to: "$('preset-control').hidden=false;",
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'wording: walls keep music nouns for any library', file: 'wall/comparison-copy.mjs',
+    from: 'return isMusicLibrary(clips) ? MUSIC : NEUTRAL_COPY;', to: 'return MUSIC;',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'wording: a music library loses its album nouns', file: 'wall/comparison-copy.mjs',
+    from: "clips.every(clip => clip?.kind === 'album')", to: 'clips.every(() => false)',
+    test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
+  },
+  {
+    name: 'wording: wall labels ignore the page nouns', file: 'wall/album-walls.mjs',
+    from: 'text: this.wallLabel(cohort.label, cohort.count),', to: 'text: `${cohort.label} · ${cohort.count.toLocaleString()} albums`,',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'wording: the 3D scene ignores the page nouns', file: 'wall/comparison-app.mjs',
+    from: '{wording,onSelect:select,', to: '{onSelect:select,',
+    test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
+  },
+  {
+    name: 'wording: ui.nouns dropped by the validator', file: 'wall/collection.mjs',
+    from: 'if (item !== null && items !== null) out.ui.nouns = { item, items };', to: '',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html names the items with ui.nouns',
+  },
+  {
+    name: 'wording: ui.nouns accepts unsupported keys', file: 'wall/collection.mjs',
+    from: "keys(ui.nouns, 'ui.nouns', ['item', 'items'])", to: "keys(ui.nouns, 'ui.nouns')",
+    test: 'tests/collection.test.mjs', pattern: 'ui.nouns names an item and its plural',
   },
 ];
 

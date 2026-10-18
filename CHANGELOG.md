@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **The comparison page's wording follows the collection.** The "Local
+  spike" badge is gone. The walls say "Walls", "items" and "groups" unless
+  the collection names its items with the new `ui.nouns` field. A music
+  library, whose clips are all `kind: "album"`, keeps "Album walls", covers,
+  racks and albums. The Starting point menu lists only the music comparisons
+  whose attributes the collection has, and is hidden when none apply.
+
 ## 0.1.0 — 2026-10-18
 
 First public release.

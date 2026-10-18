@@ -6,7 +6,7 @@ import { chromium } from 'playwright';
 
 const corpus = { id: 'comparison-fixture', revision: 'r1' };
 const album = (id, title, decade, genre, color, cover = '/covers/album.svg') => ({
-  id, url: `urn:album:${id}`, title, source: 'Music fixture', captured: '', tags: [], cover,
+  id, url: `urn:album:${id}`, title, source: 'Music fixture', kind: 'album', captured: '', tags: [], cover,
   props: { decade, genre, color: [color], artist: ['Fixture artist'] },
 });
 const clips = [
@@ -304,6 +304,26 @@ test('album walls and aisle position survive a fresh URL without changing eviden
     await page.locator('[data-view=walls]').click();
     assert.equal((await state(page)).presentation.travel,.65);
   } finally {await fresh?.close();await page.close();}
+});
+
+test('a music library keeps its album wording and all three starting points', async () => {
+  const p = await open({ renderer: true });
+  try {
+    assert.equal(await p.locator('.compare-header .experiment').count(), 0, 'no prototype badge');
+    assert.equal(await p.locator('#preset-control').isVisible(), true);
+    assert.deepEqual(await p.locator('#preset option').allTextContents(), ['Genre across decades', 'Artwork color across decades', 'Rock and Jazz across decades']);
+    assert.equal(await p.locator('#scene-title').textContent(), 'Album walls');
+    assert.equal(await p.locator('[data-view="walls"]').textContent(), 'Album walls');
+    assert.equal(await p.locator('#scene-summary').textContent(), '8 covers · 2 racks');
+    assert.match(await p.locator('#scene-help').textContent(), /^Walk the aisle to reach deeper racks\. .*Select a cover to inspect it\. .*highlight its albums\./);
+    assert.equal(await p.locator('#compare-search').getAttribute('placeholder'), 'Search titles, artists, notes…');
+    await p.waitForSelector('body[data-scene-ready="true"]', { timeout: 20000 });
+    assert.deepEqual(await p.locator('.comparison-scene-label--wall').allTextContents(), ['1970s · 4 albums', '1990s · 4 albums']);
+    assert.match(await p.locator('#comparison-stage canvas').getAttribute('aria-label'), /^Album art walls\. .*through the racks\. Select a cover/);
+    await p.selectOption('#preset', 'genres');
+    const view = await state(p);
+    assert.deepEqual([view.spec.groupBy, view.spec.groups, view.spec.measure, view.spec.sort], ['genre', ['Rock', 'Jazz'], 'decade', 'name']);
+  } finally { await p.close(); }
 });
 
 // ---- observations ---------------------------------------------------------

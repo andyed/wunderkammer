@@ -6,6 +6,7 @@ import { canonical } from './permalink.mjs';
 import { collectionSource, loadCollection, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
 import { spriteCovers } from './sprite-covers.mjs';
+import { comparisonCopy, startingPoints } from './comparison-copy.mjs';
 
 const $ = id => document.getElementById(id);
 const COLORS = ['#90e4f4','#ffda9c','#cbb7ff','#aaffaa','#ffb8d0','#d7e7ff'];
@@ -17,6 +18,8 @@ const PAGE = 12;
 const collection = collectionSource();
 if (collection) setProxyAvailable(false);
 let payload, state, model, scene, evidence = [], page = 0, restoring = false, preview = null, searchTimer;
+// The collection's own nouns, a music library's, or neutral ones (comparison-copy.mjs).
+let wording = comparisonCopy();
 const el = (tag, text, cls) => { const node = document.createElement(tag); if(text !== undefined) node.textContent = text; if(cls) node.className = cls; return node; };
 const labelFor = key => payload?.ui?.facetLabels?.[key] || ({decade:'Release decade',genre:'Genre',color:'Artwork color',source:'Source',complexity:'Visual detail',year:'Tagged year'}[key]) || key;
 const fmt = (cell,metric=state.spec.metric) => metric === 'count' ? String(cell.count) : model.cohorts.find(c=>c.key===cell.cohort)?.count ? `${(cell.share*100).toFixed(1)}%` : '—';
@@ -107,13 +110,13 @@ function renderPresentation() {
   const walls=state.presentation.view==='walls', changed=document.body.dataset.gallery!==String(walls);
   document.body.dataset.gallery=String(walls);
   if(changed)$('scope-panel').open=!walls;
-  $('scene-title').textContent=walls?'Album walls':'Aligned in depth';
-  $('scene-summary').textContent=walls?`${number(model.cohorts.reduce((n,c)=>n+c.count,0))} covers · ${model.cohorts.length} racks`:`${model.cohorts.length} planes · ${model.rows.length} categories`;
+  $('scene-title').textContent=walls?wording.walls:'Aligned in depth';
+  $('scene-summary').textContent=walls?wording.wallsSummary(model.cohorts.reduce((n,c)=>n+c.count,0),model.cohorts.length):`${model.cohorts.length} planes · ${model.rows.length} categories`;
   $('walk-control').hidden=!walls;
   const travel=state.presentation.travel||0;
   $('aisle-travel').value=Math.round(travel*100);
   $('aisle-position').textContent=travel?`${Math.round(travel*100)}%`:'Entrance';
-  $('scene-help').textContent=walls?'Walk the aisle to reach deeper racks. Drag to look around; scroll or pinch to zoom. Select a cover to inspect it. Choose a category in the comparison below to highlight its albums. Arrow keys look around; Home returns to the current aisle position.':'Drag to orbit · scroll or pinch to zoom · select a column to inspect its items. Arrow keys orbit; Home fits. Artwork strips are samples; exact items appear below.';
+  $('scene-help').textContent=walls?wording.wallsHelp:'Drag to orbit · scroll or pinch to zoom · select a column to inspect its items. Arrow keys orbit; Home fits. Artwork strips are samples; exact items appear below.';
   for(const b of document.querySelectorAll('[data-view]'))b.setAttribute('aria-pressed',String(b.dataset.view===state.presentation.view));
 }
 function renderMatrix() {
@@ -252,12 +255,22 @@ async function copy(text,button) {
   try{await navigator.clipboard.writeText(text);const old=button.textContent;button.textContent='Copied';announce('Copied');setTimeout(()=>{button.textContent=old;},1500);}
   catch {notice('Clipboard access was unavailable. Open Comparison recipe to select and copy the JSON, or use Download recipe.');}
 }
+/** Starting points are offered only for the attributes they name; with none, the control is hidden. */
+function renderStartingPoints() {
+  const points=startingPoints(payload.clips);
+  $('preset').replaceChildren(...points.map(point=>new Option(point.label,point.id)));
+  $('preset-control').hidden=!points.length;
+}
 function applyPreset(name) {
-  const base=defaultComparison(payload.clips,payload.corpus);
-  if(name==='color'){base.measure='color';base.question='How does artwork color vary across release decades?';}
-  else if(name==='genres'){base.groupBy='genre';base.groups=['Rock','Jazz'];base.measure='decade';base.sort='name';base.question='Which release decades distinguish Rock and Jazz in this collection?';}
-  else base.question='How does genre vary across release decades in this collection?';
-  changeSpec(base);
+  const point=startingPoints(payload.clips).find(p=>p.id===name);
+  if(point)changeSpec(point.apply(defaultComparison(payload.clips,payload.corpus)));
+}
+/** Wording that depends on the collection, not on the comparison. */
+function renderCopy() {
+  wording=comparisonCopy(payload);
+  document.querySelector('[data-view="walls"]').textContent=wording.walls;
+  $('compare-search').placeholder=wording.search;
+  renderStartingPoints();
 }
 function bind() {
   $('preset').addEventListener('change',e=>applyPreset(e.target.value));
@@ -305,6 +318,7 @@ async function boot() {
   else{const response=await fetch('/api/clips');if(!response.ok)throw new Error(`Collection unavailable (HTTP ${response.status})`);payload=await response.json();}
   if(!Array.isArray(payload.clips)||!payload.corpus)throw new Error('The collection has no records or corpus identity.');
   spriteCovers.setCorpus(payload.sheets,payload.clips,{covers:payload.images?.sheets==='covers'});
+  renderCopy();
   state=defaultView();
   let linkError='';try{state=readURL() || state;}catch(error){linkError=error.message;}
   // ?observations=<url>: an envelope written elsewhere, often by an LLM. Its
@@ -326,7 +340,7 @@ async function boot() {
   window.comparisonDebug=()=>({observations:resolvedObservations().map(({places,...o})=>o),observationsStale:observationsStale(),spec:structuredClone(state.spec),selection:{...state.selection},presentation:{...state.presentation},focus:state.focus,cohorts:model.cohorts,rows:model.rows,evidenceKeys:evidence.map(clipKey),evidencePacket:evidencePacket(),scene:scene?.getDiagnostics?.()||null});
   try {
     const {ComparisonScene}=await import('./comparison-scene.mjs');
-    scene=new ComparisonScene($('comparison-stage'),{onSelect:select,onInspect:openItem,onPreview:setPreview,onCameraChange:camera=>{if(!restoring){state.camera=camera;persist(true);}}});
+    scene=new ComparisonScene($('comparison-stage'),{wording,onSelect:select,onInspect:openItem,onPreview:setPreview,onCameraChange:camera=>{if(!restoring){state.camera=camera;persist(true);}}});
     scene.setModel(model);scene.setPresentation({...state.presentation,metric:state.spec.metric});scene.setSelection(state.selection);if(state.camera)scene.setCamera?.(state.camera);
     document.body.dataset.sceneReady='true';
   }catch(error){$('comparison-stage').replaceChildren(el('p',`Depth view unavailable: ${error.message}. The exact comparison and item inspection remain available below.`,'scene-loading'));}

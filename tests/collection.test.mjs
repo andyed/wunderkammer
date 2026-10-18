@@ -96,6 +96,19 @@ test('problem lists are capped and say how many were left out', () => {
   assert.match(err.message, /and 15 more/);
 });
 
+test('ui.nouns names an item and its plural; both are required words', () => {
+  const nouns = { item: 'frame', items: 'frames' };
+  assert.deepEqual(validateCollection(doc({ ui: { title: 'Frames', nouns } })).collection.ui, { title: 'Frames', nouns });
+  const problems = problemsOf(doc({ ui: { nouns: { item: 'frame', plural: 'frames' } } }));
+  assert.ok(problems.some(p => p.startsWith('ui.nouns.plural') && p.includes('supported: item, items')), problems.join('\n'));
+  assert.ok(problems.some(p => p.startsWith('ui.nouns.items') && p.includes('non-empty string')), problems.join('\n'));
+  assert.ok(problemsOf(doc({ ui: { nouns: 'frames' } })).some(p => p.startsWith('ui.nouns') && p.includes('must be an object')));
+  assert.ok(problemsOf(doc({ ui: { nouns: { item: 'x'.repeat(41), items: 'xs' } } })).some(p => p.startsWith('ui.nouns.item ')));
+  // A server's ui.nouns survives conversion to a document.
+  const { collection, removed } = toCollection({ clips: [{ id: 'a', title: 'A' }], corpus: { id: 'demo' }, facets: {}, ui: { nouns } });
+  assert.deepEqual([collection.ui.nouns, removed['ui.nouns']], [nouns, undefined]);
+});
+
 test('a server payload converts to a valid collection without server-only or private fields', () => {
   const payload = { clips: [{ id: 'a', title: 'A', url: 'urn:clipwall:image:a', tags: [], props: { year: '2026' }, cover: 'media/a.webp', sheetSlots: [1], editUri: 'obsidian://x', palette: ['#112233'] }],
     corpus: { id: 'demo', revision: 'r1' }, facets: {}, vault: '/srv/private/vault', adapters: ['images'], generated: 'now', ui: { title: 'Demo', corpusName: 'x' } };
