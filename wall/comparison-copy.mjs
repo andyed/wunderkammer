@@ -6,9 +6,11 @@
  * string here reaches the DOM through textContent only.
  */
 import { valuesOf } from './context-clusters.mjs';
+import { collectionNouns, isMusicLibrary, plural } from './nouns.mjs';
+
+export { isMusicLibrary };
 
 const number = n => n.toLocaleString();
-const plural = (count, one, many) => count === 1 ? one : many;
 const capitalized = text => { const [first = '', ...rest] = text; return first.toLocaleUpperCase() + rest.join(''); };
 
 const MUSIC = Object.freeze({
@@ -37,18 +39,14 @@ function named({ item, items }, custom) {
 
 export const NEUTRAL_COPY = named({ item: 'item', items: 'items' }, false);
 
-/** Every clip is an album, as adapters/music.mjs marks them. */
-export const isMusicLibrary = clips => Array.isArray(clips) && clips.length > 0 && clips.every(clip => clip?.kind === 'album');
-
 /**
  * The page's wording for a payload: `ui.nouns` first, then the music library's
  * own, then neutral. A server payload is not validated as a collection is, so
  * malformed nouns fall through instead of reaching the page.
  */
 export function comparisonCopy({ clips = [], ui = {} } = {}) {
-  const nouns = ui?.nouns;
-  const word = value => typeof value === 'string' && value.trim() !== '' && value.length <= 40;
-  if (word(nouns?.item) && word(nouns?.items)) return named(nouns, true);
+  const nouns = collectionNouns({ clips, ui });
+  if (nouns.custom) return named(nouns, true);
   return isMusicLibrary(clips) ? MUSIC : NEUTRAL_COPY;
 }
 

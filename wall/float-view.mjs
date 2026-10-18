@@ -22,6 +22,7 @@ import { spriteCovers } from './sprite-covers.mjs';
 import { clipKey } from './context-clusters.mjs';
 import { perf } from './instrument.mjs';
 import { ARRANGEMENTS, ARRANGEMENT_LABELS, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys } from './float-space.mjs';
+import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
@@ -191,7 +192,8 @@ export class FloatView {
    * `corpus` is every item; `scope` the subset the wall's search and facets
    * selected. The field is built once per corpus: scope only dims.
    */
-  setClips(corpus, scope = corpus) {
+  setClips(corpus, scope = corpus, { nouns = NEUTRAL_NOUNS } = {}) {
+    this.nouns = nouns;
     const keys = corpus.map(clipKey), identity = keys.join('\n');
     if (identity !== this.identity || !this.field) this.build(corpus, keys, identity);
     this.setScope(scope);
@@ -247,7 +249,7 @@ export class FloatView {
     for (const [i, title] of titles) this.itemSelect.append(new Option(title, this.keys[i]));
     if (!this.inScopeKey(this.selection)) this.selection = null;
     this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; this.itemSelect.disabled = !this.scopeCount;
-    this.scopeNote.textContent = this.scopeCount === this.count ? `All ${this.count} items` : `${this.scopeCount} of ${this.count} in scope · the rest are dimmed`;
+    this.scopeNote.textContent = this.scopeCount === this.count ? `All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}` : `${this.scopeCount} of ${this.count} in scope · the rest are dimmed`;
     if (this.hoverKey && !this.inScopeKey(this.hoverKey)) this.cancelHover();
     this.updateStatus(); this.invalidate();
   }

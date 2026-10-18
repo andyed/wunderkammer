@@ -20,6 +20,13 @@
   multiple of the atlas's column count could show part of its neighbour.
   Both are fixed upstream (muriel `99ea62b`) and re-vendored; the floating
   space no longer patches them itself.
+- **Counts use the collection's own nouns.** The wall's count, the aisle's
+  rack labels, the floating space's status line and the group labels read
+  for assistive technology now say what the collection calls its items
+  (`ui.nouns`, "albums" for a music library, otherwise "items"), singular for
+  one: "31 of 31 cats", "2000s · 1 cat". The wall's count used to say "clips"
+  for every collection. One rule, in `wall/nouns.mjs`, serves these and the
+  comparison page.
 - **The comparison page's wording follows the collection.** The "Local
   spike" badge is gone. The walls say "Walls", "items" and "groups" unless
   the collection names its items with the new `ui.nouns` field. A music

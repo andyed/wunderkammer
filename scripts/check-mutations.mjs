@@ -418,7 +418,7 @@ const cases = [
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
   },
   {
-    name: 'wording: a music library loses its album nouns', file: 'wall/comparison-copy.mjs',
+    name: 'wording: a music library loses its album nouns', file: 'wall/nouns.mjs',
     from: "clips.every(clip => clip?.kind === 'album')", to: 'clips.every(() => false)',
     test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
   },
@@ -487,7 +487,7 @@ const cases = [
   },
   {
     name: 'float scope re-places the space around the scope', file: 'wall/wall.mjs',
-    from: 'state.float.setClips(state.clips,state.filtered);', to: 'state.float.setClips(state.filtered,state.filtered);',
+    from: 'state.float.setClips(state.clips,state.filtered,{nouns:state.nouns});', to: 'state.float.setClips(state.filtered,state.filtered,{nouns:state.nouns});',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
@@ -641,6 +641,26 @@ const cases = [
     from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
     test: 'tests/collection-view.test.mjs', pattern: 'the floating space draws sprite-sheet cells',
   },
+  {
+    name: 'nouns: the wall count says clips whatever the collection calls its items', file: 'wall/wall.mjs',
+    from: 'document.createTextNode(` of ${counted(state.clips.length, state.nouns)}`)', to: 'document.createTextNode(` of ${state.clips.length} clips`)',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: aisle rack labels say items, plural even for one', file: 'wall/aisle-view.mjs',
+    from: ': `${group.label} · ${counted(group.count, this.nouns)}`;', to: ': `${group.label} · ${group.count} items`;',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: the floating space status says items', file: 'wall/float-view.mjs',
+    from: '`All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}`', to: '`All ${this.count} items`',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: a count of one takes the plural noun', file: 'wall/nouns.mjs',
+    from: 'count === 1 ? one : many', to: 'many',
+    test: 'tests/nouns.test.mjs', pattern: 'counts agree in number with their noun',
+  }
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));

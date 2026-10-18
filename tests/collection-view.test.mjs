@@ -44,6 +44,13 @@ const bad = () => {
   const d = doc(); d.format = 'wunderkammer'; d.clips[0].sourceUrl = 'javascript:alert(1)'; d.clips[4].captured = 'May 1994';
   return d;
 };
+// A collection that names its items, with one group of exactly one: 30
+// clips in three decades of ten, plus one in the 2000s.
+const nounsDoc = () => {
+  const d = doc(); d.ui.nouns = { item: 'cat', items: 'cats' };
+  d.clips.push({ id: 'c30', title: 'Cover 30', cover: 'media/0.svg', props: { decade: '2000s', genre: 'pop' } });
+  return d;
+};
 // Sprite sheets: each cover is a solid colour of its own, so a crop from the
 // wrong cell, or one that bleeds into a neighbour, shows as the wrong colour.
 const spriteColor = i => [40 + (i * 53) % 200, 40 + (i * 97) % 200, 40 + (i * 151) % 200];
@@ -125,6 +132,7 @@ before(async () => {
     if (p === '/data/frames.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(framesDoc())); return; }
     if (p === '/data/frames-nouns.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(framesDoc({ item: 'frame', items: 'frames' }))); return; }
     if (p === '/data/bad.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(bad())); return; }
+    if (p === '/data/nouns.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(nounsDoc())); return; }
     if (p === '/data/sprite.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteDoc())); return; }
     if (p === '/data/sprite-files.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles())); return; }
     if (p === '/data/sprite-missing.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles({ missing: true }))); return; }
@@ -581,5 +589,23 @@ test('when a sheet page is missing, compare.html falls back to the files in the 
     const scene = await page.evaluate(() => window.comparisonDebug().scene);
     assert.equal(scene.failedArtwork, 0, 'every wall cover came from its file');
     assert.ok(scene.loadedArtwork >= 20);
+  } finally { await page.close(); }
+});
+
+test('the wall, the aisle and the floating space count in the collection\'s own nouns, singular for one', async () => {
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}/?collection=/data/nouns.json`);
+    await ready(page);
+    assert.equal(await page.locator('#count').textContent(), '31 of 31 cats');
+    await page.locator('#view-aisle').click();
+    await page.waitForFunction(() => window.wunderkammerAisleDebug().scene?.labels?.some(Boolean), null, { timeout: 15000 });
+    const labels = (await page.evaluate(() => window.wunderkammerAisleDebug().scene.labels)).filter(Boolean);
+    assert.ok(labels.includes('2000s · 1 cat'), labels.join(' | '));
+    assert.ok(labels.includes('1970s · 10 cats'), labels.join(' | '));
+    assert.ok(!labels.some(label => / items?$/.test(label)), labels.join(' | '));
+    await page.locator('#view-float').click();
+    await page.waitForFunction(() => document.querySelector('.float-scope')?.textContent, null, { timeout: 15000 });
+    assert.equal(await page.locator('.float-scope').textContent(), 'All 31 cats');
   } finally { await page.close(); }
 });
