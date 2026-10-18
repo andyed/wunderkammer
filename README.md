@@ -119,9 +119,31 @@ and [docs/MUSIC_CORPORA.md](docs/MUSIC_CORPORA.md).
   collection explorers.
 - [Naming](docs/NAMING.md).
 
-The spatial view uses rendering primitives vendored from
-[muriel](https://github.com/andyed/muriel) (`wall/spatial/lib/`, see its
-`VENDOR.md`). Three.js loads from jsDelivr.
+Three.js loads from jsDelivr.
+
+## Related projects
+
+[muriel](https://github.com/andyed/muriel), a design skill for coding agents by
+the same author, supplies the spatial view's rendering primitives. They are
+vendored in `wall/spatial/lib/`; see its `VENDOR.md`.
+
+Other open-source collection explorers, compared in the
+[peer study](docs/PEER_STUDY.md). Licences were read from each project's
+LICENSE file in October 2026.
+
+- [VIKUS Viewer](https://github.com/cpietsch/vikus-viewer) (MIT): timeline and
+  similarity layouts for cultural collections, as a static site.
+- [PixPlot](https://github.com/pleonard212/pix-plot) (MIT): WebGL atlases of
+  large image collections laid out by similarity.
+- [Collection Space Navigator](https://github.com/Collection-Space-Navigator/CSN)
+  (MIT): projections with range and text filters over image collections.
+- [Embedding Atlas](https://github.com/apple/embedding-atlas) (MIT):
+  cross-filtered views of millions of points, with an MCP server for agents.
+- [Piling.js](https://github.com/flekschas/piling.js) (MIT): interactive piles
+  of small multiples.
+- [seajax](https://github.com/seajax/seajax) (BSD), an open-source clone of
+  Microsoft's PivotViewer and the ancestor of faceted zooming over image
+  collections.
 
 ## Tests
 
