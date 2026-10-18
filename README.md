@@ -19,7 +19,7 @@ The model writes a collection and a comparison, and attaches observations that
 cite exact cells. The page shows each claim's text beside figures it computes
 itself. Selecting one lights its evidence in the matrix and on the walls.
 
-![Two observations about kaleidoscopic frames in 2025 and 2026. The selected one cites 89 items, which stay lit on the album walls while the rest dim.](docs/screenshots/1-claims.webp)
+![Two observations about kaleidoscopic frames in 2025 and 2026. The selected one cites 89 items, which stay lit on the walls while the rest dim.](docs/screenshots/1-claims.webp)
 
 ### 2. Explore a large image collection
 
