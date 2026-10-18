@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { remote } from './media-policy.mjs';
 import { spriteCovers, spriteSource, isSpriteSource } from './sprite-covers.mjs';
+import { NEUTRAL_COPY } from './comparison-copy.mjs';
 
 const COLORS = [0x90e4f4, 0xffda9c, 0xcbb7ff, 0xaaffaa, 0xffb8d0, 0xd7e7ff];
 const ROWS = 8, PITCH = 1.04, TILE = .98, HEIGHT = ROWS * PITCH;
@@ -29,12 +30,14 @@ function fileSource(clip) {
 }
 
 export class AlbumWalls {
-  constructor(root, invalidate = () => {}, { onProgress = () => {} } = {}) {
+  constructor(root, invalidate = () => {}, { onProgress = () => {}, wallLabel = NEUTRAL_COPY.wallLabel } = {}) {
     this.parent = root;
     this.invalidate = invalidate;
     this.onProgress = onProgress;
+    // Each group's label: its value, its count and the collection's noun for its items.
+    this.wallLabel = wallLabel;
     this.root = new THREE.Group();
-    this.root.name = 'Album artwork aisle';
+    this.root.name = 'Artwork aisle';
     this.group = this.root;
     root.add(this.root);
     this.presentation = { spread: .65, slice: null };
@@ -113,7 +116,7 @@ export class AlbumWalls {
     // Metric, category rank and lens changes reuse decoded images and stable geometry.
     const keys = [...new Set(model.cohorts.flatMap(group => group.keys))].sort();
     const sources = new Map(keys.map(key => [key, coverSource(model.clipsByKey.get(key))]));
-    const signature = JSON.stringify([model.cohorts.map(group => [group.key, group.label, group.count, group.unit || 'albums', preserveOrder ? group.keys : [...group.keys].sort()]), [...sources]]);
+    const signature = JSON.stringify([model.cohorts.map(group => [group.key, group.label, group.count, preserveOrder ? group.keys : [...group.keys].sort()]), [...sources]]);
     if (signature === this.signature) { this.model = model; this._highlight(); return; }
     this._clear(); this.model = model; this.signature = signature;
     const generation = this.generation;
@@ -178,7 +181,7 @@ export class AlbumWalls {
           wall.add(mesh); this.meshes.push(mesh); this.totalTiles += items.length;
         }
       }
-      const label = { text: `${cohort.label} · ${cohort.count.toLocaleString()} ${cohort.unit || 'albums'}`,
+      const label = { text: this.wallLabel(cohort.label, cohort.count),
         point: new THREE.Vector3(0, HEIGHT + .6, -depth), cohort: cohort.key, color, visible: true };
       this.labelAnchors.push(label);
       this.racks.push({ group: rack, walls, cohort: cohort.key, start: depth, length: bayDepth, label });

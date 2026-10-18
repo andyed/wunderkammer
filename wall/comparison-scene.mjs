@@ -8,6 +8,7 @@ import { remote } from './media-policy.mjs';
 import { spriteCovers, spriteSource, isSpriteSource } from './sprite-covers.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AlbumWalls } from './album-walls.mjs';
+import { NEUTRAL_COPY } from './comparison-copy.mjs';
 
 const COLORS = [0x90e4f4, 0xffda9c, 0xcbb7ff, 0xaaffaa, 0xffb8d0, 0xd7e7ff];
 const HEIGHT = 4.4;
@@ -36,8 +37,9 @@ function fileSource(clip) {
 }
 
 export class ComparisonScene {
-  constructor(host, { onSelect = () => {}, onInspect = () => {}, onPreview = () => {}, onCameraChange = () => {} } = {}) {
+  constructor(host, { wording = NEUTRAL_COPY, onSelect = () => {}, onInspect = () => {}, onPreview = () => {}, onCameraChange = () => {} } = {}) {
     this.host = host;
+    this.wording = wording;
     this.host.replaceChildren();
     this.callbacks = { onSelect, onInspect, onPreview, onCameraChange };
     this.presentation = { spread: 0.65, view: 'depth', slice: null, metric: 'share' };
@@ -106,7 +108,7 @@ export class ComparisonScene {
       const hit = this.pick(e);
       const next = { value: hit?.value || null, cohort: hit?.cohort || null };
       this.canvas.style.cursor = hit ? 'pointer' : 'grab';
-      this.canvas.title=hit?.key?(this.model?.clipsByKey.get(hit.key)?.title||'Inspect album'):'';
+      this.canvas.title=hit?.key?(this.model?.clipsByKey.get(hit.key)?.title||this.wording.inspect):'';
       if (!same(next, this.hover)) { this.hover = next; this.callbacks.onPreview(next); }
     };
     this._onLeave = () => {
@@ -271,7 +273,7 @@ export class ComparisonScene {
     this.controls.minAzimuthAngle=walls?-Infinity:-Math.PI*.46;
     this.controls.maxAzimuthAngle=walls?Infinity:Math.PI*.46;
     if(walls && !this.artWalls){
-      this.artWalls=new AlbumWalls(this.root,()=>this.invalidate());
+      this.artWalls=new AlbumWalls(this.root,()=>this.invalidate(),{wallLabel:this.wording.wallLabel});
       this.artWalls.setModel(this.model);
     }
     if(this.artWalls && !this.labels.some(label=>label.kind==='wall')){
@@ -281,7 +283,7 @@ export class ComparisonScene {
       }
     }
     if(this.artWalls){this.artWalls.setPresentation({...this.presentation,visible:walls});this.artWalls.group.visible=walls;}
-    this.canvas.setAttribute('aria-label',walls?'Album art walls. Drag or use arrow keys to look around, scroll to zoom. Walk aisle moves through the racks. Select a cover to inspect it; the item list below provides keyboard access.':'Interactive 3D comparison. Drag or arrow keys to orbit, scroll to zoom. Exact values and selection are available in the comparison table.');
+    this.canvas.setAttribute('aria-label',walls?this.wording.wallsAria:'Interactive 3D comparison. Drag or arrow keys to orbit, scroll to zoom. Exact values and selection are available in the comparison table.');
     const n = this.planes.length;
     const separation = 0.65 + spread * 3.05;
     const max = metric === 'count' ? this.countMax : this.shareMax;

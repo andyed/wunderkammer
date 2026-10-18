@@ -66,6 +66,12 @@ index its private `/media/sheets` pages.
   a warning when they disagree.
 - **`facetTypes`** (categorical, ordinal with `order`, numeric, date) is
   validated and carried. The wall does not use it yet.
+- **`ui.nouns`** (optional) names one item and several,
+  `{ "item": "frame", "items": "frames" }`, each 1 to 40 characters. The
+  comparison page uses them on its walls: "Frame walls", "2025 · 206 frames".
+  Without them it says "item" and "items". A music library, whose clips are
+  all `kind: "album"` as the music adapter writes them, keeps its album,
+  cover and rack wording (`wall/comparison-copy.mjs`).
 - **`images.cors`** declares that covers on other origins send CORS headers.
   Without it, the loader warns that such covers stay blank in the 3D views. A
   DOM-tile fallback for them is not built. **`images.sheets`** says what
@@ -244,6 +250,22 @@ recipe: question, corpus identity and revision, scope (query and facets),
 `groupBy` with 2–6 groups, a measured attribute, count or share, category limit
 and sort. An LLM can author this directly. The host checks corpus identity
 before applying it.
+
+**Starting points.** The page's Starting point menu holds the music
+library's three comparisons: genre across decades, artwork color across
+decades, and Rock and Jazz across decades. Each is listed only when the
+collection has a `decade` attribute with at least two values and the
+attribute, or both genre values, it names. With none of them, the menu is
+hidden. `startingPoints()` in `wall/comparison-copy.mjs` decides.
+
+**Verification:** `tests/comparison-copy.test.mjs` (the three wordings and
+the starting-point gates), `tests/collection.test.mjs` (`ui.nouns`
+validation), and page tests in `tests/collection-view.test.mjs` (a collection
+without music attributes, one with `ui.nouns`) and
+`tests/comparison-view.test.mjs` (the music library's wording and menu).
+Ten mutations in `scripts/check-mutations.mjs` (`MUTATION_FILTER=wording`)
+each restore the badge, a music noun or an ungated starting point, and show
+a test failing.
 
 ## Observations
 

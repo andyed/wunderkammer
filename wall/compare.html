@@ -12,13 +12,12 @@
 <body class="comparison-app">
   <header class="compare-header">
     <a class="wordmark" href="../">wunderkammer <span>/ compare</span></a>
-    <span class="experiment">Local spike</span>
     <div class="header-actions"><button id="recipe-open">Comparison recipe</button><button id="copy-link">Copy view</button></div>
   </header>
   <main>
     <section class="question-bar" aria-labelledby="question">
       <div><h1 id="question">Loading the collection…</h1><p id="coverage">Reading the existing Wunderkammer index.</p></div>
-      <label>Starting point<select id="preset"><option value="genre">Genre across decades</option><option value="color">Artwork color across decades</option><option value="genres">Rock and Jazz across decades</option></select></label>
+      <label id="preset-control" hidden>Starting point<select id="preset"></select></label>
     </section>
     <div id="notice" role="status" hidden></div>
     <section id="observations" class="observations-panel" aria-labelledby="observations-title" hidden>
@@ -28,7 +27,7 @@
     </section>
     <details id="scope-panel" class="scope-panel" open><summary>Shape the collection <span>Search, groups & comparison</span></summary>
     <section class="compare-controls" aria-label="Comparison scope">
-      <label class="query-label">Within this collection<input id="compare-search" type="search" placeholder="Search titles, artists, notes…" autocomplete="off"></label>
+      <label class="query-label">Within this collection<input id="compare-search" type="search" placeholder="Search titles, sources, notes…" autocomplete="off"></label>
       <label>Separate in depth<select id="group-by"></select></label>
       <label>Compare<select id="measure"></select></label>
       <label>Values<select id="metric"><option value="share">Share of each group</option><option value="count">Item counts</option></select></label>
@@ -39,10 +38,10 @@
     </details>
     <div class="compare-workspace">
       <section class="depth-panel" aria-label="Spatial comparison">
-        <div class="panel-heading"><h2 id="scene-title">Album walls</h2><span id="scene-summary"></span></div>
+        <div class="panel-heading"><h2 id="scene-title">Walls</h2><span id="scene-summary"></span></div>
         <div id="comparison-stage"><p class="scene-loading">Preparing the depth view…</p></div>
         <div class="depth-toolbar">
-          <div class="view-modes" role="group" aria-label="Camera view"><button data-view="walls" aria-pressed="true">Album walls</button><button data-view="depth" aria-pressed="false">Depth chart</button><button data-view="front" aria-pressed="false">Aligned</button><button data-view="terraces" aria-pressed="false">Terraces</button></div>
+          <div class="view-modes" role="group" aria-label="Camera view"><button data-view="walls" aria-pressed="true">Walls</button><button data-view="depth" aria-pressed="false">Depth chart</button><button data-view="front" aria-pressed="false">Aligned</button><button data-view="terraces" aria-pressed="false">Terraces</button></div>
           <label class="walk-label" id="walk-control" hidden>Walk aisle <input id="aisle-travel" type="range" min="0" max="100" value="0" aria-label="Walk aisle"><output id="aisle-position">Entrance</output></label>
           <label class="spread-label">Spread <input id="depth-spread" type="range" min="0" max="100" value="65"></label>
           <label>Slice<select id="depth-slice"><option value="">All groups</option></select></label>

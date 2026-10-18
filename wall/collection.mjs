@@ -19,7 +19,7 @@ const TOP = ['format', 'version', 'corpus', 'ui', 'facetTypes', 'images', 'viewS
 const SERVER_ONLY = new Set(['vault', 'adapters', 'generated']);
 const CLIP = ['id', 'url', 'title', 'cover', 'coverVariants', 'detailCover', 'media', 'sheetSlots', 'sourceUrl', 'sourceLabel',
   'note', 'tags', 'props', 'source', 'kind', 'captured', 'palette', 'projection'];
-const UI = ['title', 'defaultGroup', 'facetOrder', 'facetLabels', 'hiddenFacets'];
+const UI = ['title', 'defaultGroup', 'facetOrder', 'facetLabels', 'hiddenFacets', 'nouns'];
 const FACET_TYPES = ['categorical', 'ordinal', 'numeric', 'date'];
 const SHEET_ROLES = ['overview', 'covers'];
 const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
@@ -124,6 +124,11 @@ export function validateCollection(input, { baseUrl = null } = {}) {
       for (const [k, v] of Object.entries(ui.facetLabels)) {
         if (field(k, `ui.facetLabels key "${k}"`) !== null) out.ui.facetLabels[k] = text(v, `ui.facetLabels.${k}`, { max: 120 });
       }
+    }
+    // What the comparison page calls one item and several; both, since a plural cannot be guessed.
+    if (ui.nouns !== undefined && keys(ui.nouns, 'ui.nouns', ['item', 'items'])) {
+      const item = text(ui.nouns.item, 'ui.nouns.item', { max: 40 }), items = text(ui.nouns.items, 'ui.nouns.items', { max: 40 });
+      if (item !== null && items !== null) out.ui.nouns = { item, items };
     }
   }
 
