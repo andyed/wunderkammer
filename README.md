@@ -26,7 +26,7 @@ different view of the same collection:
 - **[Your own axes](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=year&up=lightness&depth=hue)**:
   year across, lightness up, hue in depth. Change any axis from the menus.
 
-**Status: early public release (0.1).** The interfaces below are versioned and
+**Status: early public release (0.2).** The interfaces below are versioned and
 validated. The renderer is tested in desktop and mobile Chromium; physical
 devices and other browsers have had less coverage.
 

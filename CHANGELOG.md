@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-18
+
+The collection document gains one optional field, `ui.nouns`, and stays
+version 1. A 0.1.0 wall refuses a document that sets it.
 
 - **Get it from the release tag.** No package is published to a registry,
   so the contract, the skill and the 0.1.0 notes below now point at the tag
@@ -51,6 +54,10 @@
   library, whose clips are all `kind: "album"`, keeps "Album walls", covers,
   racks and albums. The Starting point menu lists only the music comparisons
   whose attributes the collection has, and is hidden when none apply.
+
+Known issue, unchanged from 0.1.0: the experimental browser test Canary A2
+(HTML-in-canvas behind a flag) fails. The other 417 tests pass, and all 130
+mutation cases are detected.
 
 ## 0.1.0 — 2026-10-18
 
