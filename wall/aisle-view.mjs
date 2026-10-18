@@ -71,6 +71,9 @@ export class AisleView {
     this.listen(this.itemSelect, 'change', () => this.choose(this.itemSelect.value));
     this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection); } });
     this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection); });
+    // Debug handle, as in the floating space (window.__cwFloat): the camera,
+    // spread and travel live in WebGL, so probes and seeked captures reach them here.
+    window.__cwAisle = this;
     this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(host); this.resize();
   }
 
