@@ -428,6 +428,16 @@ const cases = [
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
   },
   {
+    name: 'demo: the aisle\'s wall labels are filtered out of the static build', file: 'scripts/build-demo.mjs',
+    from: " && name !== 'comparison-copy.mjs'", to: '',
+    test: 'tests/demo-bundle.test.mjs', pattern: 'every relative import the demo pages can reach resolves',
+  },
+  {
+    name: 'demo: the comparison workbench ships in the static build', file: 'scripts/build-demo.mjs',
+    from: 'filter: source => !workbench(path.basename(source))', to: 'filter: () => true',
+    test: 'tests/demo-bundle.test.mjs', pattern: 'the demo bundle leaves the comparison workbench out',
+  },
+  {
     name: 'wording: the 3D scene ignores the page nouns', file: 'wall/comparison-app.mjs',
     from: '{wording,onSelect:select,', to: '{onSelect:select,',
     test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
