@@ -182,8 +182,8 @@ editors without taking over the source store.
 
 ## The floating space
 
-The ✺ control, or `?view=float&arrange=oklab|oklch|hsl|az`, floats the whole
-corpus in 3D. The model is meodai's 32,000 colour names
+The ✺ control, or `?view=float&arrange=oklab|oklch|hsl|az|axes`, floats the
+whole corpus in 3D. The model is meodai's 32,000 colour names
 ([names.color.pizza](https://names.color.pizza/), MIT): each name sits at its
 colour, and the page switches between colour models. Apple's HotSauce (1996)
 is the warning. It floated a folder tree in 3D, and the depth restated the
@@ -206,6 +206,7 @@ An item is placed by `palette[0]`, its largest median-cut colour cluster;
 | OKLCH | hue angle, radius = relative chroma | L | (cylinder) |
 | HSL | hue angle, radius = HSL chroma (max − min) | HSL lightness | (bicone) |
 | A–Z | reading order within a shelf | shelf (0–9, A … Z, #) | none: a flat wall |
+| Axes | a chosen dimension | a chosen dimension | a chosen dimension |
 
 - **OKLab** uses a single stretch k for both a and b, so hue angles and
   lightness stay exact. Covers and screenshots span about four times as much
@@ -235,6 +236,70 @@ An item is placed by `palette[0]`, its largest median-cut colour cluster;
 - **Guides** (axes, the hue ring and their labels) span the collection's own
   range and print its extremes, for example `L 0.85 · lightest`. They draw
   beneath every tile, so the grey axis never crosses a neutral cover.
+
+### Axes: a chosen dimension on each axis
+
+Axes puts one dimension on each of Across (x), Up (y) and Depth (z). Three
+menus labelled Across, Up and Depth appear in the toolbar while Axes is
+chosen. Picking a dimension that another axis already holds swaps the two, so
+the three axes always differ and no axis restates another. Every axis is
+2,000 world units long, the same as lightness in the colour arrangements.
+
+**What an axis can carry.**
+
+| Dimension | Position along the axis |
+|---|---|
+| Lightness | OKLab L, absolute 0–1, the same as `y` in the colour arrangements, so OKLab ↔ Axes with lightness up moves no item vertically |
+| Chroma | √(C / C_max), relative to the collection's most saturated item |
+| Hue | one turn of OKLCH hue, starting at the centre of the collection's emptiest 30° window, so no populated hue family is split across the two ends |
+| Ordered attribute with a range (capture date, year, decade, numbers) | linear from the collection's minimum to its maximum |
+| Ranked attribute (complexity, compression) | evenly spaced planes, in rank order |
+| Categorical attribute, single-valued, 2–12 values | evenly spaced planes, in alphabetical order |
+
+- **Where the values come from.**
+  - Colour dimensions use `palette[0]`.
+  - Attributes use `attributes.mjs` `attributeModel`, over the wall's own facet keys (the keys the sort and lens menus offer).
+- **What is not offered.**
+  - A multi-valued categorical, such as colour family or genre: an item can stand in only one plane, and picking one of its values would be arbitrary.
+  - A categorical with more than 12 values: its planes would be thinner than a tile.
+  - An attribute with a single value.
+  - A facet whose key is `lightness`, `chroma` or `hue`, because those names are reserved.
+- **Several values on an ordered attribute.** The axis takes the earliest or lowest, as the lens does, and its title says so ("release year, earliest of several").
+- **Defaults.**
+  - Across is time: capture date, then year, then decade, then any other ordered attribute, then a categorical, then chroma.
+  - Up is lightness, and Depth is hue.
+  - The Psychodeli example opens as capture date × lightness × hue, and a 1,793-album music library as release year × lightness × hue.
+
+**Missing values.** An item without a value waits in a labelled slot 12% of the axis length outside the axis.
+- **Across and Up:** the slot is before the axis start.
+- **Depth:** the slot is beyond the far end, behind the data. A large missing group must not stand between the camera and everything else. In the music library, 808 of 1,793 covers (45%) have no hue.
+- **Hue:**
+  - Greys (OKLCH chroma below 0.02, the threshold the reading order already uses) wait in "Grey, no hue · n".
+  - Items with no palette wait one slot further out.
+- **Other colour axes:** items with no palette wait in "No palette · n".
+- **Attributes:** the slot reads "No ‹attribute› · n", for example "No release year · 249" in the music library. As in the lens, `unknown` and `uncertain` count as missing.
+
+**Collisions.**
+- **Declumping** stays bounded: items closer than 0.6 of a tile edge are pushed apart, never more than 0.6 of an edge from their place, with no jitter.
+- **Direction.** It moves items only along colour axes, so an item never leaves its date, year or category plane.
+  - With no colour axis, it moves them along continuous attribute axes (time, numbers).
+  - With only planes, it moves them along all three axes.
+- **Measured:**
+  - Psychodeli, capture date × lightness × hue: 156 of 297 items moved, by 11.6 world units on average and 61 at most. The cap is 61.2.
+  - Music, year × lightness × hue: 851 of 1,793 moved, by 7.2 on average and 33.6 at most. The cap is 33.6.
+
+**Guides and labels.**
+- **Axis lines** run along the box edges that face the camera:
+  - Across along the front-bottom edge;
+  - Up up the front-left edge;
+  - Depth back along the right-bottom edge.
+- **Ticks** sit beside the line, away from the cloud, a fixed number of pixels off it:
+  - dates show the first and last day, then month or year starts ("Dec", "Jan 2026");
+  - numbers with up to 12 values show each value, and others show round numbers;
+  - planes show "value · count";
+  - hue shows the six hue names at their OKLCH angles, and the start angle at both ends.
+- **Overlap.** Labels are drawn in priority order (titles, then slots, then ticks), and a label that would touch an earlier one, or the toolbar, hides until the camera comes closer.
+- **Fit** looks from 20° right and 16° above, more nearly frontal than the colour arrangements, so Across reads level and long. It frames each label's drawn box as well as the tiles.
 
 ### Scope dims; nothing moves
 
@@ -267,13 +332,17 @@ and the menus are the ways in; free flight is for looking around.
 ### State and links
 
 The ViewSpec gains `presentation.mode: 'float'` and
-`float: { version: 1, arrangement, position, target, fitted, selection }`.
+`float: { version: 1, arrangement, axes?, position, target, fitted, selection }`.
 These are validated in `wall/view-schema.mjs`, which the snapshot endpoint
 shares.
-- **Copy view** carries the camera.
-- **The live link (↗)** carries `view=float&arrange=…`, and the receiver fits.
-- **Errors.** An unknown `arrange` value is refused with a message; it is
-  never ignored.
+- **Axes state.** `axes` is `{ across?, up?, depth? }`: dimension ids, distinct, each a colour name or a facet key. Any slot left out takes the collection's default. The version stays 1, since links without `axes` mean what they always did.
+- **Copy view** carries the camera and the axes.
+- **The live link (↗)** carries `view=float&arrange=…`, plus `across`, `up` and `depth` for Axes, and the receiver fits. A hand-written link may name only some of the axes (`?view=float&depth=complexity`); the axis parameters imply `arrange=axes`.
+- **Errors.** A link is refused with a message, never ignored, when:
+  - its `arrange` value is unknown;
+  - it puts one dimension on two axes;
+  - it gives axis parameters with another arrangement;
+  - it names an axis the collection cannot carry ("across=genre is not a dimension this collection can place on an axis").
 - **Pile state.** The view never writes it.
 
 ### Rendering
@@ -324,7 +393,16 @@ The 3D view shares the first two bugs. In the Psychodeli 3D view, atlas
   and the phone layout.
 - `tests/collection-view.test.mjs` checks that the float atlas draws
   sprite-sheet cells.
-- `scripts/check-mutations.mjs` has 17 float cases, all detected.
+- The Axes tests check positions against independently computed expectations:
+  - capture time, linear (the fixture's dates are unevenly spaced, so rank spacing would fail);
+  - lightness from Ottosson's table;
+  - hue from a second transcription of OKLab, checked against that table, with the emptiest-window start found by brute force;
+  - ranked and categorical planes;
+  - the grey, no-palette and missing-year slots and their labels;
+  - plane exactness under declumping, using a three-shot burst that shares one place;
+  - swapping, label placement after Fit, and the phone toolbar and fill.
+  - Link tests cover exact and live round trips, partial links, and the four refusals.
+- `scripts/check-mutations.mjs` has 35 float cases, all detected.
 - Frame times are in [PERF.md](PERF.md): 120 fps throughout at 297 items, and
   at 1,793 items apart from the fly-to arrival.
 
@@ -344,6 +422,15 @@ The 3D view shares the first two bugs. In the Psychodeli 3D view, atlas
   header wrap one button sooner. It already wrapped at 1,440 px on main.
 - **Phone header.** On a phone the view and zoom buttons scroll sideways
   rather than pushing ↗ onto a fourth row, and ▶ starts partly out of view.
+- **Axes depth reads least.** From Fit, Depth recedes and its ticks crowd at
+  the far end; orbit to read it. This is the cost of keeping Across level and
+  long.
+- **Axes scales are collection-relative** (time, numbers, chroma and the hue
+  start), so an Axes position cannot be compared across collections. Only
+  lightness is absolute.
+- **The hue axis is cut.** Hue is a circle laid on a line. The start is chosen
+  where the collection is emptiest and printed at both ends, but the two ends
+  are neighbours in colour.
 
 ## Known gaps
 

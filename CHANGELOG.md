@@ -8,6 +8,12 @@
   an item and opens it; the item menu, `[ ]` and Fit reach everything without
   camera skill. Permalinks carry the arrangement and the camera.
   [SPATIAL.md](docs/SPATIAL.md#the-floating-space).
+- **Floating space: Axes** (`?view=float&arrange=axes&across=…&up=…&depth=…`).
+  Each axis carries a chosen dimension: lightness, chroma or hue of the
+  dominant colour, or an attribute (capture date, year, a ranked or
+  categorical facet as labelled planes). Missing values wait in labelled
+  slots, greys get their own hue slot, and declumping never moves an item off
+  its attribute value. [SPATIAL.md](docs/SPATIAL.md#axes-a-chosen-dimension-on-each-axis).
 
 ## 0.1.0 — 2026-10-18
 
