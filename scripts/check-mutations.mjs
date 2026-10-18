@@ -418,7 +418,7 @@ const cases = [
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
   },
   {
-    name: 'wording: a music library loses its album nouns', file: 'wall/comparison-copy.mjs',
+    name: 'wording: a music library loses its album nouns', file: 'wall/nouns.mjs',
     from: "clips.every(clip => clip?.kind === 'album')", to: 'clips.every(() => false)',
     test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
   },
@@ -426,6 +426,16 @@ const cases = [
     name: 'wording: wall labels ignore the page nouns', file: 'wall/album-walls.mjs',
     from: 'text: this.wallLabel(cohort.label, cohort.count),', to: 'text: `${cohort.label} · ${cohort.count.toLocaleString()} albums`,',
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html gives a collection without music attributes neutral nouns, no badge',
+  },
+  {
+    name: 'demo: the aisle\'s wall labels are filtered out of the static build', file: 'scripts/build-demo.mjs',
+    from: " && name !== 'comparison-copy.mjs'", to: '',
+    test: 'tests/demo-bundle.test.mjs', pattern: 'every relative import the demo pages can reach resolves',
+  },
+  {
+    name: 'demo: the comparison workbench ships in the static build', file: 'scripts/build-demo.mjs',
+    from: 'filter: source => !workbench(path.basename(source))', to: 'filter: () => true',
+    test: 'tests/demo-bundle.test.mjs', pattern: 'the demo bundle leaves the comparison workbench out',
   },
   {
     name: 'wording: the 3D scene ignores the page nouns', file: 'wall/comparison-app.mjs',
@@ -487,7 +497,7 @@ const cases = [
   },
   {
     name: 'float scope re-places the space around the scope', file: 'wall/wall.mjs',
-    from: 'state.float.setClips(state.clips,state.filtered);', to: 'state.float.setClips(state.filtered,state.filtered);',
+    from: 'state.float.setClips(state.clips,state.filtered,{nouns:state.nouns});', to: 'state.float.setClips(state.filtered,state.filtered,{nouns:state.nouns});',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
@@ -677,6 +687,46 @@ const cases = [
     from: '  state.presentation={...state.presentation,travel};state.camera=camera;\n  renderPresentation();persist(true);', to: '  state.presentation={...state.presentation,travel};state.camera=camera;\n  renderPresentation();',
     test: 'tests/aisle-side-scroll.test.mjs', pattern: 'sideways scroll walks the comparison walls',
   },
+  {
+    name: 'nouns: the wall count says clips whatever the collection calls its items', file: 'wall/wall.mjs',
+    from: 'document.createTextNode(` of ${counted(state.clips.length, state.nouns)}`)', to: 'document.createTextNode(` of ${state.clips.length} clips`)',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: aisle rack labels say items, plural even for one', file: 'wall/aisle-view.mjs',
+    from: ': `${group.label} · ${counted(group.count, this.nouns)}`;', to: ': `${group.label} · ${group.count} items`;',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: the floating space status says items', file: 'wall/float-view.mjs',
+    from: '`All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}`', to: '`All ${this.count} items`',
+    test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: a count of one takes the plural noun', file: 'wall/nouns.mjs',
+    from: 'count === 1 ? one : many', to: 'many',
+    test: 'tests/nouns.test.mjs', pattern: 'counts agree in number with their noun',
+  },
+  {
+    name: 'validate-collection: an invalid document exits 0', file: 'scripts/validate-collection.mjs',
+    from: 'process.exitCode = failed ? 1 : 0;', to: 'process.exitCode = 0;',
+    test: 'tests/validate-collection.test.mjs', pattern: 'an invalid collection exits 1',
+  },
+  {
+    name: 'validate-collection: missing local covers pass', file: 'scripts/validate-collection.mjs',
+    from: 'if (!existsSync(file)) missing.push(', to: 'if (false) missing.push(',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a local cover the page would request',
+  },
+  {
+    name: 'validate-collection: unresolved citations pass', file: 'scripts/validate-collection.mjs',
+    from: 'if (r.unresolved.length || !r.keys.length) failed = true;', to: '',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a citation the page cannot resolve',
+  },
+  {
+    name: 'validate-collection: observations for another corpus pass', file: 'scripts/validate-collection.mjs',
+    from: "if (named.id !== want.id || (named.revision ?? null) !== (want.revision ?? null)) {", to: 'if (false) {',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a citation the page cannot resolve',
+  }
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));

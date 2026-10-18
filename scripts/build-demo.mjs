@@ -94,8 +94,10 @@ await writeFile(path.join(out, 'collection.json'), JSON.stringify(collection));
 
 // The public app includes the shared artwork renderer and main aisle view.
 // The comparison workbench remains a local spike, outside the demo bundle.
-await cp('wall', path.join(out, 'wall'), { recursive: true,
-  filter: source => !['compare.html','comparison.css'].includes(path.basename(source)) && !path.basename(source).startsWith('comparison-') });
+// comparison-copy.mjs ships: album-walls.mjs, the aisle's renderer, takes its
+// neutral wall labels from it. tests/demo-bundle.test.mjs follows the bundle's imports.
+const workbench = name => ['compare.html', 'comparison.css'].includes(name) || name.startsWith('comparison-') && name !== 'comparison-copy.mjs';
+await cp('wall', path.join(out, 'wall'), { recursive: true, filter: source => !workbench(path.basename(source)) });
 const rewrite = async (file, pairs) => { let s = await readFile(file, 'utf8'); for (const [a, b] of pairs) { if (!s.includes(a)) throw new Error(`${file}: expected ${a}`); s = s.split(a).join(b); } await writeFile(file, s); };
 await cp('index.html', path.join(out, 'index.html'));
 // The served page loads its collection; ?collection= on the URL still overrides it.

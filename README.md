@@ -7,6 +7,25 @@ attach claims about a comparison, each pointing at the exact items behind it,
 and can read back what the person selected as exact evidence. It runs from
 static files with no server.
 
+**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 297 frames from the Psychodeli
+visualizer, served as static files from GitHub Pages. Each link opens a
+different view of the same collection:
+
+- **[The wall](https://andyed.github.io/clipwall-demo/)**: every frame, grouped by capture month. The overview
+  paints from 3 sprite-sheet images instead of 297 files.
+- **[One facet](https://andyed.github.io/clipwall-demo/?facet.kaleido=kaleido&group=year)**: the 89 kaleidoscopic
+  frames, grouped by year. The rest stay reachable as context when you zoom
+  out.
+- **[The hallway](https://andyed.github.io/clipwall-demo/?view=aisle&group=year)**: one rack per year. Walk it
+  with the slider, drag to look around, and select a frame to open it.
+- **[Stacks in 3D](https://andyed.github.io/clipwall-demo/?view=3d&group=year)**: each year as a stack you can
+  open and spread.
+- **[The colour space](https://andyed.github.io/clipwall-demo/?view=float&arrange=oklch)**: every frame floats at
+  its dominant colour, with hue around the ring and lightness up. Click one
+  to fly to it.
+- **[Your own axes](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=year&up=lightness&depth=hue)**:
+  year across, lightness up, hue in depth. Change any axis from the menus.
+
 **Status: early public release (0.1).** The interfaces below are versioned and
 validated. The renderer is tested in desktop and mobile Chromium; physical
 devices and other browsers have had less coverage.
@@ -49,8 +68,21 @@ to the years in question.
 
 ![153 newspaper clippings from 1819 to 1920, grouped by publication period.](docs/screenshots/5-archive.webp)
 
-Shots 1 and 2 show the bundled example; 3–5 are local collections run on the
-same engine.
+### 6. Browse a collection by colour
+
+Every image floats in 3D at its dominant colour: lightness runs up the axis
+and hue goes around the ring. Switch between OKLab, OKLCH, HSL, A–Z and axes
+you choose, and the images travel to their new places. Search and facets dim
+whatever falls outside, without moving anything. Click an image to fly to it
+and open it.
+
+![The bundled example's 297 frames in OKLCH: hue around a ring labelled from red to magenta, lightness from 0.00 at the bottom to 0.85 at the top.](docs/screenshots/6-colour.webp)
+
+Live link, with the example served as in [Try it](#try-it):
+`http://localhost:8080/?collection=/examples/psychodeli/collection.json&view=float&arrange=oklch`
+
+Shots 1, 2 and 6 show the bundled example; 3–5 are local collections run on
+the same engine.
 
 ## Try it
 
@@ -62,7 +94,8 @@ npx http-server -p 8080 .
 Then open:
 
 - `http://localhost:8080/?collection=/examples/psychodeli/collection.json`
-  for the wall. Search, choose facets, group, press **3D**, or open an item.
+  for the wall. Search, choose facets, group, press **3D** or **✺**, or open
+  an item.
 - `http://localhost:8080/wall/compare.html?collection=/examples/psychodeli/collection.json&observations=/examples/psychodeli/observations.json`
   for a comparison with two observations. Select one to see the items behind
   it.
@@ -74,6 +107,26 @@ three, and keeps each image's own file as the fallback. The repository holds
 only the document.
 
 ## For language models
+
+Wunderkammer is best used from [muriel](https://github.com/andyed/muriel),
+a design skill for coding agents. muriel decides when a collection explorer
+is the right way to show something, builds the document from a folder or a
+CSV, and reviews the result for exploration quality and contrast.
+
+Without muriel, agents start with the skill,
+[skills/wunderkammer/SKILL.md](skills/wunderkammer/SKILL.md): when to use
+Wunderkammer, the steps from document to link, and the traps. Install it with
+`npx skills add andyed/wunderkammer`, or copy the folder into your agent's
+skills directory. Either way, before handing over a link, check the
+document, and any observations, the way the pages will read them:
+
+```bash
+node scripts/validate-collection.mjs collection.json --observations observations.json
+```
+
+It lists every problem with its path, every local cover file that is missing,
+and the figures each observation will show, and exits 1 when anything needs
+fixing.
 
 The full contract is in [docs/CONTRACT.md](docs/CONTRACT.md). In short:
 

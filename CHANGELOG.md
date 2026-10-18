@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **An agent skill and a command-line check.** `skills/wunderkammer/SKILL.md`
+  tells an agent when to use Wunderkammer, the steps from document to link,
+  and the traps; `npx skills add andyed/wunderkammer` installs it.
+  `scripts/validate-collection.mjs` checks a collection, and its
+  observations, the way the pages will read them: every problem with its
+  path, missing local cover files, and the figures each claim will show.
+  `tests/skill-example.test.mjs` keeps the skill's examples valid.
 - **Floating space** (✺, `?view=float&arrange=oklab|oklch|hsl|az`). The whole
   corpus floats in 3D, placed by each item's dominant colour in OKLab, OKLCH
   or HSL, or shelved A–Z. Search and facets dim items in place. Click flies to
@@ -20,6 +27,20 @@
   multiple of the atlas's column count could show part of its neighbour.
   Both are fixed upstream (muriel `99ea62b`) and re-vendored; the floating
   space no longer patches them itself.
+- **The static demo's aisle starts again.** `scripts/build-demo.mjs` left
+  out every `comparison-*` file, including `comparison-copy.mjs`, which the
+  aisle's wall labels come from since the wording change. The demo's
+  `?view=aisle` got a 404 on that import and stayed on the flat wall. The
+  build now ships that one file and still leaves the comparison workbench
+  out; `tests/demo-bundle.test.mjs` builds the demo and follows every import
+  its page can reach.
+- **Counts use the collection's own nouns.** The wall's count, the aisle's
+  rack labels, the floating space's status line and the group labels read
+  for assistive technology now say what the collection calls its items
+  (`ui.nouns`, "albums" for a music library, otherwise "items"), singular for
+  one: "31 of 31 cats", "2000s · 1 cat". The wall's count used to say "clips"
+  for every collection. One rule, in `wall/nouns.mjs`, serves these and the
+  comparison page.
 - **The comparison page's wording follows the collection.** The "Local
   spike" badge is gone. The walls say "Walls", "items" and "groups" unless
   the collection names its items with the new `ui.nouns` field. A music

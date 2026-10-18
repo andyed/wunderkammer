@@ -33,6 +33,7 @@ import { perf } from './instrument.mjs';
 import { collectionSource, loadCollection, collectionViewState, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
 import { AXES, axisDimensions } from './float-space.mjs';
+import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
@@ -41,6 +42,8 @@ const FACET_CHIP_LIMIT = 24;
 let facetOrder = ['tags', 'source', 'kind', 'captured'];
 
 const state = {
+  // What the collection calls its items (wall/nouns.mjs); set when the corpus loads.
+  nouns: NEUTRAL_NOUNS,
   clips: [],
   facets: {},
   filtered: [],
@@ -319,6 +322,7 @@ async function boot() {
   state.corpus = data.corpus || { id: `legacy:${location.origin}:${data.ui?.title || ''}`, revision };
   state.facets = data.facets || {};
   state.facetLabels = data.ui?.facetLabels || {};
+  state.nouns = collectionNouns({ clips: state.clips, ui: data.ui });
   if (typeof data.ui?.title === 'string') {
     document.title = data.ui.title;
     document.querySelector('.brand').textContent = data.ui.title;
@@ -777,13 +781,13 @@ function refreshSpatial() {
   if(state.mode==='float'){
     // The whole corpus floats; scope only dims, so positions keep their meaning.
     state.floatDirty=false;
-    state.float.setClips(state.clips,state.filtered);
+    state.float.setClips(state.clips,state.filtered,{nouns:state.nouns});
     state.float.setFocused?.(state.clips.find(c=>c.id===state.selected)?clipKey(state.clips.find(c=>c.id===state.selected)):null);
     renderScopeEmpty();syncArrangement();return;
   }
   if(state.mode==='aisle'){
     state.aisleDirty=false;
-    state.aisle.setClips(state.filtered,state.groupKey,{sort:state.sort,labelFor:key=>state.facetLabels[key]||key});
+    state.aisle.setClips(state.filtered,state.groupKey,{sort:state.sort,labelFor:key=>state.facetLabels[key]||key,nouns:state.nouns});
     brush.refresh();state.aisle.setLens(brush.getActive());syncLensValue();
     state.aisle.setFocused?.(state.clips.find(c=>c.id===state.selected)?clipKey(state.clips.find(c=>c.id===state.selected)):null);
     renderScopeEmpty();syncArrangement();return;
@@ -932,7 +936,7 @@ function renderCount() {
   el.count.replaceChildren();
   const strong = document.createElement('b');
   strong.textContent = String(state.filtered.length);
-  el.count.append(strong, document.createTextNode(` of ${state.clips.length} clips`));
+  el.count.append(strong, document.createTextNode(` of ${counted(state.clips.length, state.nouns)}`));
   if (state.viewStateError) el.count.append(document.createTextNode(` · ${state.viewStateError}`));
 }
 
@@ -976,7 +980,7 @@ function buildBlock(b, { background = false } = {}) {
   // Foreground headings approach a tray; context headings explicitly pivot scope.
   if (b.label && b.label !== '—') {
     h2.tabIndex = 0; h2.setAttribute('role', 'button');
-    h2.setAttribute('aria-label', `${b.label}: ${background ? 'filter to' : 'approach'} this group, ${b.count} items`);
+    h2.setAttribute('aria-label', `${b.label}: ${background ? 'filter to' : 'approach'} this group, ${counted(b.count, state.nouns)}`);
     h2.addEventListener('click', e => { if ((viewport.lastDragDistance || 0) > 4) return; if (background || e.shiftKey) selectGroup(b.label, e.shiftKey); else approachGroup(b); });
     h2.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (background || e.shiftKey) selectGroup(b.label, e.shiftKey); else approachGroup(b); } });
   }
@@ -1412,7 +1416,7 @@ function updateRowTitle(stageRect) {
     rowTitle.querySelector('strong').textContent = best.b.label || 'Ungrouped';
     rowTitle.querySelector('.n').textContent = String(best.b.count);
     rowTitle.querySelector('.pos').textContent = `${index + 1} of ${n}`;
-    rowTitle.querySelector('.rt-focus').setAttribute('aria-label', `${best.b.label}, ${best.b.count} items, group ${index + 1} of ${n}${best.layer === 'context' ? ', on the context plane. Filter to this group' : '. Approach this group'}`);
+    rowTitle.querySelector('.rt-focus').setAttribute('aria-label', `${best.b.label}, ${counted(best.b.count, state.nouns)}, group ${index + 1} of ${n}${best.layer === 'context' ? ', on the context plane. Filter to this group' : '. Approach this group'}`);
     rowTitle.dataset.layer = best.layer;
     rowTitle.hidden = false;
     rowTitleWidth = rowTitle.offsetWidth; // measured only when the text changes

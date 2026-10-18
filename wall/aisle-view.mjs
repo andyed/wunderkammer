@@ -6,6 +6,7 @@ import { listenSideScroll } from './aisle-wheel.mjs';
 import { groupBy } from './layout.mjs';
 import { clipKey, matchesFacet } from './context-clusters.mjs';
 import { sortClips, attributeMark } from './attributes.mjs';
+import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
@@ -14,7 +15,7 @@ const element = (tag, className, text) => { const node = document.createElement(
 export class AisleView {
   constructor(host, callbacks = {}) {
     this.host = host; this.callbacks = callbacks; this.visible = true; this.built = false;
-    this.travel = 0; this.spread = .65; this.fitted = true; this.selection = null;
+    this.travel = 0; this.spread = .65; this.fitted = true; this.selection = null; this.nouns = NEUTRAL_NOUNS;
     this.clipsByKey = new Map(); this.cohorts = []; this.labels = []; this.listeners = [];
     this.host.classList.add('aisle-host'); this.host.replaceChildren();
     this.scene = new THREE.Scene(); this.scene.background = new THREE.Color('#050510');
@@ -73,18 +74,22 @@ export class AisleView {
     this.listen(this.itemSelect, 'change', () => this.choose(this.itemSelect.value));
     this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection); } });
     this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection); });
+    // Debug handle, as in the floating space (window.__cwFloat): the camera,
+    // spread and travel live in WebGL, so probes and seeked captures reach them here.
+    window.__cwAisle = this;
     this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(host); this.resize();
   }
 
   listen(node, name, fn) { node.addEventListener(name, fn); this.listeners.push([node, name, fn]); }
   interact() { if (!this.programmatic && !this.disposed) this.callbacks.onInteraction?.(); }
 
-  setClips(filtered, groupKey, { sort = { key: 'none', direction: 'asc' }, labelFor } = {}) {
+  setClips(filtered, groupKey, { sort = { key: 'none', direction: 'asc' }, labelFor, nouns = NEUTRAL_NOUNS } = {}) {
+    this.nouns = nouns;
     const sorted = sortClips(filtered, sort);
     this.clipsByKey = new Map(sorted.map(clip => [clipKey(clip), clip]));
     this.cohorts = groupBy(sorted, groupKey).filter(group => group.clips.length).map((group, i) => ({
-      key: group.label || '__all__', label: group.label ? (labelFor?.(group.label) || group.label) : 'All items',
-      keys: [...new Set(group.clips.map(clipKey))], count: new Set(group.clips.map(clipKey)).size, unit: 'items',
+      key: group.label || '__all__', label: group.label ? (labelFor?.(group.label) || group.label) : `All ${nouns.items}`,
+      keys: [...new Set(group.clips.map(clipKey))], count: new Set(group.clips.map(clipKey)).size, unit: nouns.items,
     }));
     this.art?.setModel({ cohorts: this.cohorts, clipsByKey: this.clipsByKey, allRows: [] }, { preserveOrder: true });
     this.art?.setPresentation({ spread: this.spread, slice: null });
@@ -94,7 +99,7 @@ export class AisleView {
     this.itemSelect.replaceChildren(new Option('Choose an item…', ''));
     const used = new Set();
     for (const group of this.cohorts) {
-      const optgroup = element('optgroup'); optgroup.label = `${group.label} · ${group.count} items`;
+      const optgroup = element('optgroup'); optgroup.label = `${group.label} · ${counted(group.count, this.nouns)}`;
       for (const key of group.keys) if (!used.has(key)) { used.add(key); optgroup.append(new Option(this.clipsByKey.get(key).title || key, key)); }
       if (optgroup.children.length) this.itemSelect.append(optgroup);
     }
@@ -118,7 +123,7 @@ export class AisleView {
     for (const { anchor, node } of this.labels) {
       const group = this.cohorts.find(group => group.key === anchor.cohort);
       const matched = group.keys.filter(key => marks.get(key)?.match).length;
-      node.textContent = exact ? `${group.label} · ${matched} / ${group.count} match` : `${group.label} · ${group.count} items`;
+      node.textContent = exact ? `${group.label} · ${matched} / ${group.count} match` : `${group.label} · ${counted(group.count, this.nouns)}`;
       node.title = node.textContent;
     }
     this.invalidate();
