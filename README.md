@@ -7,6 +7,25 @@ attach claims about a comparison, each pointing at the exact items behind it,
 and can read back what the person selected as exact evidence. It runs from
 static files with no server.
 
+**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 297 frames from the Psychodeli
+visualizer, served as static files from GitHub Pages. Each link opens a
+different view of the same collection:
+
+- **[The wall](https://andyed.github.io/clipwall-demo/)**: every frame, grouped by capture month. The overview
+  paints from 3 sprite-sheet images instead of 297 files.
+- **[One facet](https://andyed.github.io/clipwall-demo/?facet.kaleido=kaleido&group=year)**: the 89 kaleidoscopic
+  frames, grouped by year. The rest stay reachable as context when you zoom
+  out.
+- **[The hallway](https://andyed.github.io/clipwall-demo/?view=aisle&group=year)**: one rack per year. Walk it
+  with the slider, drag to look around, and select a frame to open it.
+- **[Stacks in 3D](https://andyed.github.io/clipwall-demo/?view=3d&group=year)**: each year as a stack you can
+  open and spread.
+- **[The colour space](https://andyed.github.io/clipwall-demo/?view=float&arrange=oklch)**: every frame floats at
+  its dominant colour, with hue around the ring and lightness up. Click one
+  to fly to it.
+- **[Your own axes](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=year&up=lightness&depth=hue)**:
+  year across, lightness up, hue in depth. Change any axis from the menus.
+
 **Status: early public release (0.1).** The interfaces below are versioned and
 validated. The renderer is tested in desktop and mobile Chromium; physical
 devices and other browsers have had less coverage.
