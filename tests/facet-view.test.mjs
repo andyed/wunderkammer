@@ -53,7 +53,7 @@ before(async () => {
     }
     if (url.pathname === '/' || /^\/wall\/[\w./-]+$/.test(url.pathname)) {
       try {
-        const file = url.pathname === '/' ? 'wall/index.html' : url.pathname.slice(1);
+        const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
         if (file.includes('..')) throw new Error('Invalid fixture path');
         const bytes = await readFile(new URL('../' + file, import.meta.url));
         res.setHeader('content-type', file.endsWith('html') ? 'text/html' : file.endsWith('css') ? 'text/css' : 'text/javascript'); res.end(bytes); return;

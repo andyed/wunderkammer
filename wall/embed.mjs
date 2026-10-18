@@ -13,8 +13,11 @@
  */
 import { validateCollection } from './collection.mjs';
 
-/** The wall page next to this module: '/' on a wunderkammer server, the root of a static build. */
-const DEFAULT_WALL = new URL('../', import.meta.url).href;
+/**
+ * The wall page at the package root, one level above this module. Named in
+ * full because a CDN answers a directory URL with a listing, not the page.
+ */
+const DEFAULT_WALL = new URL('../index.html', import.meta.url).href;
 
 export function mount(element, collection, { wallUrl = DEFAULT_WALL, title = 'Collection explorer', timeout = 20000 } = {}) {
   if (!(element instanceof Element)) throw new TypeError('mount(element, collection): element must be a DOM element');

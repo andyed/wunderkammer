@@ -76,7 +76,7 @@ Other standing rules, from `wunderkammer/docs/SPATIAL.md` § Invariants and
   406 same-origin images; use this one), Music Atlas on 4175. Check listeners
   before starting one: `lsof -iTCP:4174 -sTCP:LISTEN`. Start with
   `node serve.mjs --config .local/psychodeli-atlas/wunderkammer.config.json`.
-- Three.js is loaded from a CDN importmap in `wunderkammer/wall/index.html`
+- Three.js is loaded from a CDN importmap in `wunderkammer/index.html`
   (`three@0.169.0`). Muriel demo pages use their own importmap.
 - Muriel lib tests: `node --test tests/spatial-hybrid.test.mjs` and
   `node --test tests/spatial-piles.test.mjs`, run from the muriel root. They
@@ -412,7 +412,7 @@ what was added, what is opt-in, what is Chrome-only.
      except via the atlas draw, so a paint event for a non-promoted card means
      the browser did it (find, selection).
 3. Do **not** touch the flat wall, `applyFilters`, permalinks, piles,
-   view-state, or `wall/index.html` beyond loading nothing new (the module is
+   view-state, or `index.html` beyond loading nothing new (the module is
    imported from `spatial-view.mjs`).
 
 ### Acceptance (Phase 2), all on the Psychodeli Atlas instance on 4174

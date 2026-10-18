@@ -181,7 +181,7 @@ failing.
 
 | Source | Use |
 |---|---|
-| `?collection=<url>` | The wall or `wall/compare.html`, including when a wunderkammer instance serves them |
+| `?collection=<url>` | The wall (`index.html`) or `wall/compare.html`, including when a wunderkammer instance serves them |
 | `?collection=parent` | Set by `mount()`; the embedding page posts the document |
 | `<meta name="wunderkammer-collection" content="…">` | A static build's default (`scripts/build-demo.mjs`) |
 
@@ -196,7 +196,7 @@ not a view-intent key, so it survives permalink rewrites.
 
 ```js
 import * as Wunderkammer from './wall/embed.mjs';
-const wall = Wunderkammer.mount(element, collectionObjectOrUrl, { wallUrl: './' });
+const wall = Wunderkammer.mount(element, collectionObjectOrUrl);   // wallUrl defaults to ../index.html beside embed.mjs
 await wall.ready;   // resolves on the wall's own "view ready" message
 ```
 
@@ -210,8 +210,16 @@ could quote a document the embedder cannot read, such as a local instance's
 `/api/view-state`, so the parent gets a generic error and the frame shows
 the details. Artifact hosts are untested. Checked 2026-10-17 on an npm package's
 `index.html`: jsDelivr serves HTML as `text/plain` and unpkg as `text/html`.
-A CDN-hosted wall page could therefore be framed from unpkg, if the artifact
-host allows framing it. That is untested.
+
+**Hosting the page.** The wall is `index.html` at the package root and loads
+its assets by relative path from `wall/`, so it runs from any directory: `/` on
+a wunderkammer instance, a checkout or static build, or a CDN sub-path such as
+`https://unpkg.com/wunderkammer@<version>/index.html?collection=<url>`.
+`tests/cdn-subpath.test.mjs` serves only the files `npm pack` publishes, under
+a versioned sub-path, and boots the wall and `mount()` there. Pages need a host
+that serves HTML as `text/html`: unpkg or a static host, not jsDelivr. Modules
+load from either CDN. Framing from an artifact host depends on that host's
+content security policy and is untested.
 
 **Facet counting** had two copies, in `serve.mjs` and `scripts/build-demo.mjs`.
 They had drifted: the server's copy assumed every clip had `tags`. There is now

@@ -36,7 +36,7 @@ before(async () => {
       res.end(JSON.stringify({ version: 1, mode: 'mountain', groupKey: 'source', piles: [] }));
     } else if (pathname === '/' || /^\/wall\/[\w.-]+$/.test(pathname)) {
       try {
-        const file = pathname === '/' ? 'wall/index.html' : pathname.slice(1);
+        const file = pathname === '/' ? 'index.html' : pathname.slice(1);
         res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript');
         res.end(await readFile(new URL(`../${file}`, import.meta.url)));
       } catch { res.writeHead(404); res.end(); }

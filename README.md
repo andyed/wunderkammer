@@ -61,7 +61,7 @@ npx http-server -p 8080 .
 
 Then open:
 
-- `http://localhost:8080/wall/?collection=/examples/psychodeli/collection.json`
+- `http://localhost:8080/?collection=/examples/psychodeli/collection.json`
   for the wall. Search, choose facets, group, press **3D**, or open an item.
 - `http://localhost:8080/wall/compare.html?collection=/examples/psychodeli/collection.json&observations=/examples/psychodeli/observations.json`
   for a comparison with two observations. Select one to see the items behind

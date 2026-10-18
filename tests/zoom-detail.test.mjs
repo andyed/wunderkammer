@@ -64,7 +64,7 @@ before(async () => {
     if (url.pathname === '/api/clips') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ clips, facets, corpus: { id: 'zoom', revision: 'r1' }, ui: { defaultGroup: 'none', facetOrder: ['source'], facetLabels: {} } })); return; }
     if (url.pathname === '/api/view-state') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ version: 1, mode: 'mountain', groupKey: 'none', piles: [] })); return; }
     if (url.pathname === '/' || /^\/wall\/[\w.-]+$/.test(url.pathname)) {
-      try { const file = url.pathname === '/' ? 'wall/index.html' : url.pathname.slice(1); const data = await readFile(new URL('../' + file, import.meta.url)); res.setHeader('content-type', file.endsWith('html') ? 'text/html' : file.endsWith('css') ? 'text/css' : 'text/javascript'); res.end(data); return; } catch {}
+      try { const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1); const data = await readFile(new URL('../' + file, import.meta.url)); res.setHeader('content-type', file.endsWith('html') ? 'text/html' : file.endsWith('css') ? 'text/css' : 'text/javascript'); res.end(data); return; } catch {}
     }
     res.writeHead(404); res.end();
   });

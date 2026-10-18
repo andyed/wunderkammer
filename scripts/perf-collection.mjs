@@ -38,11 +38,12 @@ const TYPES = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/ja
 
 const server = createServer(async (req, res) => {
   const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const target = p === '/' ? path.join(root, 'wall/index.html')
+  const page = path.join(root, 'index.html');
+  const target = p === '/' ? page
     : p.startsWith('/c/') ? path.join(docDir, p.slice(3))
     : p.startsWith('/wall/') ? path.join(root, p.slice(1)) : null;
-  // Nothing outside the two roots.
-  if (!target || !(target.startsWith(docDir + path.sep) || target.startsWith(path.join(root, 'wall') + path.sep))) { res.writeHead(404); res.end(); return; }
+  // Nothing outside the page and the two roots.
+  if (!target || !(target === page || target.startsWith(docDir + path.sep) || target.startsWith(path.join(root, 'wall') + path.sep))) { res.writeHead(404); res.end(); return; }
   try {
     if (!(await stat(target)).isFile()) throw new Error('not a file');
     res.setHeader('content-type', TYPES[path.extname(target)] || 'application/octet-stream');

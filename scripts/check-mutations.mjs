@@ -224,6 +224,21 @@ const cases = [
     test: 'tests/observations.test.mjs', pattern: 'figures beside an observation equal',
   },
   {
+    name: 'wall page loads its assets by root path', file: 'index.html',
+    from: '<script type="module" src="wall/wall.mjs"></script>', to: '<script type="module" src="/wall/wall.mjs"></script>',
+    test: 'tests/cdn-subpath.test.mjs', pattern: 'the wall boots from a CDN sub-path',
+  },
+  {
+    name: 'mount() defaults to a directory URL a CDN does not serve as the page', file: 'wall/embed.mjs',
+    from: "new URL('../index.html', import.meta.url)", to: "new URL('../', import.meta.url)",
+    test: 'tests/cdn-subpath.test.mjs', pattern: 'from a CDN finds the wall page',
+  },
+  {
+    name: 'npm package leaves out the wall page', file: 'package.json',
+    from: '    "index.html",\n', to: '',
+    test: 'tests/cdn-subpath.test.mjs', pattern: 'the published package includes the wall page',
+  },
+  {
     name: 'observation selection falls back to the plain evidence', file: 'wall/comparison-app.mjs',
     from: 'evidence=cited?observationEvidence(model,cited):selectEvidence(model,state.selection);', to: 'evidence=selectEvidence(model,state.selection);',
     test: 'tests/comparison-view.test.mjs', pattern: 'selecting an observation shows exactly the union',
@@ -363,7 +378,7 @@ if (!selectedCases.length) throw new Error('No mutation matched MUTATION_FILTER'
 for (const mutation of selectedCases) {
   const dir = await mkdtemp(path.join(tmpdir(), 'wunderkammer-mutation-'));
   try {
-    for (const file of ['clip.mjs', 'lib', 'wall', 'tests', 'scripts', 'package.json']) {
+    for (const file of ['clip.mjs', 'index.html', 'lib', 'wall', 'tests', 'scripts', 'package.json']) {
       await cp(path.join(root, file), path.join(dir, file), { recursive: true });
     }
     await symlink(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir');

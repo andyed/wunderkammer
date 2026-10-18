@@ -50,8 +50,8 @@ async function fixture(t, options = {}) {
     if (image) return route.fulfill({ contentType: 'image/svg+xml', body:
       `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${['#ed2525', '#20e040', '#2449ef'][image[1]]}"/></svg>`,
     });
-    const file = path === '/' ? '/wall/index.html' : path;
-    if (!file.startsWith('/wall/')) return route.fulfill({ status: 404 });
+    const file = path === '/' ? '/index.html' : path;
+    if (file !== '/index.html' && !file.startsWith('/wall/')) return route.fulfill({ status: 404 });
     try {
       // Supply a prior source file to demonstrate failure without reverting
       // shared work: WUNDERKAMMER_WALL_SOURCE=/tmp/audited-wall.mjs.

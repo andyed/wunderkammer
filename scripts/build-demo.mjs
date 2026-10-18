@@ -97,8 +97,7 @@ await writeFile(path.join(out, 'collection.json'), JSON.stringify(collection));
 await cp('wall', path.join(out, 'wall'), { recursive: true,
   filter: source => !['compare.html','comparison.css'].includes(path.basename(source)) && !path.basename(source).startsWith('comparison-') });
 const rewrite = async (file, pairs) => { let s = await readFile(file, 'utf8'); for (const [a, b] of pairs) { if (!s.includes(a)) throw new Error(`${file}: expected ${a}`); s = s.split(a).join(b); } await writeFile(file, s); };
-await rewrite(path.join(out, 'wall', 'index.html'), [['href="/wall/', 'href="wall/'], ['src="/wall/', 'src="wall/']]);
-await cp(path.join(out, 'wall', 'index.html'), path.join(out, 'index.html'));
+await cp('index.html', path.join(out, 'index.html'));
 // The served page loads its collection; ?collection= on the URL still overrides it.
 await rewrite(path.join(out, 'index.html'), [['<head>', '<head>\n<meta name="wunderkammer-collection" content="collection.json">']]);
 await writeFile(path.join(out, '.nojekyll'), '');

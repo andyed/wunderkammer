@@ -250,7 +250,7 @@ const server = http.createServer(async (req, res) => {
     const p = url.pathname;
 
     if (p === '/' || p === '/index.html') {
-      return sendFile(res, path.join(HERE, 'wall', 'index.html'), { req });
+      return sendFile(res, path.join(HERE, 'index.html'), { req });
     }
 
     if (p === '/api/clips') {

@@ -36,6 +36,7 @@
     "visualization"
   ],
   "files": [
+    "index.html",
     "wall/",
     "lib/",
     "adapters/",

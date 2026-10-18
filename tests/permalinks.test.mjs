@@ -32,7 +32,7 @@ before(async () => {
       facets: { source: { new: 40, old: 40 }, year: { 2026: 40, 2025: 40 }, color: { red: 40, blue: 40 }, kaleido: { kaleido: 27, 'non-kaleido': 53 } } })); return; }
     if (p === '/api/view-state') { if (req.method === 'PUT') puts++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ version: 1, mode: 'mountain', groupKey: 'source', piles: [] })); return; }
     if (p === '/' || p.startsWith('/wall/')) {
-      try { const file = p === '/' ? 'wall/index.html' : p.slice(1); const data = await readFile(new URL(`../${file}`, import.meta.url));
+      try { const file = p === '/' ? 'index.html' : p.slice(1); const data = await readFile(new URL(`../${file}`, import.meta.url));
         res.setHeader('content-type', file.endsWith('html') ? 'text/html' : file.endsWith('css') ? 'text/css' : 'text/javascript'); res.end(data); return;
       } catch {}
     }

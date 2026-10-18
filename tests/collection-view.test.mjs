@@ -97,7 +97,7 @@ catch (err) { window.urlResult = err.message; }
 </script>`;
 
 before(async () => {
-  const index = await readFile(new URL('../wall/index.html', import.meta.url), 'utf8');
+  const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   server = createServer(async (req, res) => {
     const p = new URL(req.url, 'http://fixture').pathname;
     if (p.startsWith('/api/')) { apiHits.push(`${req.method} ${p}`); res.writeHead(404); res.end(); return; }
@@ -130,7 +130,7 @@ before(async () => {
     if (p === '/host.html') { res.setHeader('content-type', 'text/html'); res.end(host); return; }
     if (p === '/' || p.startsWith('/wall/')) {
       try {
-        const file = p === '/' ? 'wall/index.html' : p.slice(1);
+        const file = p === '/' ? 'index.html' : p.slice(1);
         const data = await readFile(new URL(`../${file}`, import.meta.url));
         res.setHeader('content-type', file.endsWith('html') ? 'text/html' : file.endsWith('css') ? 'text/css' : 'text/javascript');
         res.end(data); return;

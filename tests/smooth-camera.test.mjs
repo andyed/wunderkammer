@@ -22,7 +22,7 @@ before(async () => {
       res.end(`<!doctype html><style>body{margin:0}#stage{position:relative;width:900px;height:650px;overflow:hidden;touch-action:none}#canvas{transform-origin:0 0;width:1600px;height:1200px;background:#345}</style><div id="stage"><div id="canvas"></div></div><script type="module">import { Viewport } from '/wall/viewport.mjs'; window.camera = new Viewport(document.querySelector('#stage'), document.querySelector('#canvas')); camera.setContent(1600,1200); camera.fit(); window.cameraReady=true;</script>`);
     } else if (path === '/' || /^\/wall\/[\w./-]+$/.test(path)) {
       try {
-        const file = path === '/' ? 'wall/index.html' : path.slice(1);
+        const file = path === '/' ? 'index.html' : path.slice(1);
         res.setHeader('Content-Type', file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript');
         res.end(await readFile(new URL(`../${file}`, import.meta.url)));
       } catch { res.writeHead(404); res.end(); }
