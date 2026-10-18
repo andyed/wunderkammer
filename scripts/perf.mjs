@@ -10,7 +10,7 @@
  * in-page requestAnimationFrame sampler for frame times.
  *
  *   node scripts/perf.mjs --url http://127.0.0.1:4175 [--headed] [--chrome]
- *        [--scenario boot|flat|interact|spatial|all] [--label before] [--out .local/perf]
+ *        [--scenario boot|flat|interact|spatial|float|all] [--label before] [--out .local/perf]
  *        [--warm] [--runs 3] [--check] [--budgets perf-budgets.json] [--atlas-timeout 60000] [--profile]
  *
  * The page's own probe (wall/instrument.mjs) is switched on for every run, so
@@ -60,6 +60,7 @@ const WARM = flag('--warm');
 const RUN_FLAT = SCENARIO === 'all' || SCENARIO === 'flat';
 const RUN_INTERACT = SCENARIO === 'all' || SCENARIO === 'flat' || SCENARIO === 'interact';
 const RUN_SPATIAL = SCENARIO === 'all' || SCENARIO === 'spatial';
+const RUN_FLOAT = SCENARIO === 'all' || SCENARIO === 'float';
 
 const round = (v, d = 1) => Number.isFinite(v) ? Number(v.toFixed(d)) : v;
 const pct = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
@@ -220,6 +221,30 @@ const SPATIAL_HOOKS = () => {
     atlas.draw = (slot, image) => { const ok = d(slot, image); if (ok) window.__spDraws++; return ok; };
   }
 };
+/** The floating space's own counters: renders, per-render CPU (pass + draw), atlas residency. Cheap enough to poll. */
+const FLOAT_STATE = () => {
+  const v = window.__cwFloat; if (!v?.built || !v.field) return null;
+  const a = v.field.atlases; let far = 0, near = 0;
+  for (let i = 0; i < v.count; i++) { if (a.farSlot[i] >= 0) far++; if (a.nearSlot[i] >= 0) near++; }
+  const work = v.frameTimes.slice(-600), info = v.renderer.info;
+  return { count: v.count, far, near, failed: a._failed.size, busy: a._inflight > 0 || a._farQueue.length > 0 || a._nearQueue.length > 0 || a.far._dirty || a.near._dirty,
+    moving: v.field.moving, flying: !!v.tween, renders: v.renderCount, work, calls: info.render.calls, atlasMB: Math.round(v.field.bytes / 1048576) };
+};
+async function waitFloat(page, timeout = ATLAS_TIMEOUT) {
+  const t0 = Date.now(); let s;
+  for (;;) {
+    s = await page.evaluate(FLOAT_STATE);
+    if (s && s.far === s.count && !s.busy && !s.moving && !s.flying) break;
+    if (Date.now() - t0 > timeout) { s = { ...s, timedOut: true }; break; }
+    await page.waitForTimeout(100);
+  }
+  return { ...s, ms: Date.now() - t0, work: undefined };
+}
+/** Renders and per-render work (ms) between two FLOAT_STATE readings. */
+function floatDelta(a, b) {
+  const n = Math.max(0, (b?.renders ?? 0) - (a?.renders ?? 0)), work = n ? b.work.slice(-n) : [];
+  return { renders: n, workP50: round(pct(work, 0.5), 2), workP95: round(pct(work, 0.95), 2), workMax: round(Math.max(0, ...work), 2), calls: b?.calls };
+}
 const SPATIAL_RESET = () => { window.__spRenders = 0; window.__spRenderMs = 0; window.__spUploads = 0; window.__spUploadMB = 0; window.__spDraws = 0; };
 
 async function waitAtlas(page, timeout = ATLAS_TIMEOUT) {
@@ -437,6 +462,59 @@ async function runOnce(browser, runIndex) {
     console.log(`    unfilter: field ${reload2.count} · ${reload2.drawn} tiles drawn, resident again in ${reload2.ms}ms · ${reload2.uploads} uploads = ${round(reload2.uploadMB, 0)}MB`);
     result.rows.push(unf);
     await page.click('#view-3d'); await page.waitForTimeout(300);
+  }
+
+  if (RUN_FLOAT) {
+    // ---- float: open ----------------------------------------------------
+    const tf0 = Date.now();
+    result.rows.push(await measure(page, cdp, 'float open', async () => {
+      await page.click('#view-float');
+      await page.waitForFunction(() => window.__cwFloat?.built && !document.getElementById('float-host').hidden, null, { timeout: 60000 });
+    }, { settle: 300 }));
+    const fl = await waitFloat(page);
+    fl.wallMs = Date.now() - tf0;
+    console.log(`  float atlas: ${fl.far}/${fl.count} far, ${fl.near} near, ${fl.failed} failed in ${fl.ms}ms · atlas ${fl.atlasMB}MB · ${fl.calls} draw calls${fl.timedOut ? ' (timed out)' : ''}`);
+    result.rows.push({ name: 'float atlas load', ...fl });
+    // Each row carries the rAF frame intervals (frames) and the view's own
+    // per-render work: billboard + tier pass + draw, measured in the page.
+    const floatRow = async (name, action, opts) => {
+      const before = await page.evaluate(FLOAT_STATE);
+      const row = await measure(page, cdp, name, action, opts);
+      row.float = floatDelta(before, await page.evaluate(FLOAT_STATE));
+      console.log(`  ${''.padEnd(28)} ✺ ${row.float.renders} renders · work p50 ${row.float.workP50}ms p95 ${row.float.workP95}ms max ${row.float.workMax}ms · ${row.float.calls} draw calls`);
+      result.rows.push(row);
+    };
+    await floatRow('float idle 2s', async () => { await page.waitForTimeout(2000); }, { settle: 0 });
+    const box = await page.locator('.float-canvas').boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height * 0.4;
+    await floatRow('float orbit (60 moves)', async () => {
+      await page.mouse.move(cx, cy); await page.mouse.down();
+      for (let i = 0; i < 60; i++) { await page.mouse.move(cx + 300 * Math.sin(i / 60 * Math.PI * 2), cy + 60 * Math.sin(i / 30 * Math.PI)); await page.waitForTimeout(16); }
+      await page.mouse.up();
+    });
+    await floatRow('float dolly (40 ticks)', async () => {
+      await page.mouse.move(cx + 80, cy);
+      for (let i = 0; i < 40; i++) { await page.mouse.wheel(0, i < 20 ? -40 : 40); await page.waitForTimeout(16); }
+    });
+    await page.keyboard.press('Home'); await waitFloat(page);
+    await floatRow('float arrange OKLab → HSL', async () => {
+      await page.locator('.float-arrange input[value=hsl]').check(); await waitFloat(page);
+    }, { settle: 200 });
+    await floatRow('float arrange HSL → A–Z', async () => {
+      await page.locator('.float-arrange input[value=az]').check(); await waitFloat(page);
+    }, { settle: 200 });
+    await page.locator('.float-arrange input[value=oklab]').check(); await waitFloat(page);
+    const option = await page.locator('.float-items select option').nth(Math.max(1, Math.floor(await page.locator('.float-items select option').count() / 2))).getAttribute('value');
+    await floatRow('float fly-to (item menu)', async () => {
+      await page.selectOption('.float-items select', option); await waitFloat(page);
+    }, { settle: 200 });
+    await page.keyboard.press('Home'); await waitFloat(page);
+    const chip = page.locator('#rail .chip[data-facet]').first();
+    if (await chip.count() && await chip.isVisible()) {
+      const chipLabel = await chip.getAttribute('data-value');
+      await floatRow(`float scope on (${chipLabel})`, async () => { await chip.click(); await waitFloat(page); }, { settle: 300 });
+      await floatRow('float scope off', async () => { await chip.click(); await waitFloat(page); }, { settle: 300 });
+    }
+    await page.click('#view-float'); await page.waitForTimeout(300);
   }
 
   // Leak check: what survives a forced GC is retained, not merely unswept.
