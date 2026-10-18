@@ -1,0 +1,153 @@
+{
+ "clipwall": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "diptych": {
+  "total_hits": 17,
+  "returned": 17,
+  "exact": 0,
+  "live": 9,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": [
+   "DIPTIC (IC 009; ['Peak Internet Inc. (CORPORATION; WASHINGTON, USA)', 'BUCKLIN, RHIA S (INDIVIDUAL; USA)'])",
+   "DIPTYQUE (IC 009; ['GILLES DOUZIECH (INDIVIDUAL; FRANCE)', 'ERIC POIX (INDIVIDUAL; FRANCE)'])"
+  ]
+ },
+ "wunderkammer": {
+  "total_hits": 4,
+  "returned": 4,
+  "exact": 0,
+  "live": 4,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "kunstkammer": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "preparator": {
+  "total_hits": 2,
+  "returned": 2,
+  "exact": 2,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "doubleslide": {
+  "total_hits": 1,
+  "returned": 1,
+  "exact": 0,
+  "live": 1,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "skied": {
+  "total_hits": 4,
+  "returned": 4,
+  "exact": 0,
+  "live": 1,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "salonhang": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "museumless": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "bilderatlas": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "epidiascope": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "stereopticon": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "selects": {
+  "total_hits": 273,
+  "returned": 200,
+  "exact": 3,
+  "live": 39,
+  "live_exact": 1,
+  "live_exact_classes": [
+   "IC 003"
+  ],
+  "live_software_marks": [
+   "MAGNOLIA SELECTS (IC 042,IC 009; ['Magnolia Pictures LLC (LIMITED LIABILITY COMPANY; DELAWARE, USA)'])"
+  ]
+ },
+ "tafeln": {
+  "total_hits": 2,
+  "returned": 2,
+  "exact": 0,
+  "live": 1,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "findingaid": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ },
+ "ekphrastic": {
+  "total_hits": 0,
+  "returned": 0,
+  "exact": 0,
+  "live": 0,
+  "live_exact": 0,
+  "live_exact_classes": [],
+  "live_software_marks": []
+ }
+}

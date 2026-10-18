@@ -1,0 +1,49 @@
+{
+  "name": "wunderkammer",
+  "version": "0.1.0",
+  "description": "A collection explorer for people and language models: a JSON collection document in, pan/zoom/facets/comparison out, exact evidence back.",
+  "type": "module",
+  "bin": {
+    "wunderkammer-clip": "./clip.mjs"
+  },
+  "scripts": {
+    "start": "node serve.mjs",
+    "clip": "node clip.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:mutations": "node scripts/check-mutations.mjs",
+    "perf": "node scripts/perf.mjs",
+    "perf:check": "node scripts/perf.mjs --runs 3 --check --headed --chrome",
+    "perf:scale": "node scripts/perf-scale.mjs",
+    "perf:compare": "node scripts/perf-compare.mjs"
+  },
+  "license": "MIT",
+  "private": false,
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  },
+  "author": "Andy Edmonds",
+  "homepage": "https://github.com/andyed/wunderkammer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andyed/wunderkammer.git"
+  },
+  "keywords": [
+    "collection",
+    "image-browser",
+    "zoomable-ui",
+    "faceted-search",
+    "llm",
+    "visualization"
+  ],
+  "files": [
+    "wall/",
+    "lib/",
+    "adapters/",
+    "serve.mjs",
+    "clip.mjs",
+    "examples/",
+    "docs/CONTRACT.md",
+    "README.md",
+    "LICENSE"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "adapters": ["images"],
+  "port": 4174,
+  "imageRoots": [{ "id": "my-images", "path": "/path/to/an/image/folder" }],
+  "imageIndex": "index.json",
+  "imageCache": "cache",
+  "corpusName": "My images",
+  "ui": { "title": "My images", "defaultGroup": "captured" }
+}

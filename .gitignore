@@ -1,0 +1,14 @@
+node_modules/
+.DS_Store
+
+view-state.json
+
+# Local instance configs, indexes and derived image caches
+.local/
+__pycache__/
+
+# Instance identities and immutable local view snapshots
+*.instance-id
+*.permalinks/
+dist-demo/
+/wunderkammer.config.json

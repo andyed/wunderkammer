@@ -1,0 +1,12 @@
+name: gate
+on: [push, pull_request]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-public.mjs
+      - run: node --test tests/check-public.test.mjs tests/collection.test.mjs tests/observations.test.mjs tests/comparison-model.test.mjs tests/comparison-state.test.mjs tests/view-intent.test.mjs tests/facet-model.test.mjs

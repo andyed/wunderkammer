@@ -1,0 +1,9 @@
+{
+  "adapters": ["obsidian"],
+  "vault": "/path/to/your/obsidian/vault",
+  "vaultName": "your-vault-name",
+  "clipsDir": "clips",
+  "attachmentsDir": "attachments",
+  "port": 4173,
+  "dedupe": true
+}

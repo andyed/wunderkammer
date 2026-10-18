@@ -1,0 +1,191 @@
+{
+  "about": "Performance budgets for wunderkammer. scripts/perf.mjs --check compares the MEDIAN of --runs N against these ceilings and exits 1 on a miss. Keys are scenario names with parenthesised facet values removed (scenarioKey in scripts/perf.mjs). headedOnly budgets are frame or GPU-side numbers that SwiftShader cannot speak to; a headless run reports them as skipped. Rationale per class is in docs/PERF.md, 'Budgets'. Targets are deliberately the bar we want, not the bar we clear: a FAIL here is a work item, not a broken build.",
+  "corpusClass": "up to ~2,000 items (Music Atlas 1,793; Psychodeli Atlas 406) at 1440x900 @2x",
+  "scenarios": {
+    "boot": {
+      "readyMs": 1000,
+      "fcpMs": 600,
+      "imagesMs": {
+        "max": 3000,
+        "headedOnly": true
+      }
+    },
+    "flat idle 1s": {
+      "scriptMs": 20,
+      "layoutMs": 0,
+      "framesOver33": {
+        "max": 0,
+        "headedOnly": true
+      }
+    },
+    "flat pan": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesOver33": {
+        "max": 0,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50
+    },
+    "flat pan zoomed": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesOver33": {
+        "max": 0,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50
+    },
+    "flat zoom in": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesMax": {
+        "max": 50,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50,
+      "scriptMs": 100
+    },
+    "flat zoom out": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesMax": {
+        "max": 50,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50,
+      "scriptMs": 100
+    },
+    "flat filter on": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "framesOver33": {
+        "max": 1,
+        "headedOnly": true
+      },
+      "inputBlockMs": 50
+    },
+    "flat filter off": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "framesOver33": {
+        "max": 1,
+        "headedOnly": true
+      },
+      "inputBlockMs": 50
+    },
+    "flat group →": {
+      "longestTaskMs": 100,
+      "scriptMs": 100,
+      "_note": "Playwright selectOption is synthetic, so Chrome records no Event Timing interaction; budget the main thread instead."
+    },
+    "detail open": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50,
+      "inputBlockMs": 50
+    },
+    "detail walk": {
+      "inpMs": {
+        "max": 50,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50,
+      "inputBlockMs": 50
+    },
+    "detail close": {
+      "inpMs": {
+        "max": 50,
+        "headedOnly": true
+      },
+      "longestTaskMs": 50,
+      "inputBlockMs": 50
+    },
+    "search type": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "inputBlockMs": 50
+    },
+    "search clear": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "inputBlockMs": 50
+    },
+    "spatial open": {
+      "inpMs": {
+        "max": 200,
+        "headedOnly": true
+      },
+      "longestTaskMs": 150,
+      "inputBlockMs": 50
+    },
+    "spatial idle 2s": {
+      "renders": 0,
+      "scriptMs": 20
+    },
+    "spatial pan": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesOver33": {
+        "max": 0,
+        "headedOnly": true
+      },
+      "scriptMs": 300
+    },
+    "spatial zoom in/out": {
+      "framesP95": {
+        "max": 16.7,
+        "headedOnly": true
+      },
+      "framesMax": {
+        "max": 50,
+        "headedOnly": true
+      }
+    },
+    "spatial filter on": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "inputBlockMs": 50
+    },
+    "spatial filter off": {
+      "inpMs": {
+        "max": 100,
+        "headedOnly": true
+      },
+      "longestTaskMs": 100,
+      "inputBlockMs": 50
+    },
+    "session retained": {
+      "nodes": 2000,
+      "heapMB": 10,
+      "listeners": 500
+    }
+  }
+}

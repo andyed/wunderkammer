@@ -1,0 +1,9 @@
+{
+  "adapters": ["music"],
+  "port": 4175,
+  "musicRoots": [{ "id": "my-music", "path": "/path/to/your/music" }],
+  "imageIndex": "index.json",
+  "imageCache": "cache",
+  "corpusName": "Music cover art",
+  "ui": { "title": "Music Atlas", "defaultGroup": "decade" }
+}

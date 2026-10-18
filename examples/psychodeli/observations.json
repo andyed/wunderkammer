@@ -1,0 +1,54 @@
+{
+  "format": "wunderkammer.observations",
+  "version": 1,
+  "comparison": {
+    "version": 1,
+    "question": "Did kaleidoscopic frames become more common from 2025 to 2026?",
+    "corpus": {
+      "id": "f70bd1e3-722d-4cdf-9b47-81b82a9ba6ca",
+      "revision": "9a4724feb68d9b4940a1c9132dfac7b5c24a0551526b257bff8f1762a3bee0e0"
+    },
+    "scope": {
+      "query": "",
+      "facets": {}
+    },
+    "groupBy": "year",
+    "groups": [
+      "2025",
+      "2026"
+    ],
+    "measure": "kaleido",
+    "metric": "share",
+    "categoryLimit": 8,
+    "sort": "difference"
+  },
+  "observations": [
+    {
+      "id": "more-kaleido",
+      "text": "Kaleidoscopic frames are a larger share of the 2026 captures than of the 2025 ones.",
+      "evidence": {
+        "cells": [
+          {
+            "value": "kaleido",
+            "cohort": "2025"
+          },
+          {
+            "value": "kaleido",
+            "cohort": "2026"
+          }
+        ]
+      }
+    },
+    {
+      "id": "less-uncertain",
+      "text": "The kaleido estimate is less often uncertain in 2026.",
+      "evidence": {
+        "cells": [
+          {
+            "value": "uncertain"
+          }
+        ]
+      }
+    }
+  ]
+}

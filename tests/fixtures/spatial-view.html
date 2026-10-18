@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Spatial lifecycle regression fixture</title>
+<link rel="stylesheet" href="/wall/spatial/spatial.css">
+<style>
+  body { margin: 0; background: #07070d; color: white; }
+  header { position: relative; z-index: 10; height: 44px; }
+  .sp-host { top: 44px; }
+  #opened { display: inline; }
+</style>
+<header>
+  <button id="full">All clips</button>
+  <button id="narrow">Gamma only</button>
+  <button id="empty">No clips</button>
+  <button id="replace">Changed source, same id</button>
+  <button id="retitle">Edited title, same source</button>
+  <output id="opened"></output>
+  <output id="hovered"></output>
+</header>
+<main id="host" class="sp-host"></main>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module">
+  import { SpatialView } from '/wall/spatial/spatial-view.mjs';
+  const clips = ['Alpha', 'Beta', 'Gamma'].map((title, i) => ({
+    id: String(i), title, url: `https://example.test/${title.toLowerCase()}`,
+    cover: `/fixtures/${title.toLowerCase()}.svg`, source: 'Fixture',
+    tags: ['fixture'], props: { dims: ['400x300'] },
+    editUri: `obsidian://open?vault=fixture&file=${title}`,
+  }));
+  // Hover preview is opt-in per host, so the fixture carries the switch the
+  // app wires to "is the detail pane open".
+  window.hoverOn = false;
+  window.hoverLog = [];
+  const hovered = () => document.querySelector('#hovered');
+  window.view = new SpatialView(document.querySelector('#host'), {
+    onOpen: (clip) => { document.querySelector('#opened').textContent = `${clip.title}|${clip.url}`; },
+    onHover: (clip) => { window.hoverLog.push(clip.title); hovered().textContent = clip.title; },
+    onHoverEnd: () => { window.hoverLog.push(null); hovered().textContent = ''; },
+    hoverEnabled: () => window.hoverOn,
+  });
+  // Stable camera and motion let screenshots assess the rendered cards and
+  // GPU quads. Data still enters through the production setClips lifecycle.
+  window.show = (next) => {
+    view.setClips(next);
+    view.motion.enabled = false;
+    view.basePos.set(0, 0, 1600);
+    view.lookTarget.set(0, 0, 0);
+    view.camera.position.copy(view.basePos);
+    view.camera.lookAt(view.lookTarget);
+    view.scene.traverse((object) => { if (object.isLineSegments) object.visible = false; });
+    for (let i = 0; i < Math.min(next.length, view.field.count); i++) {
+      view.field.place(i, (i - (next.length - 1) / 2) * 420, 0, 0, 360, 270);
+    }
+    view.field.layout();
+    view.hybrid.promoteDistance = 10000;
+    view.hybrid.update(view.camera);
+  };
+  document.querySelector('#full').onclick = () => show(clips);
+  document.querySelector('#narrow').onclick = () => show([clips[2]]);
+  document.querySelector('#empty').onclick = () => show([]);
+  document.querySelector('#replace').onclick = () => show([{
+    ...clips[2], title: 'Delta', url: 'https://example.test/delta',
+    cover: '/fixtures/delta.svg', editUri: 'obsidian://open?vault=fixture&file=Delta',
+  }]);
+  document.querySelector('#retitle').onclick = () => {
+    // In-place editor changes must not be mistaken for an unchanged snapshot.
+    view.clips[0].title = 'Delta edited';
+    view.clips[0].cover = '/fixtures/beta.svg';
+    show(view.clips);
+  };
+  const initial = new URLSearchParams(location.search).get('initial');
+  show(initial === 'empty' ? [] : initial === 'narrow' ? [clips[2]] : clips);
+  window.fixtureReady = true;
+</script>
+</html>

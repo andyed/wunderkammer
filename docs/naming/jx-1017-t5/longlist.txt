@@ -1,0 +1,70 @@
+# name<TAB>source (harvest section)
+clipwall	incumbent working name
+mnemosyne	2 Warburg, Bilderatlas Mnemosyne
+bilderatlas	2 Warburg
+tafel	2 Warburg's panels (Tafeln)
+tafeln	2 Warburg's panels
+plates	2 archive/library: plates
+museumless	2 Malraux, museum without walls
+wallless	2 Malraux, museum without walls
+imaginaire	2 Malraux, Le Musée imaginaire
+petersburg	2 the Petersburg hang
+skied	2 Royal Academy: skied
+ontheline	2 Royal Academy: on the line
+salon	2 salon hanging
+salonhang	2 salon hanging
+pendant	2 paired works hung as pendants
+diptych	2 hinged pair
+proofsheet	2 photographic proof sheet
+contactsheet	2 photographic contact sheet
+lighttable	2 the light table
+loupe	2 the loupe
+selects	2 a photo editor's selects
+diascope	2 slide projection
+episcope	2 opaque projection
+epidiascope	2 combined projector
+stereopticon	2 dissolving views
+lantern	2 magic lantern
+doubleslide	2 Wölfflin's double projection
+wunderkammer	2 cabinet of curiosities
+kunstkammer	2 cabinet of curiosities
+vitrine	2 display case
+herbarium	2 specimen sheets for comparison
+specimen	2 specimen drawer
+docent	2 museum guide who shows a collection
+registrar	2 keeper of accession records
+preparator	2 installs and hangs work
+openstorage	2 visible storage galleries
+studycollection	2 study collection
+stacks	2 library stacks
+findingaid	2 archival finding aid
+folio	2 folio
+carrel	2 study carrel
+concordance	2 concordance
+collation	2 collation
+memex	2 Bush, As We May Think
+ekphrasis	3 verbal description of a visual work
+ekphrastic	3 ekphrasis
+synoptic	2 synoptic comparison
+synopsis	2 synoptic comparison
+juxta	2 juxtaposition
+smallmultiples	3 Tufte
+perspectivewall	3 Mackinlay, Robertson and Card
+semanticzoom	3 Pad++
+dynamicquery	3 Ahlberg and Shneiderman
+overview	3 Shneiderman's task list
+detailsondemand	3 Shneiderman's task list
+facetwall	1 facets + wall
+survey	1 survey / review / dive
+aisle	1 aisle view
+racks	1 album racks
+baywise	1 cohort bays
+cohort	1 comparison cohorts
+evidencewall	1 evidence + wall
+handback	1 hand-back
+pinwall	2 pinned panels
+corkboard	2 pinned panels
+hangfile	2 hanging + file
+plinth	2 display
+atlaswall	3 texture atlas + wall
+tilewall	3 tile + wall
