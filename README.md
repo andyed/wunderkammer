@@ -19,35 +19,35 @@ The model writes a collection and a comparison, and attaches observations that
 cite exact cells. The page shows each claim's text beside figures it computes
 itself. Selecting one lights its evidence in the matrix and on the walls.
 
-![Two observations about kaleidoscopic frames in 2025 and 2026. The selected one cites 89 items, which stay lit on the album walls while the rest dim.](docs/screenshots/1-claims.png)
+![Two observations about kaleidoscopic frames in 2025 and 2026. The selected one cites 89 items, which stay lit on the album walls while the rest dim.](docs/screenshots/1-claims.webp)
 
 ### 2. Explore a large image collection
 
 Survey everything at once, filter with facets that show their counts, then
 open an item and come back to where you were.
 
-![297 frames grouped by capture month, with facet counts in the rail.](docs/screenshots/2-explore.png)
+![297 frames grouped by capture month, with facet counts in the rail.](docs/screenshots/2-explore.webp)
 
 ### 3. Keep a reference board for a creative project
 
 Clippings and captures sit together, faceted by what they're evidence of. Open
 one and read its notes without losing the board.
 
-![Renderer captures and simulation fields grouped by evidence type, with one capture open in the detail pane.](docs/screenshots/3-reference.png)
+![Renderer captures and simulation fields grouped by evidence type, with one capture open in the detail pane.](docs/screenshots/3-reference.webp)
 
 ### 4. Browse your own library at scale
 
 `serve.mjs` reads a music or photo folder and serves it as a live collection,
 with saved piles and links.
 
-![A music library of 1,793 albums at overview scale, grouped by release decade.](docs/screenshots/4-library.png)
+![A music library of 1,793 albums at overview scale, grouped by release decade.](docs/screenshots/4-library.webp)
 
 ### 5. Work through an archive
 
 Documents rather than art: clippings grouped by publication period, filtered
 to the years in question.
 
-![153 newspaper clippings from 1819 to 1920, grouped by publication period.](docs/screenshots/5-archive.png)
+![153 newspaper clippings from 1819 to 1920, grouped by publication period.](docs/screenshots/5-archive.webp)
 
 Shots 1 and 2 show the bundled example; 3–5 are local collections run on the
 same engine.
