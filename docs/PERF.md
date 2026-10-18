@@ -11,6 +11,46 @@ uniformly smooth dense transitions are not established. Stable reader geometry,
 reversible approach/return, bounded animation and image queues, and the flat
 overview picture are described in [SMOOTH_SPATIAL.md](SMOOTH_SPATIAL.md).
 
+## Floating space (2026-10-18)
+
+`node scripts/perf.mjs --url <instance> --scenario float --headed --chrome`.
+Setup: Apple M3 Max, Chrome 155, 1440×900 at 2×, 120 Hz display. One run per
+corpus, cold cache.
+- **297 items:** the Psychodeli example collection, served statically.
+- **1,793 items:** a local music library through `serve.mjs`.
+
+Each row has two measures:
+- **Frame:** the interval between animation frames, so 8.3 ms is 120 fps.
+- **Work:** the view's own time per render (billboard, tier pass and draw
+  submission), measured in the page.
+
+| Scenario | 297: frame p50 / p95 / max (ms) | 297: work p50 / p95 | 1,793: frame p50 / p95 / max (ms) | 1,793: work p50 / p95 |
+|---|---|---|---|---|
+| Orbit, 60 pointer moves | 8.3 / 9.2 / 9.3 | 0.2 / 0.3 | 8.3 / 9.0 / 9.4 | 0.3 / 0.4 |
+| Dolly, 40 wheel ticks | 8.3 / 9.2 / 9.4 | 0.2 / 0.3 | 8.3 / 9.2 / 9.4 | 0.3 / 0.4 |
+| Arrange, OKLab → HSL | 8.3 / 9.1 / 9.3 | 0.3 / 0.4 | 8.3 / 9.3 / 32.8 | 0.5 / 0.7 |
+| Arrange, HSL → A–Z | 8.3 / 9.2 / 9.4 | 0.2 / 0.3 | 8.3 / 9.1 / 9.3 | 0.5 / 2.5 |
+| Fly-to, item menu | 8.3 / 9.2 / 9.3 | 0.3 / 0.7 | 8.4 / 17.4 / 33.6 | 0.3 / 0.6 |
+| Idle, 2 s | 8.3 / 9.2 / 9.3 | no renders | 8.3 / 9.2 / 9.4 | no renders |
+
+- **Atlas load.** After opening, the far tiles were resident in 104 ms at 297
+  items (21 MB of atlas) and 1,062 ms at 1,793 (45 MB).
+- **Scope changes** render once or twice. Their slower frames (max 33 ms at
+  297, 66 ms at 1,793) come from the rail and scope bar laying out, not from
+  the space.
+
+Two measurements changed the code before these numbers were taken:
+- **Render loops multiplied.** A camera flight's `setCamera()` requested a
+  frame from inside the frame callback, which started a second loop beside the
+  first, and every flight step doubled them. One arrangement change made
+  81,924 renders; a fly-to made 2,048. Headless runs hid it: SwiftShader's slow
+  frames left too few frames for the doubling to show. A guard now keeps one
+  loop, and a test asserts at most one render per animation frame.
+- **Near atlas reduced to 64 slots.** With 256 near slots (4096², 93 MB of
+  atlas), a fly-to at 1,793 items had a p95 frame of 33.2 ms, 7 frames over
+  33 ms, while dozens of tiles promoted at once. With 64 slots it is 17.4 ms
+  and one frame.
+
 ## Collection sprite sheets: 297 cover files → 16 pages (2026-10-17)
 
 **Change.** A collection document can ship its covers as cells of a few

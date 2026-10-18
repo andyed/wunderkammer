@@ -52,7 +52,10 @@ The spatial view maps the same subset into the field (rows or the similarity
 map) or facet-derived piles. The artwork aisle uses the same canonical groups,
 sort and attribute brush through `wall/aisle-view.mjs` and shared
 `wall/album-walls.mjs`. Readable URL intent feeds the existing ViewSpec/history
-path; see [AISLE.md](AISLE.md) for the integration boundary. The detail panel
+path; see [AISLE.md](AISLE.md) for the integration boundary. The floating
+space places the whole corpus by colour or title and dims what the scope
+leaves out, rather than laying out the subset; see
+[SPATIAL.md](SPATIAL.md#the-floating-space). The detail panel
 displays an item; it does not currently implement relationship navigation.
 
 ## Required state boundaries

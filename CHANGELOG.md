@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Floating space** (✺, `?view=float&arrange=oklab|oklch|hsl|az`). The whole
+  corpus floats in 3D, placed by each item's dominant colour in OKLab, OKLCH
+  or HSL, or shelved A–Z. Search and facets dim items in place. Click flies to
+  an item and opens it; the item menu, `[ ]` and Fit reach everything without
+  camera skill. Permalinks carry the arrangement and the camera.
+  [SPATIAL.md](docs/SPATIAL.md#the-floating-space).
+
 ## 0.1.0 — 2026-10-18
 
 First public release.

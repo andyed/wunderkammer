@@ -180,6 +180,171 @@ current license analysis or a performance comparison. See
 An exploration tool may still borrow selection, undo or navigation ideas from
 editors without taking over the source store.
 
+## The floating space
+
+The ✺ control, or `?view=float&arrange=oklab|oklch|hsl|az`, floats the whole
+corpus in 3D. The model is meodai's 32,000 colour names
+([names.color.pizza](https://names.color.pizza/), MIT): each name sits at its
+colour, and the page switches between colour models. Apple's HotSauce (1996)
+is the warning. It floated a folder tree in 3D, and the depth restated the
+hierarchy the tree already showed. So every position here means something,
+and the arrangement that has no third dimension (A–Z) gets none.
+
+Source: `wall/float-space.mjs` (positions, pure), `wall/float-view.mjs`
+(renderer and navigation), `wall/float.css`. The view is built the way
+`wall/aisle-view.mjs` is. `spatial-view.mjs` changed by two `export`
+keywords (`sourceFor`, `proxied`).
+
+### What a position means
+
+An item is placed by `palette[0]`, its largest median-cut colour cluster;
+`scripts/image_features.py` sorts the palette by pixel count.
+
+| Arrangement | Across | Up | Depth |
+|---|---|---|---|
+| OKLab | a × k | L | b × k |
+| OKLCH | hue angle, radius = relative chroma | L | (cylinder) |
+| HSL | hue angle, radius = HSL chroma (max − min) | HSL lightness | (bicone) |
+| A–Z | reading order within a shelf | shelf (0–9, A … Z, #) | none: a flat wall |
+
+- **OKLab** uses a single stretch k for both a and b, so hue angles and
+  lightness stay exact. Covers and screenshots span about four times as much
+  lightness as chroma: 0.51 against 0.21 for the Psychodeli example, and 0.90
+  against 0.18 for a 1,793-album library. Unstretched, the space stands as a
+  needle down the middle of the stage. k is chosen per collection, rounded to a
+  half, capped at 4, and printed on the `+a` label (`×2` and `×4` for those two).
+- **OKLCH** keeps OKLab's hue angle, so switching between the two moves items
+  only outward or inward. The radius is 700 × √(C / C₉₅), where C₉₅ is the
+  collection's 95th-percentile chroma. Muted covers move out to where their hue
+  can be read, and one neon outlier cannot press the rest against the axis.
+- **HSL** is the bicone, not the cylinder. HSL saturation is unstable at the
+  ends: #010300 has saturation 1, and on a cylinder it would sit at full radius
+  beside the vivid colours.
+- **A–Z** sorts by title with numeric collation and folded accents.
+- **No palette.** Items without one wait on a labelled shelf below the space
+  ("No palette · n"). They are not dropped, and not parked at the origin.
+- **Declumping.** Identical colours are common (black covers, white
+  screenshots) and would z-fight. Items closer than 0.6 of a tile edge are
+  pushed apart, but never further than 0.6 of an edge from their colour. The
+  diagnostics report both the exact and the drawn positions. In the Psychodeli
+  example, 245 of 297 items moved: by 21 world units on average (0.011 OKLab
+  L), and 54 at most.
+- **Tiles** have equal area whatever their aspect, so a panorama does not
+  outweigh a portrait. The edge is 680 / ∛N world units, kept between 30 and
+  150; lightness spans 2,000 units.
+- **Guides** (axes, the hue ring and their labels) span the collection's own
+  range and print its extremes, for example `L 0.85 · lightest`. They draw
+  beneath every tile, so the grey axis never crosses a neutral cover.
+
+### Scope dims; nothing moves
+
+The field is built once per corpus. Search and facets only change each item's
+brightness: out of scope drops to 25%, with most of its saturation removed, so
+that in a space arranged by colour a dimmed item does not compete on colour.
+Dimmed items are not picked, not listed in the item menu and not stepped to,
+so a click passes through them. A placed camera stays where it is. A fitted
+camera refits only when the stage resizes, as when the scope bar appears.
+
+### Reaching an item
+
+PHILOSOPHY.md requires that reaching an item never takes camera skill. Fly-to
+and the menus are the ways in; free flight is for looking around.
+
+- **Click** flies to the item and opens the detail pane. The camera travels
+  along the line from where it is, so it does not turn. The item lands at 38%
+  of the stage height, in the middle of the stage left of the detail pane.
+- **Item menu** lists the scope by title and flies to the chosen item.
+  Inspect, or Enter, opens it.
+- **[ and ]** step through the scope in the arrangement's own order: around
+  the hue wheel with greys first, or by title in A–Z.
+- **Fit** (Home, 0 or ⊡) shows the whole space above the toolbar, from the
+  front, above and to the right. A–Z is seen square on.
+- **Free flight.** Drag orbits. The wheel dollies toward the pointer
+  (OrbitControls `zoomToCursor`). Arrow keys orbit, W A S D fly, Q and E move
+  down and up, and + and − dolly.
+- **Reduced motion.** Flights and arrangement changes jump instead of animating.
+
+### State and links
+
+The ViewSpec gains `presentation.mode: 'float'` and
+`float: { version: 1, arrangement, position, target, fitted, selection }`.
+These are validated in `wall/view-schema.mjs`, which the snapshot endpoint
+shares.
+- **Copy view** carries the camera.
+- **The live link (↗)** carries `view=float&arrange=…`, and the receiver fits.
+- **Errors.** An unknown `arrange` value is refused with a message; it is
+  never ignored.
+- **Pile state.** The view never writes it.
+
+### Rendering
+
+- **Primitives.** The vendored `TileField` and `AtlasPair` draw the space in
+  one instanced draw call; the guides and the selection ring add two more.
+- **Sprite sheets.** Collections that name them draw from their cells through
+  `sprite-covers.mjs`, as the 3D view does. A failed page falls back to the
+  file.
+- **Billboards.** Tiles face the camera: each frame of camera motion
+  rewrites every instance's rotation, about 0.3 ms at 1,793 items.
+- **Motion.** Arrangement changes use `TileField.moveTo`/`tick`, the
+  per-instance motion that the 3D view's pile spreads use. The DOM FLIP in
+  `layout-motion.mjs` animates DOM nodes, not GPU instances. A change takes
+  about a second, and most of the travel happens in the first quarter.
+- **Frame loop.** It runs only while a flight, a transition or atlas work
+  (fetch or upload) is pending. An idle space draws nothing.
+- **Near atlas.** It has 64 slots (2048², 16 MB) rather than the 3D view's
+  256. A fly-to frames a few neighbours, and the smaller texture halved the
+  arrival hitch (see PERF.md).
+
+The view patches the vendored fragment shader on its own material and leaves
+`lib/` unedited. If the source text it expects is missing, the patch fails
+loudly: `dimMode` becomes `hidden`, a status line appears and the tests fail.
+
+1. **Output encoding.** The shader samples the sRGB-tagged atlas, which the GPU
+   decodes to linear, and writes the result without re-encoding. Covers draw
+   about 2.2 gamma dark, and dark covers turn black. Measured: atlas 169
+   renders as 96.
+2. **Slot lookup.** The slot index arrives as an interpolated float. At an
+   exact multiple of the atlas's column count it can arrive as 4.9999…, and
+   `floor` then picks the previous row: slot 5 of a 5-column atlas drew a band
+   of slot 4.
+3. **Dimming.** TileField writes per-instance opacity as 0 or 1 and draws
+   with the depth buffer, not blending. The patch reads the value as
+   brightness instead.
+
+The 3D view shares the first two bugs. In the Psychodeli 3D view, atlas
+215, 0, 9 renders as 172, 0, 1. Both should be fixed upstream in muriel.
+
+### Proof
+
+- `tests/float-view.test.mjs` places items against Ottosson's published OKLab
+  coordinates for the sRGB primaries, and checks HSL, OKLCH angles and A–Z
+  order. It also covers fly-to landing and size; dimming with no movement of
+  items or camera; per-tile GPU pixels (sRGB, no slot bleed, dimmed colour);
+  one render per animation frame; permalinks, live links and refused intent;
+  and the phone layout.
+- `tests/collection-view.test.mjs` checks that the float atlas draws
+  sprite-sheet cells.
+- `scripts/check-mutations.mjs` has 17 float cases, all detected.
+- Frame times are in [PERF.md](PERF.md): 120 fps throughout at 297 items, and
+  at 1,793 items apart from the fly-to arrival.
+
+### Limits
+
+- **Occlusion.** A fly-to can land with a neighbour in front of the item. The
+  detail pane still shows it.
+- **Collection-relative scales.** The OKLab stretch and the OKLCH radius are
+  set per collection, so positions cannot be compared across collections.
+- **Lens and sort** are disabled here, as in the 3D view.
+- **Shelf labels.** In a dense A–Z wall they hide each other until you fly
+  closer.
+- **Screenshots.** A screenshot's dominant colour includes its UI chrome.
+- **Touch** uses OrbitControls' defaults: one finger orbits; two fingers dolly
+  and pan.
+- **Header width.** On a collection with similarity icons, ✺ makes the
+  header wrap one button sooner. It already wrapped at 1,440 px on main.
+- **Phone header.** On a phone the view and zoom buttons scroll sideways
+  rather than pushing ↗ onto a fourth row, and ▶ starts partly out of view.
+
 ## Known gaps
 
 The prioritized [hybrid hardening plan](HYBRID_HARDENING.md) adds concrete

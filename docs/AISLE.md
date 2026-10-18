@@ -17,7 +17,7 @@ corpus. For example:
 
 Highlight keeps the other items in place; a facet changes membership. Repeated
 `facet.KEY` values retain the canonical OR-within/AND-across semantics. Supported
-parameters are `view=flat|3d|aisle`, `q`, `group`, `sort`, `direction=asc|desc`,
+parameters are `view=flat|3d|aisle|float`, `arrange=oklab|oklch|hsl|az` (floating space), `q`, `group`, `sort`, `direction=asc|desc`,
 `lens`, one `highlight.KEY`, repeated `facet.KEY`, `travel`, `spread`, `focus`
 (stable item URL), and `rail=0|1`. Travel and spread range from zero to one.
 
