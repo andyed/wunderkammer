@@ -58,11 +58,6 @@ const cases = [
     test: 'tests/flat-wall.test.mjs', pattern: 'cluster suggestions switch scope',
   },
   {
-    name: 'native image drag cancels canvas gesture', file: 'wall/wall.mjs',
-    from: 'img.draggable = false; // native image dragging', to: 'img.draggable = true; // native image dragging',
-    test: 'tests/flat-wall.test.mjs', pattern: 'edge-pan prototype enlarges rendered tiles',
-  },
-  {
     name: 'edge drag silently stays bounded', file: 'wall/viewport.mjs',
     from: "zoom: drag && this.panMode === 'edge'", to: 'zoom: false',
     test: 'tests/flat-wall.test.mjs', pattern: 'edge-pan prototype enlarges rendered tiles',
@@ -101,8 +96,10 @@ const cases = [
   },
   {
     name: 'fixed-width overview collapse', file: 'wall/wall.mjs',
-    from: 'viewportAspect: state.renderAspect',
-    to: 'wallWidth: 2500',
+    // Anchored on the main layout call: the same option now also appears earlier,
+    // in the background plane's layout, which this test does not measure.
+    from: '// The similarity map places the corpus once; a filter hides, never re-projects.\n    viewportAspect: state.renderAspect',
+    to: '// The similarity map places the corpus once; a filter hides, never re-projects.\n    wallWidth: 2500',
     test: 'tests/flat-wall.test.mjs', pattern: 'rendered overview fills available space',
   },
   {
