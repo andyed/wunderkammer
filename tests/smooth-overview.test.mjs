@@ -75,7 +75,10 @@ async function agreement(page) {
     const context = surface.getContext('2d'), bitmap = surface.getBoundingClientRect(), failures = [], samples = [];
     for (const tile of document.querySelectorAll('#canvas > .overview-painted')) {
       const r = tile.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
-      if (x <= stage.left || x >= stage.right || y <= stage.top || y >= stage.bottom) continue;
+      // elementFromPoint rounds to whole CSS pixels at any DPR (Chromium 148):
+      // a centre in the stage's last half pixel is tested at the stage's edge,
+      // here also the viewport's, and returns null. Skip points it cannot address.
+      if (x <= stage.left || Math.round(x) >= stage.right || y <= stage.top || Math.round(y) >= stage.bottom) continue;
       const id = Number(tile.getAttribute('aria-label').split(' ').at(-1));
       const actual = [...context.getImageData(Math.floor((x - bitmap.left) * surface.width / bitmap.width),
         Math.floor((y - bitmap.top) * surface.height / bitmap.height), 1, 1).data];
@@ -317,7 +320,8 @@ test('covered camera motion transforms a complete picture without repainting and
             let checked = 0;
             for (const tile of document.querySelectorAll('#canvas > .overview-painted')) {
               const box = tile.getBoundingClientRect(), x = box.x + box.width / 2, y = box.y + box.height / 2;
-              if (x <= stage.left || x >= stage.right || y <= stage.top + 70 || y >= stage.bottom) continue;
+              // Rounded like elementFromPoint (see agreement).
+              if (x <= stage.left || Math.round(x) >= stage.right || y <= stage.top + 70 || Math.round(y) >= stage.bottom) continue;
               const id = Number(tile.getAttribute('aria-label').split(' ').at(-1));
               const expected = [40 + id * 29 % 180, 40 + id * 47 % 180, 40 + id * 67 % 180, 255];
               const actual = [...context.getImageData(Math.floor((x - rect.left) * canvas.width / rect.width), Math.floor((y - rect.top) * canvas.height / rect.height), 1, 1).data];
@@ -362,13 +366,24 @@ test('zoom-out exposes decoded DOM at cached-picture edges without repainting ev
             let fallback = 0, painted = 0;
             for (const tile of document.querySelectorAll('#canvas > .tile')) {
               const box = tile.getBoundingClientRect(), x = box.x + box.width / 2, y = box.y + box.height / 2;
-              if (x <= stage.left || x >= stage.right || y <= stage.top + 70 || y >= stage.bottom) continue;
+              // Rounded like elementFromPoint (see agreement). During a zoom-out,
+              // columns of tile centres move in across the right edge; in some
+              // sampled frames one sits in the last half pixel, and its hit is null.
+              if (x <= stage.left || Math.round(x) >= stage.right || y <= stage.top + 70 || Math.round(y) >= stage.bottom) continue;
               const id = Number(tile.getAttribute('aria-label').split(' ').at(-1));
               if (tile.classList.contains('overview-painted')) {
                 painted++;
                 const expected = [40 + id * 29 % 180, 40 + id * 47 % 180, 40 + id * 67 % 180, 255];
                 const actual = [...context.getImageData(Math.floor((x - bitmap.left) * canvas.width / bitmap.width), Math.floor((y - bitmap.top) * canvas.height / bitmap.height), 1, 1).data];
                 if (actual.some((n, i) => Math.abs(n - expected[i]) > 2)) failures.push({ id, actual, expected });
+                // A tile hidden behind the picture must lie wholly inside it. One
+                // that straddles the shrinking picture's edge has a correct centre
+                // pixel and a blank outer part, which a centre-only probe never
+                // samples. Over 30 runs the worst painted tile sat 0.007 px inside;
+                // with the un-paint step removed, stale tiles stuck out 12 px.
+                const outside = Math.max(bitmap.left - Math.max(box.left, stage.left), Math.min(box.right, stage.right) - bitmap.right,
+                  bitmap.top - Math.max(box.top, stage.top), Math.min(box.bottom, stage.bottom) - bitmap.bottom);
+                if (outside > 0.5) failures.push({ straddles: id, outside });
               } else {
                 fallback++;
                 const image = tile.querySelector('img');
@@ -416,7 +431,8 @@ test('zoom-out reentry after reading scale immediately reuses its retained bitma
             let checked = 0;
             for (const tile of document.querySelectorAll('#canvas > .overview-painted')) {
               const box = tile.getBoundingClientRect(), x = box.x + box.width / 2, y = box.y + box.height / 2;
-              if (x <= stage.left || x >= stage.right || y <= stage.top + 70 || y >= stage.bottom) continue;
+              // Rounded like elementFromPoint (see agreement).
+              if (x <= stage.left || Math.round(x) >= stage.right || y <= stage.top + 70 || Math.round(y) >= stage.bottom) continue;
               const id = Number(tile.getAttribute('aria-label').split(' ').at(-1));
               const expected = [40 + id * 29 % 180, 40 + id * 47 % 180, 40 + id * 67 % 180, 255];
               const actual = [...context.getImageData(Math.floor((x - bitmap.left) * canvas.width / bitmap.width), Math.floor((y - bitmap.top) * canvas.height / bitmap.height), 1, 1).data];
