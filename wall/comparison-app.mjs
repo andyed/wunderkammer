@@ -301,7 +301,7 @@ function restoreURL() {
 }
 async function boot() {
   if(collection){const loaded=await loadCollection(collection);payload=loaded.data;for(const warning of loaded.warnings)console.warn(`[wunderkammer] collection: ${warning}`);
-    if(collection!==FROM_PARENT){const wall=new URL('../',location.href);wall.searchParams.set('collection',new URL(collection,location.href).href);document.querySelector('.wordmark').href=wall.href;}}
+    if(collection!==FROM_PARENT){const wall=new URL('../index.html',location.href);wall.searchParams.set('collection',new URL(collection,location.href).href);document.querySelector('.wordmark').href=wall.href;}}
   else{const response=await fetch('/api/clips');if(!response.ok)throw new Error(`Collection unavailable (HTTP ${response.status})`);payload=await response.json();}
   if(!Array.isArray(payload.clips)||!payload.corpus)throw new Error('The collection has no records or corpus identity.');
   spriteCovers.setCorpus(payload.sheets,payload.clips,{covers:payload.images?.sheets==='covers'});

@@ -239,6 +239,11 @@ const cases = [
     test: 'tests/cdn-subpath.test.mjs', pattern: 'the published package includes the wall page',
   },
   {
+    name: 'comparison page links back to the package folder', file: 'wall/comparison-app.mjs',
+    from: "const wall=new URL('../index.html',location.href);", to: "const wall=new URL('../',location.href);",
+    test: 'tests/cdn-subpath.test.mjs', pattern: 'the comparison page links back to the wall page',
+  },
+  {
     name: 'observation selection falls back to the plain evidence', file: 'wall/comparison-app.mjs',
     from: 'evidence=cited?observationEvidence(model,cited):selectEvidence(model,state.selection);', to: 'evidence=selectEvidence(model,state.selection);',
     test: 'tests/comparison-view.test.mjs', pattern: 'selecting an observation shows exactly the union',

@@ -16,7 +16,7 @@ const PKG = '/npm/wunderkammer@0.1.0/';
 const TYPES = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const svg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="${color}"/></svg>`;
 const doc = () => ({
-  format: 'wunderkammer.collection', version: 1, corpus: { id: 'fixture:cdn' },
+  format: 'wunderkammer.collection', version: 1, corpus: { id: 'fixture:cdn', revision: 'r1' },
   ui: { title: 'CDN fixture', defaultGroup: 'decade' },
   clips: Array.from({ length: 12 }, (_, i) => ({
     id: `c${i}`, title: `Cover ${i}`, cover: `media/${i % 3}.svg`,
@@ -85,6 +85,20 @@ test('mount() from a CDN finds the wall page with no wallUrl', async () => {
     assert.equal(await page.evaluate(() => window.result), 'ready');
     assert.equal(new URL(await page.locator('iframe').getAttribute('src')).pathname, `${PKG}index.html`);
     assert.equal(await page.frameLocator('iframe').locator('#canvas > .tile').count(), 12);
+    assert.deepEqual(misses, [], 'no request leaves the package');
+  } finally { await page.close(); }
+});
+
+test('the comparison page links back to the wall page inside the package', async () => {
+  misses.length = 0;
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}${PKG}wall/compare.html?collection=/data/c.json`);
+    await page.waitForFunction(() => document.body.dataset.comparisonReady === 'true', null, { timeout: 20000 });
+    // unpkg answers the package folder with its file browser, so the link names the page.
+    const back = new URL(await page.locator('.wordmark').getAttribute('href'), page.url());
+    assert.equal(back.pathname, `${PKG}index.html`);
+    assert.equal(back.searchParams.get('collection'), `${origin}/data/c.json`);
     assert.deepEqual(misses, [], 'no request leaves the package');
   } finally { await page.close(); }
 });
