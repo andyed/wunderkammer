@@ -170,6 +170,31 @@ Image and music collections need the Python indexers in `scripts/`
 (`scripts/music-requirements.txt`). See [docs/IMAGE_CORPORA.md](docs/IMAGE_CORPORA.md)
 and [docs/MUSIC_CORPORA.md](docs/MUSIC_CORPORA.md).
 
+## How it renders
+
+The 3D view (Stacks in 3D) splits the work between WebGL and HTML, by what
+each item needs at its distance:
+
+| Tier | Items | Drawn as | Carries |
+|---|---|---|---|
+| Far | the whole collection | instanced GPU quads from one atlas of 64-px tiles | colour and shape |
+| Near | a pool of about 256 | larger atlas slots | a recognizable image |
+| Promoted | a pool of about 14 | real HTML cards over the canvas | selectable text, links, keyboard focus |
+
+The GPU carries the crowd and HTML carries the few items you are reading, so
+the number of live HTML cards in the 3D view stays fixed as the collection
+grows. In the floating space, items are drawn from the same two kinds of
+atlas, with 64 near slots, and none is promoted: an item opens in the detail
+pane. A search or facet is a mask over the field: items outside it dim or
+hide in place, and the far atlas is kept.
+
+The flat wall paints its overview from a few sprite-sheet images (3 pages
+instead of 297 files for the demo) and switches to HTML tiles at a reading
+zoom. Its HTML tiles are not pooled, so its page cost still grows with the
+collection. The trade-offs, limits and measured numbers are in
+[docs/SPATIAL.md](docs/SPATIAL.md#why-a-hybrid-renderer) and
+[docs/PERF.md](docs/PERF.md).
+
 ## Design
 
 - [Philosophy](docs/PHILOSOPHY.md): useful motion, trustworthy context.
