@@ -7,12 +7,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-// A CDN as unpkg serves a package: the published files under a versioned
-// sub-path, HTML as text/html, and nothing at the host root. Only the files
-// `npm pack` would publish are served, so a page that reaches outside its
-// package, or a file left out of package.json "files", fails here.
+// A static host serving a release under a versioned sub-path: HTML as
+// text/html, and nothing at the host root. Only the files package.json lists
+// are served (`npm pack --dry-run` reads that list), so a page that reaches
+// outside the release, or a file left out of "files", fails here.
 const root = fileURLToPath(new URL('../', import.meta.url));
-const PKG = '/npm/wunderkammer@0.1.0/';
+const PKG = '/wunderkammer@v0.1.0/';
 const TYPES = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const svg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="${color}"/></svg>`;
 const doc = () => ({
@@ -95,7 +95,7 @@ test('the comparison page links back to the wall page inside the package', async
   try {
     await page.goto(`${origin}${PKG}wall/compare.html?collection=/data/c.json`);
     await page.waitForFunction(() => document.body.dataset.comparisonReady === 'true', null, { timeout: 20000 });
-    // unpkg answers the package folder with its file browser, so the link names the page.
+    // A host may answer the release's folder with a file listing, so the link names the page.
     const back = new URL(await page.locator('.wordmark').getAttribute('href'), page.url());
     assert.equal(back.pathname, `${PKG}index.html`);
     assert.equal(back.searchParams.get('collection'), `${origin}/data/c.json`);

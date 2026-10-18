@@ -80,8 +80,11 @@ steps and traps.
      `"images": { "cors": true }`, or they stay blank in the 3D views.
    - To embed the wall in a page:
      `import { mount } from './wall/embed.mjs'; await mount(element, collectionOrUrl).ready;`
-   - A CDN can serve the modules, but the page itself needs a host that
-     serves HTML as `text/html`. jsDelivr serves it as `text/plain`.
+   - Get Wunderkammer from a release tag on GitHub; no package is published
+     to a registry. jsDelivr's GitHub route
+     (`https://cdn.jsdelivr.net/gh/andyed/wunderkammer@v0.2.0/wall/embed.mjs`)
+     serves a tag's modules, but serves HTML as `text/plain`, so the page
+     itself needs a static host that serves HTML as `text/html`.
 
 6. **Make a claim the person can check.** Write `observations.json`, then open
    `wall/compare.html?collection=<document>&observations=<observations>`:

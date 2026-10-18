@@ -226,18 +226,22 @@ origins. Problem text goes to the parent only when the parent posted the
 document. A `?collection=` URL is fetched with the wall's origin. Its problems
 could quote a document the embedder cannot read, such as a local instance's
 `/api/view-state`, so the parent gets a generic error and the frame shows
-the details. Artifact hosts are untested. Checked 2026-10-17 on an npm package's
-`index.html`: jsDelivr serves HTML as `text/plain` and unpkg as `text/html`.
+the details. Artifact hosts are untested.
 
-**Hosting the page.** The wall is `index.html` at the package root and loads
-its assets by relative path from `wall/`, so it runs from any directory: `/` on
-a wunderkammer instance, a checkout or static build, or a CDN sub-path such as
-`https://unpkg.com/wunderkammer@<version>/index.html?collection=<url>`.
-`tests/cdn-subpath.test.mjs` serves only the files `npm pack` publishes, under
+**Hosting the page.** Wunderkammer is released as git tags (`v<version>` on
+GitHub); no package is published to a registry. The wall is `index.html` at
+the repository root and loads its assets by relative path from `wall/`, so it
+runs from any directory: `/` on a wunderkammer instance, or a checkout or
+static build of a tag at any sub-path, such as a GitHub Pages project site
+(the [live demo](https://andyed.github.io/clipwall-demo/) is one).
+`tests/cdn-subpath.test.mjs` serves only the files `package.json` lists, under
 a versioned sub-path, and boots the wall and `mount()` there. Pages need a host
-that serves HTML as `text/html`: unpkg or a static host, not jsDelivr. Modules
-load from either CDN. Framing from an artifact host depends on that host's
-content security policy and is untested.
+that serves HTML as `text/html`. jsDelivr's GitHub route
+(`https://cdn.jsdelivr.net/gh/andyed/wunderkammer@<tag>/`) serves a tag's
+modules as JavaScript but its HTML as `text/plain` (checked 2026-10-18), so
+import modules from it only and pass `mount()` a `wallUrl` on a static host.
+Framing from an artifact host depends on that host's content security policy
+and is untested.
 
 **Facet counting** had two copies, in `serve.mjs` and `scripts/build-demo.mjs`.
 They had drifted: the server's copy assumed every clip had `tags`. There is now

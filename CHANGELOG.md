@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Get it from the release tag.** No package is published to a registry,
+  so the contract, the skill and the 0.1.0 notes below now point at the tag
+  on GitHub, a static host serving a checkout of it, or the live demo.
+  jsDelivr's GitHub route serves a tag's modules, not its pages.
 - **An agent skill and a command-line check.** `skills/wunderkammer/SKILL.md`
   tells an agent when to use Wunderkammer, the steps from document to link,
   and the traps; `npx skills add andyed/wunderkammer` installs it.
@@ -68,11 +72,11 @@ First public release.
 - **Hand-back.** `window.wunderkammer.export()` returns scope, focus,
   highlight and the exact items on the wall, or the evidence packet on the
   comparison page.
-- **Loads from a CDN.** The wall is `index.html` at the package root, with
-  relative asset paths, so it runs from a CDN sub-path such as unpkg's. Pages
-  need HTML served as `text/html`, which jsDelivr does not do; modules load
-  from either. `mount()` finds the page with no `wallUrl`, and the comparison
-  page links back to it.
+- **Runs from a sub-path.** The wall is `index.html` at the repository
+  root, with relative asset paths, so a static host can serve a checkout of
+  the tag at any sub-path. Pages need HTML served as `text/html`, which
+  jsDelivr does not do; it serves the modules only. `mount()` finds the page
+  with no `wallUrl`, and the comparison page links back to it.
 - **Local server.** `serve.mjs` serves Obsidian vaults, TiddlyWiki, image
   folders and music libraries, with saved piles and compact links.
 - **Public-tree gate.** `scripts/check-public.mjs` checks the tree in CI.
