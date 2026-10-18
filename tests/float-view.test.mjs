@@ -83,6 +83,10 @@ test('float arrangement places each item at its dominant colour in OKLab, OKLCH 
     near(scene.exact[key('0000ff')], [RADIUS * Math.cos(deg(240)), 0, RADIUS * Math.sin(deg(240))], 0.01, 'HSL blue');
     near(scene.exact[key('ffff00')], [RADIUS * Math.cos(deg(60)), 0, RADIUS * Math.sin(deg(60))], 0.01, 'HSL yellow');
     near(scene.exact[key('ffffff')], [0, WORLD / 2, 0], 0.01, 'HSL white'); near(scene.exact[key('808080')], [0, (128 / 255 - 0.5) * WORLD, 0], 0.01, 'HSL grey');
+    // A bicone: navy's radius is its HSL chroma, (108 − 26) / 255, not its saturation (0.61).
+    const navyHue = ((26 - 42) / (108 - 26) + 4) * 60;
+    near(scene.exact[key('1a2a6c')], [RADIUS * 82 / 255 * Math.cos(deg(navyHue)), ((108 + 26) / 2 / 255 - 0.5) * WORLD, RADIUS * 82 / 255 * Math.sin(deg(navyHue))], 0.01, 'HSL navy');
+    near(scene.exact[key('000000')], [0, -WORLD / 2, 0], 0.01, 'HSL black sits on the axis');
     for (const [id, target] of Object.entries(scene.targets)) near(scene.positions[id], target, 0.01, `${id} moved to its HSL place`);
 
     await p.locator('.float-arrange input[value=oklch]').check(); await settled(p); ({ scene } = await debug(p));
@@ -105,12 +109,16 @@ test('float arrangement places each item at its dominant colour in OKLab, OKLCH 
   } finally { await p.close(); }
   // Without reduced motion, items travel to their new places rather than jumping.
   const m = await open('?view=float&rail=0', { motion: true }); try {
+    // Count animation frames alongside renders: a transition draws at most once per frame.
+    await m.evaluate(() => { window.__frames = 0; const count = () => { window.__frames++; requestAnimationFrame(count); }; requestAnimationFrame(count); window.__renders0 = window.__cwFloat.renderCount; });
     await m.locator('.float-arrange input[value=hsl]').check();
     const mid = await m.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.wunderkammerFloatDebug().scene)))));
     assert.ok(mid.moving > 0, 'the arrangement change animates');
     const red = mid.positions[key('ff0000')], target = mid.targets[key('ff0000')];
     assert.ok(Math.hypot(...red.map((v, i) => v - target[i])) > 1, 'red is still on its way');
     await settled(m); const done = (await debug(m)).scene;
+    const { frames, renders } = await m.evaluate(() => ({ frames: window.__frames, renders: window.__cwFloat.renderCount - window.__renders0 }));
+    assert.ok(renders <= frames + 2, `${renders} renders in ${frames} animation frames: one render loop, not several`);
     for (const [id, t] of Object.entries(done.targets)) near(done.positions[id], t, 0.01, `${id} arrived`);
   } finally { await m.close(); }
 });

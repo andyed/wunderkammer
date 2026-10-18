@@ -134,7 +134,10 @@ export function arrange(clips, arrangement, { edge = tileEdge(clips.length) } = 
         const r = RADIUS * Math.sqrt(Math.min(1, C / cref)), t = h * Math.PI / 180;
         x = r * Math.cos(t); y = (L - 0.5) * WORLD; z = r * Math.sin(t);
       } else {
-        const [H, S, Lh] = hsl(rgb), r = RADIUS * S, t = H * Math.PI / 180;
+        // The HSL bicone: radius is HSL chroma (max − min), not saturation.
+        // Saturation is unstable at the ends: #010300 has S = 1, and on a
+        // cylinder it would sit at full radius beside the vivid colours.
+        const [H, S, Lh] = hsl(rgb), r = RADIUS * S * (1 - Math.abs(2 * Lh - 1)), t = H * Math.PI / 180;
         x = r * Math.cos(t); y = (Lh - 0.5) * WORLD; z = r * Math.sin(t);
       }
       positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z;
@@ -231,7 +234,7 @@ function colourGuides(arrangement, positions, placed, stretch, labels, guides) {
     const t = deg * Math.PI / 180, r = RADIUS + 70;
     labels.push({ text: `${hue} · ${deg}°`, kind: 'hue', point: [r * Math.cos(t), mid, r * Math.sin(t)] });
   }
-  labels.push({ text: arrangement === 'hsl' ? 'radius · saturation' : 'radius · relative chroma', kind: 'axis', point: [RADIUS * 0.5, mid - 40, 0] });
+  labels.push({ text: arrangement === 'hsl' ? 'radius · HSL chroma' : 'radius · relative chroma', kind: 'axis', point: [RADIUS * 0.5, mid - 40, 0] });
 }
 
 /**

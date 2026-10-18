@@ -768,6 +768,10 @@ body[data-view-mode=aisle] .review-tip .brush-key { font-size:16px; }
 @media (max-width:700px) and (hover:none) {
   .main-controls { padding-block:4px; }
   .main-controls .zoomctl, #copy-view, #copy-live-view { order:1; }
+  /* The view and zoom buttons share a row with the two link buttons. When they
+   * outgrow it (the floating space's ✺ added one), the group scrolls sideways
+   * instead of pushing ↗ onto a fourth header row. */
+  .main-controls .zoomctl { flex:1 1 0; min-width:200px; overflow-x:auto; scrollbar-width:none; }
   #view-aisle,#copy-live-view { min-height:44px; }
   body[data-view-mode=aisle] #attribute-lens { display:block; }
   body[data-view-mode=aisle] .review-tip[data-brush-active] { display:block; }

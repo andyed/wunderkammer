@@ -383,6 +383,11 @@ const cases = [
     test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
   },
   {
+    name: 'float HSL radius uses saturation (a cylinder)', file: 'wall/float-space.mjs',
+    from: 'r = RADIUS * S * (1 - Math.abs(2 * Lh - 1))', to: 'r = RADIUS * S',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
+  },
+  {
     name: 'float arrangement change leaves items where they were', file: 'wall/float-view.mjs',
     from: 'if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q); continue; }',
     to: 'if (still) continue;',
@@ -449,6 +454,11 @@ const cases = [
     name: 'float live link drops the arrangement', file: 'wall/view-intent.mjs',
     from: "  if (view.presentation.mode === 'float') p.set('arrange', view.float.arrangement);", to: '',
     test: 'tests/float-view.test.mjs', pattern: 'float arrangement and camera survive',
+  },
+  {
+    name: 'float flight starts a second render loop', file: 'wall/float-view.mjs',
+    from: 'if (this.frame || this.ticking || this.disposed', to: 'if (this.frame || this.disposed',
+    test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
   },
   {
     name: 'sprite floating space ignores cells', file: 'wall/float-view.mjs',

@@ -26,6 +26,7 @@ import { ARRANGEMENTS, ARRANGEMENT_LABELS, isArrangement, arrange } from './floa
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const titleOrder = new Intl.Collator(undefined, { numeric: true });
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
 const element = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text) node.textContent = text; return node; };
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -100,12 +101,12 @@ export class FloatView {
     this.arrangeGroup = element('fieldset', 'float-arrange');
     this.arrangeGroup.append(element('legend', '', 'Arrange by'));
     this.radios = new Map();
+    const group = `float-arrange-${Math.random().toString(36).slice(2, 8)}`;
     for (const name of ARRANGEMENTS) {
       const label = element('label'), input = element('input');
-      input.type = 'radio'; input.name = `float-arrange-${Math.random().toString(36).slice(2, 8)}`; input.value = name;
+      input.type = 'radio'; input.name = group; input.value = name;
       label.append(input, element('span', '', ARRANGEMENT_LABELS[name])); this.arrangeGroup.append(label); this.radios.set(name, input);
     }
-    for (const input of this.radios.values()) input.name = [...this.radios.values()][0].name;
     const selectLabel = element('label', 'float-items');
     this.itemSelect = element('select'); this.itemSelect.setAttribute('aria-label', 'Choose an item in this scope to fly to it'); selectLabel.append(element('span', '', 'Item'), this.itemSelect);
     this.inspectButton = element('button', '', 'Inspect'); this.inspectButton.type = 'button'; this.inspectButton.disabled = true;
@@ -180,7 +181,7 @@ export class FloatView {
     if (spriteCovers.available) { spriteCovers.warm(64); spriteCovers.warm(160); }
     const clips = this.clips;
     this.field = new TileField({
-      scene: this.scene, count: Math.max(1, this.count), nearDistance: 1200, nearSlots: 256,
+      scene: this.scene, count: Math.max(1, this.count), nearDistance: 1200, nearSlots: 64,
       resolve: (i, tier) => { const src = sourceFor(clips[i], tier === 'near' ? 256 : 64); return src ? proxied(src) : null; },
       // Sprite-sheet cells, as in the 3D view: a cell-only cover has no URL,
       // and RETRY waits for its page; a failed page falls back to the file.
@@ -213,7 +214,7 @@ export class FloatView {
     }
     this.itemSelect.replaceChildren(new Option(this.scopeCount ? 'Choose an item…' : 'No items in this scope', ''));
     const titles = [...this.inScope.keys()].filter(i => this.inScope[i])
-      .map(i => [i, String(this.clips[i].title || this.keys[i])]).sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true }));
+      .map(i => [i, String(this.clips[i].title || this.keys[i])]).sort((a, b) => titleOrder.compare(a[1], b[1]));
     for (const [i, title] of titles) this.itemSelect.append(new Option(title, this.keys[i]));
     if (!this.inScopeKey(this.selection)) this.selection = null;
     this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; this.itemSelect.disabled = !this.scopeCount;
@@ -485,12 +486,20 @@ export class FloatView {
    */
   invalidate() {
     this.dirty = true;
-    if (this.frame || this.disposed || !this.visible || this.contextLost || !this.renderer) return;
+    // Inside tick() the frame decides at its end whether to run again. A
+    // request from here as well would start a second loop beside it, and every
+    // flight step would double them (measured: 81,924 renders for one
+    // arrangement change in headed Chrome).
+    if (this.frame || this.ticking || this.disposed || !this.visible || this.contextLost || !this.renderer) return;
     this.frame = requestAnimationFrame(now => this.tick(now));
   }
   tick(now) {
     this.frame = null;
     if (this.disposed || !this.visible || this.contextLost || !this.field && !this.dirty) return;
+    this.ticking = true;
+    try { this.frameStep(now); } finally { this.ticking = false; }
+  }
+  frameStep(now) {
     const dt = Math.min(100, now - (this.lastTick ?? now)); this.lastTick = now;
     const started = performance.now();
     const flying = this.tickCamera(now), moving = this.field ? this.field.tick(dt) > 0 : false;
@@ -512,7 +521,7 @@ export class FloatView {
     // waiting for their throttled upload: stopping before that last flush
     // leaves placeholders on screen over pixels the atlas already holds.
     const loading = this.field && atlasBusy(this.field.atlases);
-    if (flying || moving || loading || this.tween) this.frame = requestAnimationFrame(t => this.tick(t));
+    if (flying || moving || loading || this.tween || this.dirty) this.frame = requestAnimationFrame(t => this.tick(t));
     else this.lastTick = undefined;
   }
   /** Every tile faces the camera: a cover seen edge-on carries no information. */
@@ -540,13 +549,18 @@ export class FloatView {
   }
   placeLabels() {
     const occupied = [], point = new THREE.Vector3();
-    for (const { point: anchor, node } of this.labels) {
+    for (const label of this.labels) {
+      const { point: anchor, node } = label;
       point.copy(anchor).project(this.camera);
-      const x = (point.x + 1) / 2 * this.width, y = (1 - point.y) / 2 * this.height;
+      let x = (point.x + 1) / 2 * this.width; const y = (1 - point.y) / 2 * this.height;
       const visible = point.z > -1 && point.z < 1 && x > 8 && x < this.width - 8 && y > 8 && y < this.height - 8
         && !occupied.some(p => Math.abs(p.y - y) < 30 && Math.abs(p.x - x) < 150);
       node.hidden = !visible;
-      if (visible) { node.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`; occupied.push({ x, y }); }
+      if (!visible) continue;
+      // Keep the whole label on the stage; its width is measured once, as its text never changes.
+      label.width ||= node.offsetWidth;
+      x = clamp(x, label.width / 2 + 4, Math.max(label.width / 2 + 4, this.width - label.width / 2 - 4));
+      node.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`; occupied.push({ x, y });
     }
   }
 
