@@ -89,6 +89,26 @@ only the document.
 
 ## For language models
 
+Wunderkammer is best used from [muriel](https://github.com/andyed/muriel),
+a design skill for coding agents. muriel decides when a collection explorer
+is the right way to show something, builds the document from a folder or a
+CSV, and reviews the result for exploration quality and contrast.
+
+Without muriel, agents start with the skill,
+[skills/wunderkammer/SKILL.md](skills/wunderkammer/SKILL.md): when to use
+Wunderkammer, the steps from document to link, and the traps. Install it with
+`npx skills add andyed/wunderkammer`, or copy the folder into your agent's
+skills directory. Either way, before handing over a link, check the
+document, and any observations, the way the pages will read them:
+
+```bash
+node scripts/validate-collection.mjs collection.json --observations observations.json
+```
+
+It lists every problem with its path, every local cover file that is missing,
+and the figures each observation will show, and exits 1 when anything needs
+fixing.
+
 The full contract is in [docs/CONTRACT.md](docs/CONTRACT.md). In short:
 
 1. **Collection document** (`wunderkammer.collection`, version 1): items with

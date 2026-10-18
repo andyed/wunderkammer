@@ -42,6 +42,7 @@
     "adapters/",
     "serve.mjs",
     "clip.mjs",
+    "skills/",
     "examples/",
     "docs/CONTRACT.md",
     "README.md",

@@ -660,6 +660,26 @@ const cases = [
     name: 'nouns: a count of one takes the plural noun', file: 'wall/nouns.mjs',
     from: 'count === 1 ? one : many', to: 'many',
     test: 'tests/nouns.test.mjs', pattern: 'counts agree in number with their noun',
+  },
+  {
+    name: 'validate-collection: an invalid document exits 0', file: 'scripts/validate-collection.mjs',
+    from: 'process.exitCode = failed ? 1 : 0;', to: 'process.exitCode = 0;',
+    test: 'tests/validate-collection.test.mjs', pattern: 'an invalid collection exits 1',
+  },
+  {
+    name: 'validate-collection: missing local covers pass', file: 'scripts/validate-collection.mjs',
+    from: 'if (!existsSync(file)) missing.push(', to: 'if (false) missing.push(',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a local cover the page would request',
+  },
+  {
+    name: 'validate-collection: unresolved citations pass', file: 'scripts/validate-collection.mjs',
+    from: 'if (r.unresolved.length || !r.keys.length) failed = true;', to: '',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a citation the page cannot resolve',
+  },
+  {
+    name: 'validate-collection: observations for another corpus pass', file: 'scripts/validate-collection.mjs',
+    from: "if (named.id !== want.id || (named.revision ?? null) !== (want.revision ?? null)) {", to: 'if (false) {',
+    test: 'tests/validate-collection.test.mjs', pattern: 'a citation the page cannot resolve',
   }
 ];
 
