@@ -47,12 +47,6 @@ const cases = [
     test: 'tests/permalinks.test.mjs', pattern: 'view codec validates versions',
   },
   {
-    name: 'context appears at ordinary overview zoom', file: 'wall/wall.mjs',
-    from: 'visible > 0 && distant && sparse && (topFits || bottomFits)',
-    to: 'visible > 0',
-    test: 'tests/flat-wall.test.mjs', pattern: 'context clusters switch scope',
-  },
-  {
     name: 'cluster union silently becomes intersection', file: 'wall/context-clusters.mjs',
     from: 'new Set(branches.flatMap(branch => branch.keys))',
     to: 'new Set(branches[0]?.keys.filter(key => branches.every(branch => branch.keys.includes(key))))',
@@ -61,7 +55,7 @@ const cases = [
   {
     name: 'Shift-click replaces instead of adding', file: 'wall/wall.mjs',
     from: 'selectCluster(cluster, e.shiftKey)', to: 'selectCluster(cluster, false)',
-    test: 'tests/flat-wall.test.mjs', pattern: 'context clusters switch scope',
+    test: 'tests/flat-wall.test.mjs', pattern: 'cluster suggestions switch scope',
   },
   {
     name: 'native image drag cancels canvas gesture', file: 'wall/wall.mjs',
