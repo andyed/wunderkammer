@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **An agent skill and a command-line check.** `skills/wunderkammer/SKILL.md`
+  tells an agent when to use Wunderkammer, the steps from document to link,
+  and the traps; `npx skills add andyed/wunderkammer` installs it.
+  `scripts/validate-collection.mjs` checks a collection, and its
+  observations, the way the pages will read them: every problem with its
+  path, missing local cover files, and the figures each claim will show.
+  `tests/skill-example.test.mjs` keeps the skill's examples valid.
 - **Floating space** (✺, `?view=float&arrange=oklab|oklch|hsl|az`). The whole
   corpus floats in 3D, placed by each item's dominant colour in OKLab, OKLCH
   or HSL, or shelved A–Z. Search and facets dim items in place. Click flies to

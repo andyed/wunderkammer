@@ -44,6 +44,15 @@ validator for it:
 }
 ```
 
+**Checking a document before sharing it:** `scripts/validate-collection.mjs`
+runs the same validator from the command line, reports local cover and sheet
+files that do not exist, and, given `--observations`, prints each
+observation's computed figures and every citation that does not resolve. Exit
+0 means the pages will load the document and every claim resolves; `--json`
+gives the full report. `tests/validate-collection.test.mjs` covers it, and
+four mutations (`MUTATION_FILTER=validate-collection`) show those tests
+failing when a check is removed.
+
 **Validation** (`wall/collection.mjs`, `validateCollection()`): unknown keys
 are refused with the list of supported ones, and every problem is reported
 with its path in one error, up to 25. Server-only keys (`vault`, `adapters`,
@@ -67,11 +76,14 @@ index its private `/media/sheets` pages.
 - **`facetTypes`** (categorical, ordinal with `order`, numeric, date) is
   validated and carried. The wall does not use it yet.
 - **`ui.nouns`** (optional) names one item and several,
-  `{ "item": "frame", "items": "frames" }`, each 1 to 40 characters. The
-  comparison page uses them on its walls: "Frame walls", "2025 · 206 frames".
-  Without them it says "item" and "items". A music library, whose clips are
-  all `kind: "album"` as the music adapter writes them, keeps its album,
-  cover and rack wording (`wall/comparison-copy.mjs`).
+  `{ "item": "frame", "items": "frames" }`, each 1 to 40 characters. Every
+  count uses them, singular for one: the wall's count ("128 of 128 frames"),
+  the aisle's rack labels ("2025 · 1 frame"), the floating space's status
+  line and the comparison page's walls ("Frame walls", "2025 · 206 frames").
+  Without them the pages say "item" and "items". A music library, whose clips
+  are all `kind: "album"` as the music adapter writes them, says "albums" and
+  keeps its cover and rack wording on the comparison page. The rule is in
+  `wall/nouns.mjs`.
 - **`images.cors`** declares that covers on other origins send CORS headers.
   Without it, the loader warns that such covers stay blank in the 3D views. A
   DOM-tile fallback for them is not built. **`images.sheets`** says what
