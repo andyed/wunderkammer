@@ -59,6 +59,16 @@ for (const [name, files, pattern] of [
   });
 }
 
+test('README screenshots pass, and the same image elsewhere does not', async () => {
+  const dir = await tree({ ...clean, 'docs/screenshots/1-claims.png': 'png bytes', 'docs/other/1-claims.png': 'png bytes' });
+  try {
+    const r = run(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /docs\/other\/1-claims\.png: media not on the allowlist/);
+    assert.doesNotMatch(r.stderr, /docs\/screenshots\//);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('the naming record may quote the old contract names', async () => {
   const dir = await tree({ ...clean, 'docs/NAMING.md': j('Renamed `clip', 'wall.collection` to `wunderkammer.collection`.\n') });
   try { assert.equal(run(dir).status, 0); } finally { await rm(dir, { recursive: true, force: true }); }

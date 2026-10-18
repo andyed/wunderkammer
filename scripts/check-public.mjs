@@ -34,6 +34,8 @@ const LEGACY_ALLOWED = [/^docs\/NAMING\.md$/, /^docs\/naming\//, /^scripts\/chec
 /** The only media that may be published, by path. */
 const MEDIA = /\.(png|jpe?g|webp|gif|avif|mp3|m4a|flac|wav|mp4|mov|pdf)$/i;
 const MEDIA_ALLOWED = new Set(['docs/wall.png', 'docs/wall-overview.png']);
+/** README screenshots live here; anything else needs a deliberate allowlist entry. */
+const MEDIA_ALLOWED_DIRS = ['docs/screenshots/'];
 const TEXT = /\.(m?js|cjs|json|md|html|css|py|sh|txt|tsv|ya?ml|toml)$|(^|\/)(LICENSE|\.gitignore)$/;
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
@@ -57,7 +59,7 @@ const present = new Set(files);
 let scanned = 0;
 for (const file of files) {
   if (PRIVATE_PATHS.some(re => re.test(file))) note(file, 'private path');
-  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file)) note(file, 'media not on the allowlist');
+  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file) && !MEDIA_ALLOWED_DIRS.some(dir => file.startsWith(dir))) note(file, 'media not on the allowlist');
   if (!TEXT.test(file)) continue;
   const text = await readFile(path.join(root, file), 'utf8');
   scanned++;
