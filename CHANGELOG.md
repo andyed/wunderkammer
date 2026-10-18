@@ -26,6 +26,12 @@
   library, whose clips are all `kind: "album"`, keeps "Album walls", covers,
   racks and albums. The Starting point menu lists only the music comparisons
   whose attributes the collection has, and is hidden when none apply.
+- **Sideways scroll is a walk in the 3D hallways.** In the wall page's aisle and on
+  the comparison page's walls, a sideways wheel or trackpad scroll moves along
+  the aisle, as the Walk aisle slider does, and the travel is kept in the link
+  and across Back/Forward. A view turned toward a wall keeps its angle as it
+  passes. Vertical scroll is still a zoom, and each gesture keeps the axis it
+  starts on. [AISLE.md](docs/AISLE.md#sideways-scroll).
 
 ## 0.1.0 — 2026-10-18
 
