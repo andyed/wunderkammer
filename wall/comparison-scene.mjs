@@ -8,6 +8,7 @@ import { remote } from './media-policy.mjs';
 import { spriteCovers, spriteSource, isSpriteSource } from './sprite-covers.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AlbumWalls } from './album-walls.mjs';
+import { listenSideScroll } from './aisle-wheel.mjs';
 import { NEUTRAL_COPY } from './comparison-copy.mjs';
 
 const COLORS = [0x90e4f4, 0xffda9c, 0xcbb7ff, 0xaaffaa, 0xffb8d0, 0xd7e7ff];
@@ -37,11 +38,11 @@ function fileSource(clip) {
 }
 
 export class ComparisonScene {
-  constructor(host, { wording = NEUTRAL_COPY, onSelect = () => {}, onInspect = () => {}, onPreview = () => {}, onCameraChange = () => {} } = {}) {
+  constructor(host, { wording = NEUTRAL_COPY, onSelect = () => {}, onInspect = () => {}, onPreview = () => {}, onCameraChange = () => {}, onWalk = () => {} } = {}) {
     this.host = host;
     this.wording = wording;
     this.host.replaceChildren();
-    this.callbacks = { onSelect, onInspect, onPreview, onCameraChange };
+    this.callbacks = { onSelect, onInspect, onPreview, onCameraChange, onWalk };
     this.presentation = { spread: 0.65, view: 'depth', slice: null, metric: 'share' };
     this.selection = { value: null, cohort: null };
     this.preview = { value: null, cohort: null };
@@ -79,6 +80,8 @@ export class ComparisonScene {
     this.scene.add(rim);
     this.root = new THREE.Group();
     this.scene.add(this.root);
+    // On the album walls, sideways scroll is a walk along the aisle; vertical scroll stays a zoom.
+    this.unlistenWheel = listenSideScroll(this.canvas, { active: () => this.presentation.view === 'walls' && !!this.artWalls, walk: distance => this.walk(distance) });
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = false;
     this.controls.enablePan = false;
@@ -92,7 +95,7 @@ export class ComparisonScene {
     this.controls.rotateSpeed = 0.6;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
-    this._onChange = () => { this.invalidate(); if (this.model && !this.programmaticCamera) this.callbacks.onCameraChange(this.getCamera()); };
+    this._onChange = () => { this.invalidate(); if (this.programmaticCamera) return; this.fitted = false; if (this.model) this.callbacks.onCameraChange(this.getCamera()); };
     this.controls.addEventListener('change', this._onChange);
     this._onDown = e => { this.down = e.isPrimary ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null; };
     this._onUp = e => {
@@ -420,7 +423,7 @@ export class ComparisonScene {
     if(this.presentation.view==='walls' && this.artWalls){
       const pose=this.artWalls.cameraPose(this.presentation.travel||0,this.camera.aspect);
       this.controls.maxDistance=200;
-      this.setCamera(pose);return;
+      this.setCamera(pose);this.fitted=true;return;
     }
     const width = this.sceneWidth || 10;
     const count = this.planes.length || 4;
@@ -450,7 +453,36 @@ export class ComparisonScene {
     this.programmaticCamera = true;
     this.controls.update();
     this.programmaticCamera = false;
+    this.fitted = true;
     this.invalidate();
+  }
+
+  /**
+   * Walk the album walls' aisle `distance` world units deeper (negative: back
+   * toward the entrance), keeping the camera's angle to the walls. A fitted
+   * camera takes the pose at the new travel; a turned or zoomed one slides
+   * along the aisle with its target. The host hears the new travel, and the
+   * camera when it is not fitted, as it does from the Walk aisle slider.
+   */
+  walk(distance) {
+    if (this.presentation.view !== 'walls' || !this.artWalls || !Number.isFinite(distance)) return false;
+    const { length } = this.artWalls.travelSpan(), from = this.presentation.travel || 0;
+    if (!(length > 0)) return false;
+    const travel = Math.round(clamp(from + distance / length, 0, 1) * 1e5) / 1e5;
+    if (travel === from) return false;
+    this.presentation = { ...this.presentation, travel };
+    if (this.fitted) this.reset();
+    else {
+      const step = (travel - from) * length;
+      this.camera.position.z -= step;
+      this.controls.target.z -= step;
+      this.programmaticCamera = true;
+      this.controls.update();
+      this.programmaticCamera = false;
+      this.invalidate();
+    }
+    this.callbacks.onWalk(travel, this.fitted ? null : this.getCamera());
+    return true;
   }
 
   getCamera() {
@@ -464,6 +496,7 @@ export class ComparisonScene {
     this.programmaticCamera = true;
     this.controls.update();
     this.programmaticCamera = false;
+    this.fitted = false;
     this.invalidate();
     return true;
   }
@@ -532,6 +565,7 @@ export class ComparisonScene {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.resizeObserver.disconnect();
+    this.unlistenWheel();
     this.controls.removeEventListener('change', this._onChange);
     this.controls.dispose();
     for (const [name, fn] of [['pointerdown', this._onDown], ['pointerup', this._onUp], ['pointermove', this._onMove], ['pointerleave', this._onLeave], ['pointercancel', this._onLeave], ['keydown', this._onKey], ['webglcontextlost', this._onContextLost], ['webglcontextrestored', this._onContextRestored]]) this.canvas.removeEventListener(name, fn);

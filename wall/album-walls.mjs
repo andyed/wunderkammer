@@ -328,14 +328,20 @@ export class AlbumWalls {
     return targets;
   }
 
-  cameraPose(travel = 0, aspect = 1.5) {
+  /** Where the shown racks begin, and the world units travel 0..1 walks past them. */
+  travelSpan() {
     const shown = this.racks.filter(rack => rack.group.visible);
     const first = shown[0], last = shown.at(-1);
     const start = first?.start || 0, end = last ? last.start + last.length : this.totalDepth;
+    return { start, length: Math.max(0, end - start - 3.2) };
+  }
+
+  cameraPose(travel = 0, aspect = 1.5) {
+    const { start, length } = this.travelSpan();
     const amount = clamp(Number(travel) || 0, 0, 1);
     // The entry pose fills the frame with recognizable covers and a long vanishing aisle.
     const portrait = aspect < 1;
-    const z = 3.9 - start - amount * Math.max(0, end - start - 3.2);
+    const z = 3.9 - start - amount * length;
     const y = HEIGHT * .49;
     const x = portrait ? -this.gap * .12 : -this.gap * .045;
     return { position: [x, y, z], target: [portrait ? this.gap * .16 : 0, y + .08, z - (portrait ? 8 : 10)] };
@@ -347,7 +353,7 @@ export class AlbumWalls {
       highlightedTiles: this.highlightedTiles, pendingArtwork: this.requests.size + (this.pendingSprites || 0),
       visibleMeshCount: this.meshes.filter(mesh => mesh.parent?.parent?.visible).length,
       atlasBytes: this.pages.length * ATLAS * ATLAS * 4, drawMeshes: this.meshes.length,
-      totalDepth: this.totalDepth, gap: this.gap || 0 };
+      totalDepth: this.totalDepth, gap: this.gap || 0, travelLength: this.travelSpan().length };
   }
 
   dispose() {

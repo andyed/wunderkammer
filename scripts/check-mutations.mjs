@@ -641,6 +641,42 @@ const cases = [
     from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
     test: 'tests/collection-view.test.mjs', pattern: 'the floating space draws sprite-sheet cells',
   },
+  {
+    name: 'side scroll: the wall aisle ignores sideways wheels', file: 'wall/aisle-view.mjs',
+    from: '      this.unlistenWheel = listenSideScroll(this.canvas, { walk: distance => this.walk(distance) });\n', to: '',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'sideways scroll walks the wall page aisle',
+  },
+  {
+    name: 'side scroll: the comparison walls ignore sideways wheels', file: 'wall/comparison-scene.mjs',
+    from: "    this.unlistenWheel = listenSideScroll(this.canvas, { active: () => this.presentation.view === 'walls' && !!this.artWalls, walk: distance => this.walk(distance) });\n",
+    to: '    this.unlistenWheel = () => {};\n',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'sideways scroll walks the comparison walls',
+  },
+  {
+    name: 'side scroll: a vertical swipe walks on its sideways jitter', file: 'wall/aisle-wheel.mjs',
+    from: 'if (axis === null || event.timeStamp - last > REST_MS) axis = ', to: 'axis = ',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'a vertical swipe never walks and a sideways swipe never zooms',
+  },
+  {
+    name: 'side scroll: a sideways swipe also zooms', file: 'wall/aisle-wheel.mjs',
+    from: '    event.stopImmediatePropagation();\n', to: '',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'a vertical swipe never walks and a sideways swipe never zooms',
+  },
+  {
+    name: 'side scroll: an aisle walk turns the view back down the aisle', file: 'wall/aisle-view.mjs',
+    from: '    if (this.fitted) this.applyPose();\n    else {\n      const step', to: '    if (true) this.applyPose();\n    else {\n      const step',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'a turned aisle view slides along the wall at its angle',
+  },
+  {
+    name: 'side scroll: a comparison walk turns a zoomed view back', file: 'wall/comparison-scene.mjs',
+    from: '    if (this.fitted) this.reset();', to: '    if (true) this.reset();',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'sideways scroll walks the comparison walls',
+  },
+  {
+    name: 'side scroll: a comparison walk leaves the URL behind', file: 'wall/comparison-app.mjs',
+    from: '  state.presentation={...state.presentation,travel};state.camera=camera;\n  renderPresentation();persist(true);', to: '  state.presentation={...state.presentation,travel};state.camera=camera;\n  renderPresentation();',
+    test: 'tests/aisle-side-scroll.test.mjs', pattern: 'sideways scroll walks the comparison walls',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));
