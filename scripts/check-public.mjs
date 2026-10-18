@@ -40,6 +40,8 @@ const MEDIA_ALLOWED = new Set(['docs/wall.png', 'docs/wall-overview.png']);
  * SHA-256 of its bytes, as scripts/collection-sheets.py writes it. A page no
  * document names, or whose bytes have changed under its name, is a finding. */
 const SHEET_PAGE = /(^|\/)([0-9a-f]{64})\.(webp|png|jpe?g|avif)$/;
+/** README screenshots live here; anything else needs a deliberate allowlist entry. */
+const MEDIA_ALLOWED_DIRS = ['docs/screenshots/'];
 const TEXT = /\.(m?js|cjs|json|md|html|css|py|sh|txt|tsv|ya?ml|toml)$|(^|\/)(LICENSE|\.gitignore)$/;
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
@@ -73,7 +75,7 @@ for (const file of files.filter(f => f.endsWith('.json'))) {
 let scanned = 0;
 for (const file of files) {
   if (PRIVATE_PATHS.some(re => re.test(file))) note(file, 'private path');
-  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file)) {
+  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file) && !MEDIA_ALLOWED_DIRS.some(dir => file.startsWith(dir))) {
     const page = file.match(SHEET_PAGE);
     if (!page || !sheetPages.has(file)) note(file, 'media not on the allowlist');
     else if (createHash('sha256').update(await readFile(path.join(root, file))).digest('hex') !== page[2]) note(file, 'sheet page bytes do not match its content-hash name');
