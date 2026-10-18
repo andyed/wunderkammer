@@ -23,3 +23,6 @@ export const plural = (count, one, many) => count === 1 ? one : many;
 
 /** "1 cat", "128 cats". The number is printed as given, matching the counts beside it. */
 export const counted = (count, nouns = NEUTRAL_NOUNS) => `${count} ${plural(count, nouns.item, nouns.items)}`;
+
+/** "1970s · 1,234 cats": a group's wall label, formatted as comparison-copy.mjs formats the comparison page's. */
+export const wallLabel = (label, count, nouns = NEUTRAL_NOUNS) => `${label} · ${count.toLocaleString()} ${plural(count, nouns.item, nouns.items)}`;

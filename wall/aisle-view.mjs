@@ -5,7 +5,7 @@ import { AlbumWalls } from './album-walls.mjs';
 import { groupBy } from './layout.mjs';
 import { clipKey, matchesFacet } from './context-clusters.mjs';
 import { sortClips, attributeMark } from './attributes.mjs';
-import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
+import { NEUTRAL_NOUNS, wallLabel } from './nouns.mjs';
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
@@ -42,7 +42,8 @@ export class AisleView {
       this.controls.minPolarAngle = .15; this.controls.maxPolarAngle = Math.PI * .9;
       this.controls.rotateSpeed = .55; this.controls.zoomSpeed = .65;
       this.controls.addEventListener('change', () => { this.invalidate(); if (!this.programmatic) { this.fitted = false; this.cancelHover(); this.interact(); } });
-      this.art = new AlbumWalls(this.root, () => this.invalidate(), { onProgress: () => this.updateStatus() });
+      // The nouns arrive with setClips, after this; the label reads them when each rack is built.
+      this.art = new AlbumWalls(this.root, () => this.invalidate(), { onProgress: () => this.updateStatus(), wallLabel: (label, count) => wallLabel(label, count, this.nouns) });
       this.raycaster = new THREE.Raycaster();
       this.listen(this.canvas, 'pointerdown', e => { this.cancelHover(); this.down = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; });
       this.listen(this.canvas, 'pointerup', e => {
@@ -96,7 +97,7 @@ export class AisleView {
     this.itemSelect.replaceChildren(new Option('Choose an item…', ''));
     const used = new Set();
     for (const group of this.cohorts) {
-      const optgroup = element('optgroup'); optgroup.label = `${group.label} · ${counted(group.count, this.nouns)}`;
+      const optgroup = element('optgroup'); optgroup.label = wallLabel(group.label, group.count, this.nouns);
       for (const key of group.keys) if (!used.has(key)) { used.add(key); optgroup.append(new Option(this.clipsByKey.get(key).title || key, key)); }
       if (optgroup.children.length) this.itemSelect.append(optgroup);
     }
@@ -120,7 +121,7 @@ export class AisleView {
     for (const { anchor, node } of this.labels) {
       const group = this.cohorts.find(group => group.key === anchor.cohort);
       const matched = group.keys.filter(key => marks.get(key)?.match).length;
-      node.textContent = exact ? `${group.label} · ${matched} / ${group.count} match` : `${group.label} · ${counted(group.count, this.nouns)}`;
+      node.textContent = exact ? `${group.label} · ${matched} / ${group.count} match` : anchor.text;
       node.title = node.textContent;
     }
     this.invalidate();
