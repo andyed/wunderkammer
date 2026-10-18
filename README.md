@@ -68,15 +68,18 @@ to the years in question.
 
 ![153 newspaper clippings from 1819 to 1920, grouped by publication period.](docs/screenshots/5-archive.webp)
 
-### 6. Browse a collection by colour
+### 6. Pivot a collection on the dimension you choose
 
-Every image floats in 3D at its dominant colour: lightness runs up the axis
-and hue goes around the ring. Switch between OKLab, OKLCH, HSL, A–Z and axes
-you choose, and the images travel to their new places. Search and facets dim
-whatever falls outside, without moving anything. Click an image to fly to it
-and open it.
+Choose a dimension and every image floats in 3D at its place along it.
+Choose another and the same images travel to their new places, so one item
+can be followed from arrangement to arrangement. In the floating space (✺), a
+dimension is an image's dominant colour (OKLab, OKLCH or HSL) or its title
+(A–Z). Under Axes, each axis takes a dimension of its own: the lightness,
+chroma or hue of the colour, or an attribute such as year or a facet. With a search or facets
+set, the images outside the scope dim in place and nothing moves. Click an
+image to fly to it and open it.
 
-![The bundled example's 297 frames in OKLCH: hue around a ring labelled from red to magenta, lightness from 0.00 at the bottom to 0.85 at the top.](docs/screenshots/6-colour.webp)
+![The bundled example's 297 frames pivoted on colour, in OKLCH: hue around a ring labelled from red to magenta, lightness from 0.00 at the bottom to 0.85 at the top.](docs/screenshots/6-colour.webp)
 
 Live link, with the example served as in [Try it](#try-it):
 `http://localhost:8080/?collection=/examples/psychodeli/collection.json&view=float&arrange=oklch`
