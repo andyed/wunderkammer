@@ -58,10 +58,22 @@ test('a failed page withdraws its level so the wall falls back to files', async 
   assert.equal(sheetSet.covers('a', 40), true);
   sheetSet.ensure(40);
   await tick(); await tick();
-  assert.deepEqual(changes, ['failed']);
+  assert.deepEqual(changes, ['failed', 'ready'], 'the failed level, then the next one it starts');
   assert.equal(sheetSet.covers('a', 20), true, 'the next level up still covers small draws');
   sheetSet.ensure(20); await tick(); await tick();
   assert.equal(sheetSet.slot('a', 20).edge, 64);
+});
+
+test('a failed level starts the next one without waiting for the camera', async () => {
+  const { sheetSet, loads } = harness({ fail: ['/s32.webp'] });
+  sheetSet.ensure(20);
+  for (let i = 0; i < 6; i++) await tick();
+  assert.deepEqual(loads, ['/s32.webp', '/s64.webp'], 'no second ensure() was needed');
+  assert.equal(sheetSet.slot('a', 20).edge, 64);
+  const none = harness({ fail: sheets.map(s => s.src) });
+  none.sheetSet.ensure(20);
+  for (let i = 0; i < 8; i++) await tick();
+  assert.equal(none.sheetSet.covers('a', 20), false, 'with every level failed, nothing is promised and the files load');
 });
 
 test('an unchanged page list keeps its decoded pages; a new one releases them', async () => {

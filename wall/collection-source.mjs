@@ -40,9 +40,13 @@ export async function loadCollection(source, { fetcher = (...a) => fetch(...a), 
     const foreign = collection.clips.filter(c => crossOrigin(c.cover, win)).length;
     if (foreign) warnings.push(`${foreign} cover${foreign === 1 ? ' is' : 's are'} on other origins and images.cors is not true; `
       + 'they show on the flat wall but stay blank in the 3D views unless their host sends CORS headers');
+    // Sheets are fetched and cropped, so without CORS they fail in every view.
+    const sheets = (collection.sheets || []).filter(s => crossOrigin(s.src, win)).length;
+    if (sheets) warnings.push(`${sheets} sprite sheet${sheets === 1 ? ' is' : 's are'} on other origins and images.cors is not true; `
+      + 'their covers stay blank everywhere unless their host sends CORS headers');
   }
-  const { clips, corpus, facets, ui } = collection;
-  return { data: { clips, corpus, facets, ui }, viewState: collection.viewState || null, warnings };
+  const { clips, corpus, facets, ui, sheets, images } = collection;
+  return { data: { clips, corpus, facets, ui, ...(sheets ? { sheets } : {}), ...(images ? { images } : {}) }, viewState: collection.viewState || null, warnings };
 }
 
 function crossOrigin(src, win) {

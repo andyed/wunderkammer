@@ -5,6 +5,7 @@ import { validateObservations, resolveObservation, observationEvidence, observat
 import { canonical } from './permalink.mjs';
 import { collectionSource, loadCollection, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
+import { spriteCovers } from './sprite-covers.mjs';
 
 const $ = id => document.getElementById(id);
 const COLORS = ['#90e4f4','#ffda9c','#cbb7ff','#aaffaa','#ffb8d0','#d7e7ff'];
@@ -199,7 +200,11 @@ function renderEvidence() {
   const host=$('evidence-items');host.replaceChildren();
   for(const clip of evidence.slice(page*PAGE,(page+1)*PAGE)) {
     const b=el('button',undefined,'evidence-item');b.type='button';b.dataset.key=clipKey(clip);b.setAttribute('aria-label',`Inspect ${clip.title}`);
-    const src=safeMedia(clip.cover || clip.media?.[0]?.src);if(src){const img=el('img');img.src=src;img.alt='';img.loading='lazy';img.addEventListener('error',()=>img.replaceWith(el('span','Artwork unavailable','no-art')),{once:true});b.append(img);}else b.append(el('span','No local artwork','no-art'));
+    // A cover kept as sprite-sheet cells is cropped at the thumbnail's size.
+    const sprite=spriteCovers.has(clip),src=safeMedia(clip.cover || clip.media?.[0]?.src);
+    if(src||sprite){const img=el('img');img.alt='';img.loading='lazy';img.addEventListener('error',()=>img.replaceWith(el('span','Artwork unavailable','no-art')),{once:true});b.append(img);
+      if(sprite)void spriteCovers.coverUrl(clip,192,src).then(url=>{if(url)img.src=url;else img.replaceWith(el('span','Artwork unavailable','no-art'));});else img.src=src;}
+    else b.append(el('span','No local artwork','no-art'));
     b.append(el('span',clip.title,'item-name'),el('span',valuesOf(clip,state.spec.groupBy).join(' · '),'item-group'));b.addEventListener('click',()=>openItem(clipKey(clip)));host.append(b);
   }
   if(!evidence.length)host.append(el('p','No items in this selection. Clear selection or widen the search.','evidence-empty'));
@@ -207,7 +212,9 @@ function renderEvidence() {
 function openItem(key,save=true) {
   const clip=model.clipsByKey.get(key);if(!clip){notice('This item is unavailable in the current corpus.');return;}
   state.focus=key;$('item-title').textContent=clip.title;const host=$('item-content');host.replaceChildren();
-  const src=safeMedia(clip.detailCover || clip.cover || clip.media?.[0]?.src);if(src){const image=el('img');image.src=src;image.alt=clip.title;host.append(image);}
+  const sprite=!clip.detailCover&&spriteCovers.has(clip),src=safeMedia(clip.detailCover || clip.cover || clip.media?.[0]?.src);
+  if(sprite){const image=el('img');image.alt=clip.title;host.append(image);void spriteCovers.coverUrl(clip,Infinity,src).then(url=>{if(url&&image.isConnected)image.src=url;});}
+  else if(src){const image=el('img');image.src=src;image.alt=clip.title;host.append(image);}
   const text=el('div');text.append(el('pre',clip.note || Object.entries(clip.props||{}).map(([k,v])=>`${labelFor(k)}: ${Array.isArray(v)?v.join(', '):v}`).join('\n')));
   if(src){const link=el('a','Open artwork');link.href=src;link.target='_blank';link.rel='noopener';text.append(el('p'),link);}host.append(text);
   if(!$('item-dialog').open)$('item-dialog').showModal();if(save)persist();
@@ -297,6 +304,7 @@ async function boot() {
     if(collection!==FROM_PARENT){const wall=new URL('../',location.href);wall.searchParams.set('collection',new URL(collection,location.href).href);document.querySelector('.wordmark').href=wall.href;}}
   else{const response=await fetch('/api/clips');if(!response.ok)throw new Error(`Collection unavailable (HTTP ${response.status})`);payload=await response.json();}
   if(!Array.isArray(payload.clips)||!payload.corpus)throw new Error('The collection has no records or corpus identity.');
+  spriteCovers.setCorpus(payload.sheets,payload.clips,{covers:payload.images?.sheets==='covers'});
   state=defaultView();
   let linkError='';try{state=readURL() || state;}catch(error){linkError=error.message;}
   // ?observations=<url>: an envelope written elsewhere, often by an LLM. Its

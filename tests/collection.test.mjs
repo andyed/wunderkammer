@@ -110,3 +110,67 @@ test('the shared facet counter matches the server shape and tolerates clips with
   const clips = [{ tags: ['x', 'y'], source: 's', kind: 'page', captured: '2026-01-02', props: { color: ['red', 'blue'], empty: '' } }, { props: { color: 'red' } }];
   assert.deepEqual(buildFacets(clips), { tags: { x: 1, y: 1 }, source: { s: 1 }, kind: { page: 1 }, captured: { '2026-01': 1 }, color: { red: 2, blue: 1 } });
 });
+
+// Sprite sheets (docs/CONTRACT.md, "Sprite sheets").
+const spriteDoc = (over = {}) => doc({
+  sheets: [{ src: 'sheets/p64.webp', edge: 64, width: 140, height: 40 }, { src: 'sheets/p480.webp', edge: 480, width: 968, height: 274 }],
+  clips: [
+    { id: 'a', title: 'A', props: { decade: '1980s' }, sheetSlots: [[0, 2, 2, 64, 36], [1, 2, 2, 480, 270]] },
+    { id: 'b', title: 'B', props: { decade: '1990s' }, sheetSlots: [[0, 70, 2, 64, 36], [1, 486, 2, 480, 270]] },
+  ],
+  ...over,
+});
+
+test('a collection may ship its covers as sprite-sheet cells', () => {
+  const { collection, warnings } = validateCollection(spriteDoc(), { baseUrl: 'https://host.example/c/collection.json' });
+  assert.deepEqual(warnings, []);
+  // Sheet sources resolve against the document, as every image does.
+  assert.deepEqual(collection.sheets.map(s => s.src), ['https://host.example/c/sheets/p64.webp', 'https://host.example/c/sheets/p480.webp']);
+  assert.deepEqual(collection.clips[1].sheetSlots, [[0, 70, 2, 64, 36], [1, 486, 2, 480, 270]]);
+  assert.equal('cover' in collection.clips[0], false);
+});
+
+test('sheet sources follow the image scheme rule', () => {
+  for (const src of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'obsidian://open?vault=x']) {
+    const bad = spriteDoc(); bad.sheets[1].src = src;
+    assert.ok(problemsOf(bad).some(p => p.startsWith('sheets[1].src') && p.includes('data:image/')), src);
+  }
+  const ok = spriteDoc(); ok.sheets[0].src = 'data:image/png;base64,iVBORw0KGgo=';
+  assert.doesNotThrow(() => validateCollection(ok));
+});
+
+test('every sheet cell is checked against the sheet it points into', () => {
+  const bad = spriteDoc();
+  bad.sheets.push({ src: 'sheets/x.webp', edge: 0, width: 10.5, height: 99999 });
+  bad.clips[0].sheetSlots = [[0, 2, 2, 64, 36], [0, 70, 2, 64, 36]];   // two cells in one level
+  bad.clips[1].sheetSlots = [[0, 100, 2, 64, 36], [5, 0, 0, 1, 1], [1, 2, 2, 480, '270'], [2, 0, 0, 1, 1]];
+  bad.clips.push({ id: 'c', sheetSlots: [[1, 0, 0, 481, 100]] }, { id: 'd', sheetSlots: 'all' });
+  const problems = problemsOf(bad);
+  const has = (start, fragment) => assert.ok(problems.some(p => p.startsWith(start) && p.includes(fragment)), `${start} … ${fragment}\n${problems.join('\n')}`);
+  has('sheets[2].edge', 'integer from 1');
+  has('sheets[2].width', 'integer from 1');
+  has('sheets[2].height', 'integer from 1');
+  has('clips[0].sheetSlots[1]', 'repeats the 64 px level');
+  has('clips[1].sheetSlots[0]', 'inside sheets[0] (140×40)');
+  has('clips[1].sheetSlots[1]', 'sheets[5], which does not exist');
+  has('clips[1].sheetSlots[2]', 'five integers');
+  has('clips[1].sheetSlots[3]', 'sheets[2], which is not valid');
+  has('clips[2].sheetSlots[0]', "larger than its sheet's edge (480)");
+  has('clips[3].sheetSlots', '[sheet, x, y, w, h]');
+});
+
+test('cells need a sheets list, and a sheet no cell uses is a warning', () => {
+  const orphan = spriteDoc(); delete orphan.sheets;
+  assert.ok(problemsOf(orphan).some(p => p.startsWith('clips[0].sheetSlots') && p.includes('top-level sheets')));
+  const unused = spriteDoc(); unused.sheets.push({ src: 'sheets/extra.webp', edge: 160, width: 10, height: 10 });
+  const { warnings } = validateCollection(unused);
+  assert.ok(warnings.some(w => w.includes('sheets [2]') && w.includes('nothing loads them')), warnings.join('\n'));
+  assert.ok(problemsOf(spriteDoc({ sheets: [] })).some(p => p.startsWith('sheets') && p.includes('1 to')));
+});
+
+test('images.sheets says what cells are when a clip also has a file', () => {
+  const { collection } = validateCollection(spriteDoc({ images: { cors: true, sheets: 'covers' } }));
+  assert.deepEqual(collection.images, { cors: true, sheets: 'covers' });
+  assert.equal(validateCollection(spriteDoc({ images: { sheets: 'overview' } })).collection.images.sheets, 'overview');
+  assert.ok(problemsOf(spriteDoc({ images: { sheets: 'full' } })).some(p => p.startsWith('images.sheets') && p.includes('overview, covers')));
+});

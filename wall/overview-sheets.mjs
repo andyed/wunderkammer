@@ -124,6 +124,7 @@ export class OverviewSheets {
   /** Start loading what a `need`-pixel draw would use, coarsest first. */
   ensure(need) {
     if (!this.available) return;
+    this._lastNeed = need;
     const first = this.levels.find(l => l.allowed && l.state !== 'failed');
     if (first) this._loadLevel(first);
     const wanted = this.levelFor(need);
@@ -167,6 +168,11 @@ export class OverviewSheets {
         if (key !== this._key) return;
         if (--pending === 0 && level.state !== 'failed') level.state = 'ready';
         if (level.state === 'ready' && this._next) { const next = this._next; this._next = null; this._loadLevel(next); }
+        // A failed level must not leave the next one idle: covers() promises
+        // it, so the wall keeps tiles off their files, and without camera
+        // motion nothing would call ensure() again (a static view, reduced
+        // motion, or every page unpublished).
+        if (level.state === 'failed' && pending === 0 && this._lastNeed !== undefined) { this._next = null; this.ensure(this._lastNeed); }
         this.onChange?.(level);
       });
     }

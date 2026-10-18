@@ -5,6 +5,7 @@
 import { perf } from './instrument.mjs';
 import { OverviewAtlas } from './overview-atlas.mjs';
 import { OverviewSheets } from './overview-sheets.mjs';
+import { spriteSource } from './sprite-covers.mjs';
 
 const DEFAULTS = { enterPx: 72, exitPx: 96, motionPx: 160, maxDpr: 2,
   maxCanvasPixels: 4_194_304, maxImagePixels: 16_777_216, maxImages: 4096,
@@ -79,7 +80,11 @@ export function overviewSource(clip = {}) {
   const variants = (clip.coverVariants || []).filter(v => v?.src && Number.isFinite(v.width) && v.width > 0);
   let smallest = null;
   for (const v of variants) if (!smallest || v.width < smallest.width) smallest = v;
-  return smallest?.src || clip.cover || clip.media?.[0]?.src || '';
+  if (smallest?.src || clip.cover) return smallest?.src || clip.cover;
+  // A collection's cover that exists only as sprite-sheet cells has no file to
+  // name; it is keyed by identity (sprite-covers.mjs).
+  if (Array.isArray(clip.sheetSlots) && clip.sheetSlots.length) return spriteSource(clip);
+  return clip.media?.[0]?.src || '';
 }
 
 /** Each worker owns at most one decoder. Completed large images become bounded

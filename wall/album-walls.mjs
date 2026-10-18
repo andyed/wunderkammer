@@ -3,13 +3,17 @@
  */
 import * as THREE from 'three';
 import { remote } from './media-policy.mjs';
+import { spriteCovers, spriteSource, isSpriteSource } from './sprite-covers.mjs';
 
 const COLORS = [0x90e4f4, 0xffda9c, 0xcbb7ff, 0xaaffaa, 0xffb8d0, 0xd7e7ff];
 const ROWS = 8, PITCH = 1.04, TILE = .98, HEIGHT = ROWS * PITCH;
 const ATLAS = 2048, CELL = 128, PAD = 2, PER_ROW = ATLAS / CELL, PER_PAGE = PER_ROW ** 2;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
-function coverSource(clip) {
+/** A cover served by sprite-sheet cells is cropped from its sheet in _load. */
+const coverSource = clip => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip);
+
+function fileSource(clip) {
   const variants = (clip?.coverVariants || []).filter(v => v?.src && v.width > 0)
     .sort((a, b) => a.width - b.width);
   const source = (variants.find(v => v.width >= CELL) || variants.at(-1))?.src || clip?.cover;
@@ -122,7 +126,8 @@ export class AlbumWalls {
       const record = { key, page, x, y, u: (x + PAD) / ATLAS, v: 1 - (y + CELL - PAD) / ATLAS };
       slots.set(key, record);
       const source = sources.get(key);
-      if (source) queue.push({ ...record, source }); else this.failedArtwork++;
+      const clip = model.clipsByKey.get(key);
+      if (source) queue.push({ ...record, source, clip, file: isSpriteSource(source) ? fileSource(clip) : source }); else this.failedArtwork++;
     }
     const backingMaterial = this._own(new THREE.MeshBasicMaterial({ color: 0x10151e }));
     const floorMaterial = this._own(new THREE.MeshBasicMaterial({ color: 0x0c111b, side: THREE.DoubleSide }));
@@ -198,28 +203,50 @@ export class AlbumWalls {
     let next = 0;
     const run = () => {
       if (this.disposed || generation !== this.generation || next >= queue.length) return;
-      const item = queue[next++], image = new Image();
+      const item = queue[next++];
+      if (isSpriteSource(item.source)) {
+        // Crop the cell at the rack's cell size, then draw it like a file. A
+        // page that fails leaves the clip's own file, when it has one.
+        this.pendingSprites = (this.pendingSprites || 0) + 1;
+        void spriteCovers.bitmap(item.clip, CELL).then(bitmap => {
+          this.pendingSprites--;
+          if (this.disposed || generation !== this.generation) { bitmap?.close?.(); return; }
+          if (!bitmap && item.file) { loadFile(item, item.file); return; }
+          if (bitmap) this._drawArtwork(item, bitmap, bitmap.width, bitmap.height); else this.failedArtwork++;
+          bitmap?.close?.();
+          this.invalidate(); this.onProgress(this.getDiagnostics()); run();
+        });
+        return;
+      }
+      loadFile(item, item.source);
+    };
+    const loadFile = (item, source) => {
+      const image = new Image();
       this.requests.add(image); image.decoding = 'async';
       const done = okay => {
         this.requests.delete(image); image.onload = image.onerror = null;
         if (this.disposed || generation !== this.generation) return;
-        if (okay && image.naturalWidth && image.naturalHeight) {
-          const edge = Math.min(image.naturalWidth, image.naturalHeight);
-          const sx = (image.naturalWidth - edge) / 2, sy = (image.naturalHeight - edge) / 2;
-          try {
-            // Fill the entire cell, with edge bleed around the sampled interior.
-            item.page.ctx.drawImage(image, sx, sy, edge, edge, item.x, item.y, CELL, CELL);
-            item.page.texture.needsUpdate = true; this.loadedArtwork++;
-          } catch { this.failedArtwork++; }
-        } else this.failedArtwork++;
+        if (okay && image.naturalWidth && image.naturalHeight) this._drawArtwork(item, image, image.naturalWidth, image.naturalHeight);
+        else this.failedArtwork++;
         this.invalidate(); this.onProgress(this.getDiagnostics()); run();
       };
       // Without the instance proxy a remote cover loads directly, and an atlas
       // texture drawn from it must be requested with CORS or the upload fails.
-      if (/^https?:/i.test(item.source) && new URL(item.source).origin !== location.origin) image.crossOrigin = 'anonymous';
-      image.onload = () => done(true); image.onerror = () => done(false); image.src = item.source;
+      if (/^https?:/i.test(source) && new URL(source).origin !== location.origin) image.crossOrigin = 'anonymous';
+      image.onload = () => done(true); image.onerror = () => done(false); image.src = source;
     };
     for (let i = 0; i < Math.min(8, queue.length); i++) run();
+  }
+
+  /** The centre square of an artwork, filling its whole cell with edge bleed
+   * around the sampled interior. */
+  _drawArtwork(item, image, width, height) {
+    const edge = Math.min(width, height);
+    const sx = (width - edge) / 2, sy = (height - edge) / 2;
+    try {
+      item.page.ctx.drawImage(image, sx, sy, edge, edge, item.x, item.y, CELL, CELL);
+      item.page.texture.needsUpdate = true; this.loadedArtwork++;
+    } catch { this.failedArtwork++; }
   }
 
   setPresentation({ spread = this.presentation.spread, slice = this.presentation.slice } = {}) {
@@ -314,7 +341,7 @@ export class AlbumWalls {
   getDiagnostics() {
     return { totalTiles: this.totalTiles, loadedArtwork: this.loadedArtwork, failedArtwork: this.failedArtwork,
       atlasPages: this.pages.length, visibleCohorts: this.racks.filter(rack => rack.group.visible).length,
-      highlightedTiles: this.highlightedTiles, pendingArtwork: this.requests.size,
+      highlightedTiles: this.highlightedTiles, pendingArtwork: this.requests.size + (this.pendingSprites || 0),
       visibleMeshCount: this.meshes.filter(mesh => mesh.parent?.parent?.visible).length,
       atlasBytes: this.pages.length * ATLAS * ATLAS * 4, drawMeshes: this.meshes.length,
       totalDepth: this.totalDepth, gap: this.gap || 0 };

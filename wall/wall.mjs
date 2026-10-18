@@ -24,7 +24,8 @@ import { Viewport } from './viewport.mjs';
 import { createDetailPane } from './detail-pane.mjs';
 import { zoomDetailCandidate } from './zoom-detail.mjs';
 import { createReaderLift, createReaderMedia } from './reader-lift.mjs';
-import { OverviewSurface, overviewSource } from './overview-surface.mjs';
+import { OverviewSurface, overviewSource, loadOverviewImage } from './overview-surface.mjs';
+import { spriteCovers, isSpriteSource } from './sprite-covers.mjs';
 import { animateLayout, captureLayoutMotion, movingNodes } from './layout-motion.mjs';
 import { createImageWork } from './image-work.mjs';
 import { ViewStateStore, mergePileState } from './view-state.mjs';
@@ -99,7 +100,12 @@ const viewport = new Viewport(el.stage, el.canvas, onViewportChange);
 const readerLift = createReaderLift();
 const readerMedia = createReaderMedia();
 const imageWork = createImageWork();
-const overview = new OverviewSurface(el.stage);
+// A cover that exists only as sprite-sheet cells has no file for the
+// overview's per-source loader; the sheets crop it instead.
+const overview = new OverviewSurface(el.stage, {
+  loadImage: (src, options) => isSpriteSource(src) ? spriteCovers.overviewImage(src, options) : loadOverviewImage(src, options) });
+/** Device pixels a draw of `cssPx` needs, at the DPR the overview also caps at. */
+const devicePx = cssPx => cssPx * Math.min(Math.max(1, window.devicePixelRatio || 1), 2);
 // A sheet level that failed to load withdraws its promise to cover tiles;
 // re-run image loading so those tiles fetch their own files instead.
 overview.onSheetsChange = level => { if (level.state === 'failed') updateVisibility(); };
@@ -284,7 +290,10 @@ async function boot() {
 
   state.clips = Array.isArray(data.clips) ? data.clips : [];
   // Baked overview pages (scripts/sheets.py): the overview paints the whole
-  // wall from a few of them instead of decoding every cover file.
+  // wall from a few of them instead of decoding every cover file. A
+  // collection's own sheets (scripts/collection-sheets.py) also serve every
+  // other tier for clips that have no cover file.
+  spriteCovers.setCorpus(data.sheets, state.clips, { covers: data.images?.sheets === 'covers' });
   overview.setSheets(data.sheets, state.clips);
   // Production supplies a server-computed SHA revision. Legacy adapters and
   // fixture origins must still render when Web Crypto is unavailable.
@@ -468,8 +477,11 @@ function renderContext() {
     const samples = Array.from({ length: Math.min(6, cluster.members.length) }, (_, i) =>
       cluster.members[Math.floor(i * cluster.members.length / Math.min(6, cluster.members.length))]);
     for (const clip of samples) {
-      const src = clip.cover || clip.media?.[0]?.src;
-      if (src) { const img = document.createElement('img'); img.src = src; img.alt = ''; img.draggable = false; montage.append(img); }
+      const sprite = spriteCovers.has(clip), src = clip.cover || clip.media?.[0]?.src;
+      if (src || sprite) {
+        const img = document.createElement('img'); img.alt = ''; img.draggable = false; montage.append(img);
+        if (sprite) void spriteCovers.coverUrl(clip, devicePx(96), src).then(url => { if (url) img.src = url; }); else img.src = src;
+      }
       else { const fallback = document.createElement('span'); fallback.textContent = clip.title || 'No image'; montage.append(fallback); }
     }
     button.append(title, montage, reason);
@@ -991,14 +1003,26 @@ function buildTile(clip, { background = false } = {}) {
   node.setAttribute('role', 'button');
   node.setAttribute('aria-label', clip.title || 'clip');
 
+  // A cover served by sprite-sheet cells gets its <img> source at reveal time,
+  // cropped at the size the tile is drawn (revealSprite). Its file, if it has
+  // one, waits in data-file(-srcset), not data-src: the overview's handoff
+  // starts every data-src it finds, and the file is only for a cell whose
+  // page fails to load (revealTiles moves it over then).
+  const sprite = spriteCovers.has(clip);
   const src = clip.cover || clip.media?.[0]?.src || '';
-  if (src) {
+  if (src || sprite) {
     const img = document.createElement('img');
     img.alt = '';                    // decorative; the caption carries the name
-    img.dataset.src = src;
-    if (Array.isArray(clip.coverVariants) && clip.coverVariants.length) {
-      img.dataset.srcset = clip.coverVariants.filter(v => typeof v.src === 'string' && Number.isFinite(v.width) && v.width > 0)
-        .map(v => `${v.src} ${Math.round(v.width)}w`).join(', ');
+    const srcset = Array.isArray(clip.coverVariants) && clip.coverVariants.length
+      ? clip.coverVariants.filter(v => typeof v.src === 'string' && Number.isFinite(v.width) && v.width > 0)
+        .map(v => `${v.src} ${Math.round(v.width)}w`).join(', ') : '';
+    if (sprite) {
+      img.dataset.sprite = '0';
+      if (src) img.dataset.file = src;
+      if (srcset) img.dataset.fileSrcset = srcset;
+    } else {
+      if (src) img.dataset.src = src;
+      if (srcset) img.dataset.srcset = srcset;
     }
     img.draggable = false; // native image dragging cancels the canvas pointer gesture
     img.decoding = 'async';
@@ -1207,9 +1231,13 @@ function flowCard(key, p) {
 function flowShow(card, clip) {
   const [a, b] = card.querySelectorAll('img');
   const next = a.classList.contains('on') ? b : a, prev = next === a ? b : a;
-  next.src = clip.cover || clip.media?.[0]?.src || '';
   const swap = () => { next.classList.add('on'); prev.classList.remove('on'); };
-  if (next.complete && next.naturalWidth) swap(); else next.onload = swap;
+  const show = src => { next.src = src || ''; if (next.complete && next.naturalWidth) swap(); else next.onload = swap; };
+  const file = clip.cover || clip.media?.[0]?.src;
+  if (spriteCovers.has(clip)) {
+    const token = next.dataset.token = String(Number(next.dataset.token || 0) + 1);
+    void spriteCovers.coverUrl(clip, devicePx(Math.max(card.clientWidth, card.clientHeight) || 480), file).then(url => { if (next.dataset.token === token) show(url); });
+  } else show(file);
   card._clip = clip; card.setAttribute('aria-label', clip.title || 'clip'); card.querySelector('.cap .t').textContent = clip.title || '(untitled)';
 }
 function showcaseTick() {
@@ -1472,6 +1500,13 @@ function revealTiles(r, tileEls, positions, load) {
     // position record, which is rebuilt with every layout.
     const img = p.img ?? (p.img = node.firstElementChild?.tagName === 'IMG' ? node.firstElementChild : null);
     if (!img) { p.loaded = true; continue; }
+    if (img.dataset.sprite !== undefined) {
+      if (spriteCovers.serves(p.clip, devicePx(Math.max(p.w, p.h) * viewport.scale))) { revealSprite(node, id, p, positions); continue; }
+      // Its cells' pages failed: the file loads below. With no file there is nothing left to show.
+      if (img.dataset.file) { img.dataset.src = img.dataset.file; delete img.dataset.file; }
+      if (img.dataset.fileSrcset) { img.dataset.srcset = img.dataset.fileSrcset; delete img.dataset.fileSrcset; }
+      if (!img.dataset.src && !img.dataset.srcset && !img.currentSrc) { node.classList.add('broken'); p.loaded = true; continue; }
+    }
     const sizes = `${Math.max(1, Math.ceil(p.w * viewport.scale))}px`;
     if (!img.dataset.src && (!img.dataset.srcset || (img.srcset && img.sizes === sizes))) continue;
     // The overview paints this tile from a baked page at this zoom; its own
@@ -1509,6 +1544,56 @@ function revealTiles(r, tileEls, positions, load) {
         try { await img.decode(); } catch {} // The tile's existing error placeholder is authoritative.
       });
   }
+}
+
+/**
+ * A tile whose cover exists only as sprite-sheet cells (sprite-covers.mjs).
+ * Its <img> gets the cell of the smallest level that holds the tile's drawn
+ * size, and moves up a level, never down, when a zoom needs more pixels.
+ * `data-sprite` records the level edge on screen (0: none yet).
+ */
+function revealSprite(node, id, p, positions) {
+  const need = devicePx(Math.max(p.w, p.h) * viewport.scale);
+  const cell = spriteCovers.cellFor(p.clip, need);
+  if (!cell) { p.loaded = true; return; }
+  const shown = Number(p.img.dataset.sprite) || 0;
+  if (shown >= cell.edge) { if (shown >= spriteCovers.maxEdge(p.clip)) p.loaded = true; return; }
+  // The overview paints this tile from the sheets at this zoom.
+  if (!shown && overview.coversWithoutDom(node, p.sheetSource ??= overviewSource(p.clip), p.w * viewport.scale, viewport.scale)) return;
+  const current = () => node.isConnected && p.shown && positions.get(id) === p
+    && positions === (node.classList.contains('bg') ? state.bgPositions : state.positions);
+  imageWork.add(node, p.w * p.h * viewport.scale ** 2, current, async () => {
+    // Boot and every filter reveal at the old scale and fit in the same next
+    // frame this work starts in. Wait one frame more and leave a moving camera
+    // to its landing, which reveals again: at the fitted scale the overview
+    // paints every tile, and a full-size page would be fetched for nothing.
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (performance.now() < viewport.settlesAt || viewport.zooming || !current()) return;
+    const img = p.img;
+    const scale = viewport.scale, need = devicePx(Math.max(p.w, p.h) * scale), on = Number(img?.dataset.sprite) || 0;
+    if (!on && overview.coversWithoutDom(node, p.sheetSource ??= overviewSource(p.clip), p.w * scale, scale)) return;
+    const cell = spriteCovers.cellFor(p.clip, need);
+    if (!cell) { updateVisibility(); return; } // its page failed meanwhile: the file, or another level
+    if (!img || node.firstElementChild !== img || on >= cell.edge) return;
+    const url = await spriteCovers.url(p.clip, need);
+    // A page that failed withdrew its cells; revealing again picks another
+    // level, or the clip's file.
+    if (!url) { if (current()) updateVisibility(); return; }
+    if (!current() || node.firstElementChild !== img) return;
+    if (img.naturalWidth > 0) {
+      // Keep the smaller cell on screen until the larger one has decoded.
+      const next = img.cloneNode(false);
+      next.dataset.sprite = String(cell.edge); next.src = url;
+      try { await next.decode(); } catch { return; }
+      if (!current() || node.firstElementChild !== img) return;
+      next.addEventListener('error', () => node.classList.add('broken'), { once: true });
+      img.replaceWith(next); p.img = next;
+      overview.replaceImage(node, next);
+      return;
+    }
+    img.dataset.sprite = String(cell.edge); img.src = url;
+    try { await img.decode(); } catch {} // The tile's error placeholder is authoritative.
+  });
 }
 
 /* -------------------------------------------------------------- facets --- */
@@ -1763,10 +1848,10 @@ el.detail.addEventListener('click', (e) => {
 });
 
 function itemSource(clip, pose = null, sourceNode = null) {
-  if (state.spatialOn) return { sourceRect: activeSpatial()?.originRectangle(clip), sourceSrc: clip.cover };
+  if (state.spatialOn) return { sourceRect: activeSpatial()?.originRectangle(clip), sourceSrc: spriteCovers.peekUrl(clip) || clip.cover };
   const hintedImage = sourceNode?.isConnected && sourceNode.querySelector('img');
   if (hintedImage && !pose) return { source: hintedImage, sourceRect: hintedImage.getBoundingClientRect(),
-    sourceSrc: hintedImage.currentSrc || hintedImage.src || clip.cover };
+    sourceSrc: hintedImage.currentSrc || hintedImage.src || spriteCovers.peekUrl(clip) || clip.cover };
   // Background perspective is not flat world geometry. The lift retains its
   // captured origin for exact return instead of borrowing a foreground copy.
   if (pose && sourceNode?.classList.contains('bg')) return {};
@@ -1780,7 +1865,7 @@ function itemSource(clip, pose = null, sourceNode = null) {
   return { source: pose ? null : source,
     sourceRect: { left: r.left + camera.x + t.x * camera.scale, top: r.top + camera.y + t.y * camera.scale,
       width: t.w * camera.scale, height: t.h * camera.scale },
-    sourceSrc: source?.currentSrc || source?.src || clip.cover };
+    sourceSrc: source?.currentSrc || source?.src || spriteCovers.peekUrl(clip) || clip.cover };
 }
 function exposeReadingItem(clip, sourceNode = null) {
   if (state.spatialOn || window.innerWidth <= 800 || sourceNode?.classList.contains('bg')) return;
@@ -1843,16 +1928,30 @@ function renderDetail(clip) {
     nav.append(prev, pos, next); d.append(nav);
   }
 
+  // A cover served by sprite-sheet cells shows what the tile already holds,
+  // then the largest cell, or the file if that cell's page fails. A
+  // detailCover file still wins.
+  const sprite = !clip.detailCover && spriteCovers.has(clip);
   const cover = clip.detailCover || clip.cover || clip.media?.[0]?.src;
-  if (cover) {
+  if (cover || sprite) {
     const img = document.createElement('img');
     img.alt = '';
     img.decoding = 'async';
     img.draggable = false;
     d.append(img);
     const origin = itemSource(clip);
-    void readerMedia.prepareImage(img, clip, { thumbnail: origin.sourceSrc || clip.cover });
-    if (order.length && at >= 0) readerMedia.prefetch([order[(at + 1) % order.length], order[(at - 1 + order.length) % order.length]]);
+    if (sprite) {
+      if (origin.sourceSrc) img.src = origin.sourceSrc;
+      void spriteCovers.coverUrl(clip, Infinity, cover).then(src => {
+        if (src && img.isConnected) void readerMedia.prepareImage(img, clip, { thumbnail: img.getAttribute('src') || src, src });
+      });
+    } else void readerMedia.prepareImage(img, clip, { thumbnail: origin.sourceSrc || clip.cover });
+    if (order.length && at >= 0) {
+      const near = [order[(at + 1) % order.length], order[(at - 1 + order.length) % order.length]];
+      // Cells are prefetched as cells, not as the files they stand in for.
+      readerMedia.prefetch(near.filter(next => !spriteCovers.has(next) || next.detailCover));
+      for (const next of near) if (spriteCovers.has(next) && !next.detailCover) void spriteCovers.url(next);
+    }
   }
 
   const h2 = document.createElement('h2');

@@ -278,6 +278,93 @@ const cases = [
     from: 'if (collection) setProxyAvailable(false);', to: '',
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html shows remote CORS covers',
   },
+  // Sprite sheets (docs/CONTRACT.md, "Sprite sheets"): MUTATION_FILTER=sprite
+  {
+    name: 'sprite cells accepted outside their sheet', file: 'wall/collection.mjs',
+    from: 'if (x < 0 || y < 0 || w < 1 || h < 1 || x + w > sheet.width || y + h > sheet.height) {', to: 'if (false) {',
+    test: 'tests/collection.test.mjs', pattern: 'every sheet cell is checked against the sheet',
+  },
+  {
+    name: 'sprite sheet sources skip the image scheme rule', file: 'wall/collection.mjs',
+    from: 'const src = image(sheet.src, `${p}.src`);', to: 'const src = sheet.src;',
+    test: 'tests/collection.test.mjs', pattern: 'sheet sources follow the image scheme rule',
+  },
+  {
+    name: 'sprite sheets dropped by the collection loader', file: 'wall/collection-source.mjs',
+    from: 'return { data: { clips, corpus, facets, ui, ...(sheets ? { sheets } : {}),', to: 'return { data: { clips, corpus, facets, ui,',
+    test: 'tests/collection-view.test.mjs', pattern: 'shows them on the wall and in the detail pane',
+  },
+  {
+    name: 'sprite tiles never get their cell', file: 'wall/wall.mjs',
+    from: 'if (spriteCovers.serves(p.clip, devicePx(Math.max(p.w, p.h) * viewport.scale))) { revealSprite(node, id, p, positions); continue; }', to: '',
+    test: 'tests/collection-view.test.mjs', pattern: 'shows them on the wall and in the detail pane',
+  },
+  {
+    name: 'sprite detail pane shows no cover', file: 'wall/wall.mjs',
+    from: 'const sprite = !clip.detailCover && spriteCovers.has(clip);', to: 'const sprite = false;',
+    test: 'tests/collection-view.test.mjs', pattern: 'shows them on the wall and in the detail pane',
+  },
+  {
+    name: 'sprite crops read the wrong cell', file: 'wall/sprite-covers.mjs',
+    from: 'drawImage(image, cell.x, cell.y, cell.w, cell.h, 0, 0, cell.w, cell.h);\n      let blob',
+    to: 'drawImage(image, 0, 0, cell.w, cell.h, 0, 0, cell.w, cell.h);\n      let blob',
+    test: 'tests/sprite-covers.test.mjs', pattern: 'cropped from its own rectangle',
+  },
+  {
+    name: 'sprite overview keys miss cells-only clips', file: 'wall/overview-surface.mjs',
+    from: 'if (Array.isArray(clip.sheetSlots) && clip.sheetSlots.length) return spriteSource(clip);', to: '',
+    test: 'tests/sprite-covers.test.mjs', pattern: 'the overview keys a cells-only clip by identity',
+  },
+  {
+    name: 'sprite 3D atlas ignores cells', file: 'wall/spatial/spatial-view.mjs',
+    from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
+    test: 'tests/collection-view.test.mjs', pattern: 'the 3D view draws sprite-sheet cells',
+  },
+  {
+    name: 'sprite album walls ignore cells', file: 'wall/album-walls.mjs',
+    from: 'const coverSource = clip => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip);', to: 'const coverSource = clip => fileSource(clip);',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html shows sprite-sheet cells',
+  },
+  {
+    name: 'sprite evidence thumbnails ignore cells', file: 'wall/comparison-app.mjs',
+    from: 'const sprite=spriteCovers.has(clip),src=safeMedia(', to: 'const sprite=false,src=safeMedia(',
+    test: 'tests/collection-view.test.mjs', pattern: 'compare.html shows sprite-sheet cells',
+  },
+  {
+    name: 'sprite failed page keeps its cells, so nothing falls back', file: 'wall/sprite-covers.mjs',
+    from: "const ok = cell => this.pages[cell.page].state !== 'failed';", to: 'const ok = () => true;',
+    test: 'tests/collection-view.test.mjs', pattern: 'when a sheet page is missing, the wall',
+  },
+  {
+    name: 'sprite fallback skips clips that have a file', file: 'wall/sprite-covers.mjs',
+    from: 'if (larger || this.files.has(key)) return larger || null;', to: 'if (larger) return larger;',
+    test: 'tests/sprite-covers.test.mjs', pattern: 'a failed page sends a clip with a file back to its file',
+  },
+  {
+    name: 'sprite compare walls drop the file fallback', file: 'wall/album-walls.mjs',
+    from: 'if (!bitmap && item.file) { loadFile(item, item.file); return; }', to: '',
+    test: 'tests/collection-view.test.mjs', pattern: 'when a sheet page is missing, compare.html falls back',
+  },
+  {
+    name: 'sprite cells win only where no file exists', file: 'wall/sprite-covers.mjs',
+    from: "if (!Array.isArray(clip?.sheetSlots) || (hasFile(clip) && !covers)) continue;", to: "if (!Array.isArray(clip?.sheetSlots) || hasFile(clip)) continue;",
+    test: 'tests/collection-view.test.mjs', pattern: 'cells serve every view even where a cover file exists',
+  },
+  {
+    name: 'sprite failed overview level leaves the next one idle', file: 'wall/overview-sheets.mjs',
+    from: "if (level.state === 'failed' && pending === 0 && this._lastNeed !== undefined) { this._next = null; this.ensure(this._lastNeed); }", to: '',
+    test: 'tests/overview-sheets.test.mjs', pattern: 'a failed level starts the next one without waiting for the camera',
+  },
+  {
+    name: 'sprite gate admits a sheet page no collection names', file: 'scripts/check-public.mjs',
+    from: 'if (!page || !sheetPages.has(file))', to: 'if (!page)',
+    test: 'tests/check-public.test.mjs', pattern: 'a sheet page no collection names',
+  },
+  {
+    name: 'sprite gate skips the content hash', file: 'scripts/check-public.mjs',
+    from: ".digest('hex') !== page[2])", to: ".digest('hex') === null)",
+    test: 'tests/check-public.test.mjs', pattern: 'whose bytes changed under its name',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));
@@ -285,7 +372,7 @@ if (!selectedCases.length) throw new Error('No mutation matched MUTATION_FILTER'
 for (const mutation of selectedCases) {
   const dir = await mkdtemp(path.join(tmpdir(), 'wunderkammer-mutation-'));
   try {
-    for (const file of ['clip.mjs', 'lib', 'wall', 'tests', 'package.json']) {
+    for (const file of ['clip.mjs', 'lib', 'wall', 'tests', 'scripts', 'package.json']) {
       await cp(path.join(root, file), path.join(dir, file), { recursive: true });
     }
     await symlink(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir');

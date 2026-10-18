@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const gate = fileURLToPath(new URL('../scripts/check-public.mjs', import.meta.url));
 async function tree(files) {
@@ -62,4 +63,35 @@ for (const [name, files, pattern] of [
 test('the naming record may quote the old contract names', async () => {
   const dir = await tree({ ...clean, 'docs/NAMING.md': j('Renamed `clip', 'wall.collection` to `wunderkammer.collection`.\n') });
   try { assert.equal(run(dir).status, 0); } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+// Sprite sheets: a page is published by a collection document naming it, and
+// pinned by its content-hash name (scripts/collection-sheets.py).
+const page = Buffer.from('not really a webp, but bytes all the same');
+const pageName = createHash('sha256').update(page).digest('hex');
+const sheetDoc = src => JSON.stringify({ format: 'wunderkammer.collection', version: 1, corpus: { id: 'x' },
+  sheets: [{ src, edge: 64, width: 8, height: 8 }], clips: [{ id: 'a', sheetSlots: [[0, 0, 0, 8, 8]] }] });
+
+test('a sheet page a collection names, under its content hash, passes', async () => {
+  const dir = await tree({ ...clean, 'examples/x/collection.json': sheetDoc(`sheets/${pageName}.webp`), [`examples/x/sheets/${pageName}.webp`]: page });
+  try { const r = run(dir); assert.equal(r.status, 0, r.stderr); } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a sheet page no collection names is media nobody chose', async () => {
+  // Named by a document elsewhere in the tree: the reference resolves against the document, not the page.
+  const dir = await tree({ ...clean, 'examples/y/collection.json': sheetDoc(`sheets/${pageName}.webp`), [`examples/x/sheets/${pageName}.webp`]: page });
+  try {
+    const r = run(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, new RegExp(`examples/x/sheets/${pageName}\\.webp: media not on the allowlist`));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a named sheet page whose bytes changed under its name fails', async () => {
+  const dir = await tree({ ...clean, 'examples/x/collection.json': sheetDoc(`sheets/${pageName}.webp`), [`examples/x/sheets/${pageName}.webp`]: Buffer.from('swapped') });
+  try {
+    const r = run(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /sheet page bytes do not match its content-hash name/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

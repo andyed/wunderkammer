@@ -11,6 +11,7 @@
  * Exits 1 on any finding and 2 when nothing was scanned: a gate that read no
  * files has checked nothing, and must not report a pass.
  */
+import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +35,11 @@ const LEGACY_ALLOWED = [/^docs\/NAMING\.md$/, /^docs\/naming\//, /^scripts\/chec
 /** The only media that may be published, by path. */
 const MEDIA = /\.(png|jpe?g|webp|gif|avif|mp3|m4a|flac|wav|mp4|mov|pdf)$/i;
 const MEDIA_ALLOWED = new Set(['docs/wall.png', 'docs/wall-overview.png']);
+/** Sprite-sheet pages are published by naming them: a collection document in
+ * the tree lists the page in its `sheets`, and the page is named by the
+ * SHA-256 of its bytes, as scripts/collection-sheets.py writes it. A page no
+ * document names, or whose bytes have changed under its name, is a finding. */
+const SHEET_PAGE = /(^|\/)([0-9a-f]{64})\.(webp|png|jpe?g|avif)$/;
 const TEXT = /\.(m?js|cjs|json|md|html|css|py|sh|txt|tsv|ya?ml|toml)$|(^|\/)(LICENSE|\.gitignore)$/;
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
@@ -54,10 +60,24 @@ const note = (file, rule, detail) => findings.push(`${file}: ${rule}${detail ? `
 let files;
 try { files = await walk(root); } catch (error) { console.error(`check-public: cannot read ${root}: ${error.message}`); process.exit(2); }
 const present = new Set(files);
+const sheetPages = new Set();
+for (const file of files.filter(f => f.endsWith('.json'))) {
+  let doc;
+  try { doc = JSON.parse(await readFile(path.join(root, file), 'utf8')); } catch { continue; }
+  if (doc?.format !== 'wunderkammer.collection' || !Array.isArray(doc.sheets)) continue;
+  for (const sheet of doc.sheets) {
+    if (typeof sheet?.src !== 'string' || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(sheet.src)) continue;
+    sheetPages.add(path.posix.normalize(path.posix.join(path.posix.dirname(file), sheet.src.split(/[?#]/)[0])));
+  }
+}
 let scanned = 0;
 for (const file of files) {
   if (PRIVATE_PATHS.some(re => re.test(file))) note(file, 'private path');
-  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file)) note(file, 'media not on the allowlist');
+  if (MEDIA.test(file) && !MEDIA_ALLOWED.has(file)) {
+    const page = file.match(SHEET_PAGE);
+    if (!page || !sheetPages.has(file)) note(file, 'media not on the allowlist');
+    else if (createHash('sha256').update(await readFile(path.join(root, file))).digest('hex') !== page[2]) note(file, 'sheet page bytes do not match its content-hash name');
+  }
   if (!TEXT.test(file)) continue;
   const text = await readFile(path.join(root, file), 'utf8');
   scanned++;

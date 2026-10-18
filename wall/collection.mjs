@@ -1,7 +1,7 @@
 /**
  * The collection document: what a producer, often an LLM, writes to show a
  * person a visual collection in wunderkammer without a wunderkammer server. Format
- * "wunderkammer.collection", version 1; docs/LLM_COLLECTIONS.md describes it.
+ * "wunderkammer.collection", version 1; docs/CONTRACT.md describes it.
  *
  * The validator is the trust boundary for ?collection= and mount(). A
  * collection can come from anywhere, so link and image schemes are checked
@@ -12,15 +12,16 @@
 import { buildFacets } from './facet-counts.mjs';
 
 export const COLLECTION_FORMAT = 'wunderkammer.collection';
-export const COLLECTION_LIMITS = Object.freeze({ clips: 50000, problems: 25 });
+export const COLLECTION_LIMITS = Object.freeze({ clips: 50000, problems: 25, sheets: 4096, sheetSlots: 8, sheetEdge: 4096, sheetPx: 16384 });
 
-const TOP = ['format', 'version', 'corpus', 'ui', 'facetTypes', 'images', 'viewState', 'facets', 'clips'];
+const TOP = ['format', 'version', 'corpus', 'ui', 'facetTypes', 'images', 'viewState', 'sheets', 'facets', 'clips'];
 /** Keys a wunderkammer server payload carries that a portable document must not. */
-const SERVER_ONLY = new Set(['vault', 'adapters', 'generated', 'sheets']);
-const CLIP = ['id', 'url', 'title', 'cover', 'coverVariants', 'detailCover', 'media', 'sourceUrl', 'sourceLabel',
+const SERVER_ONLY = new Set(['vault', 'adapters', 'generated']);
+const CLIP = ['id', 'url', 'title', 'cover', 'coverVariants', 'detailCover', 'media', 'sheetSlots', 'sourceUrl', 'sourceLabel',
   'note', 'tags', 'props', 'source', 'kind', 'captured', 'palette', 'projection'];
 const UI = ['title', 'defaultGroup', 'facetOrder', 'facetLabels', 'hiddenFacets'];
 const FACET_TYPES = ['categorical', 'ordinal', 'numeric', 'date'];
+const SHEET_ROLES = ['overview', 'covers'];
 const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 const CAPTURED = /^\d{4}(-\d{2}(-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?)?)?$/;
@@ -145,9 +146,19 @@ export function validateCollection(input, { baseUrl = null } = {}) {
     }
   }
 
-  if (input.images !== undefined && keys(input.images, 'images', ['cors'])) {
-    if (typeof input.images.cors !== 'boolean') problem('images.cors', 'must be true or false');
-    else out.images = { cors: input.images.cors };
+  if (input.images !== undefined && keys(input.images, 'images', ['cors', 'sheets'])) {
+    out.images = {};
+    if (input.images.cors !== undefined) {
+      if (typeof input.images.cors !== 'boolean') problem('images.cors', 'must be true or false');
+      else out.images.cors = input.images.cors;
+    }
+    // What a clip's cells are when it also names a file: "overview" (they feed
+    // only the overview canvas, as a server's pages do) or "covers" (they serve
+    // every view; the file stands in only for a page that fails to load).
+    if (input.images.sheets !== undefined) {
+      if (!SHEET_ROLES.includes(input.images.sheets)) problem('images.sheets', `must be one of ${SHEET_ROLES.join(', ')}`);
+      else out.images.sheets = input.images.sheets;
+    }
   }
 
   if (input.viewState !== undefined && keys(input.viewState, 'viewState', ['version', 'mode', 'groupKey', 'piles'])) {
@@ -160,6 +171,29 @@ export function validateCollection(input, { baseUrl = null } = {}) {
     }
     out.viewState = structuredClone(vs);
   }
+
+  // Sprite sheets: a few images that hold every cover, instead of one file per
+  // item (docs/CONTRACT.md, "Sprite sheets"). Clips point into them with
+  // sheetSlots, checked against these bounds below.
+  if (input.sheets !== undefined) {
+    const L = COLLECTION_LIMITS;
+    if (!Array.isArray(input.sheets) || !input.sheets.length || input.sheets.length > L.sheets) {
+      problem('sheets', `must be an array of 1 to ${L.sheets} { src, edge, width, height } objects`);
+    } else {
+      out.sheets = input.sheets.map((sheet, i) => {
+        const p = `sheets[${i}]`;
+        if (!keys(sheet, p, ['src', 'edge', 'width', 'height'])) return null;
+        const src = image(sheet.src, `${p}.src`);
+        let ok = src !== null;
+        if (!Number.isInteger(sheet.edge) || sheet.edge < 1 || sheet.edge > L.sheetEdge) { problem(`${p}.edge`, `must be an integer from 1 to ${L.sheetEdge}`); ok = false; }
+        for (const k of ['width', 'height']) {
+          if (!Number.isInteger(sheet[k]) || sheet[k] < 1 || sheet[k] > L.sheetPx) { problem(`${p}.${k}`, `must be an integer from 1 to ${L.sheetPx}`); ok = false; }
+        }
+        return ok ? { src, edge: sheet.edge, width: sheet.width, height: sheet.height } : null;
+      });
+    }
+  }
+  const usedSheets = new Set();
 
   out.clips = [];
   if (!Array.isArray(input.clips) || !input.clips.length || input.clips.length > COLLECTION_LIMITS.clips) {
@@ -200,6 +234,27 @@ export function validateCollection(input, { baseUrl = null } = {}) {
       if (clip.media !== undefined) {
         if (!Array.isArray(clip.media) || clip.media.length > 32) problem(`${path}.media`, 'must be an array of at most 32 { src } objects');
         else c.media = clip.media.map((m, j) => keys(m, `${path}.media[${j}]`, ['src']) ? { src: image(m.src, `${path}.media[${j}].src`) } : null);
+      }
+      if (clip.sheetSlots !== undefined) {
+        const p = `${path}.sheetSlots`, L = COLLECTION_LIMITS;
+        if (!out.sheets) problem(p, 'needs a top-level sheets list to point into');
+        else if (!Array.isArray(clip.sheetSlots) || !clip.sheetSlots.length || clip.sheetSlots.length > L.sheetSlots) {
+          problem(p, `must be an array of 1 to ${L.sheetSlots} [sheet, x, y, w, h] cells`);
+        } else {
+          const edges = new Set();
+          c.sheetSlots = clip.sheetSlots.map((cell, j) => {
+            const q = `${p}[${j}]`;
+            if (!Array.isArray(cell) || cell.length !== 5 || !cell.every(Number.isInteger)) { problem(q, 'must be [sheet, x, y, w, h], five integers'); return null; }
+            const [index, x, y, w, h] = cell, sheet = out.sheets[index];
+            if (!sheet) { problem(q, index >= 0 && index < out.sheets.length ? `points at sheets[${index}], which is not valid` : `points at sheets[${index}], which does not exist`); return null; }
+            if (x < 0 || y < 0 || w < 1 || h < 1 || x + w > sheet.width || y + h > sheet.height) { problem(q, `must lie inside sheets[${index}] (${sheet.width}×${sheet.height})`); return null; }
+            // Tiers pick a cell by its level's edge, so a cell may not exceed it.
+            if (Math.max(w, h) > sheet.edge) { problem(q, `is larger than its sheet's edge (${sheet.edge})`); return null; }
+            if (edges.has(sheet.edge)) { problem(q, `repeats the ${sheet.edge} px level; give one cell per level`); return null; }
+            edges.add(sheet.edge); usedSheets.add(index);
+            return [index, x, y, w, h];
+          });
+        }
       }
       if (clip.sourceUrl !== undefined) c.sourceUrl = link(clip.sourceUrl, `${path}.sourceUrl`);
       if (clip.sourceLabel !== undefined) c.sourceLabel = text(clip.sourceLabel, `${path}.sourceLabel`, { max: 100 });
@@ -249,6 +304,11 @@ export function validateCollection(input, { baseUrl = null } = {}) {
 
   if (problems.length || overflow) throw new CollectionError(problems, overflow);
 
+  if (out.sheets) {
+    const unused = out.sheets.map((_, i) => i).filter(i => !usedSheets.has(i));
+    if (unused.length) warnings.push(`sheets ${unused.slice(0, 10).map(i => `[${i}]`).join(', ')}${unused.length > 10 ? ' …' : ''} hold no clip's cell; nothing loads them`);
+  }
+
   // Counts are derived so they cannot disagree with the clips.
   out.facets = buildFacets(out.clips);
   if (input.facets !== undefined && !sameCounts(input.facets, out.facets)) {
@@ -273,7 +333,9 @@ export function toCollection(payload, { viewState } = {}) {
   const clips = (payload.clips || []).map(clip => {
     const c = {};
     for (const [k, v] of Object.entries(clip)) {
-      if (CLIP.includes(k)) c[k] = v; else removed[k] = (removed[k] || 0) + 1;
+      // A server's sheetSlots index its own /media/sheets pages, which an
+      // export does not carry; scripts/collection-sheets.py bakes portable ones.
+      if (CLIP.includes(k) && k !== 'sheetSlots') c[k] = v; else removed[k] = (removed[k] || 0) + 1;
     }
     return c;
   });

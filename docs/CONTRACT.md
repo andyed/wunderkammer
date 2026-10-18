@@ -47,8 +47,9 @@ validator for it:
 **Validation** (`wall/collection.mjs`, `validateCollection()`): unknown keys
 are refused with the list of supported ones, and every problem is reported
 with its path in one error, up to 25. Server-only keys (`vault`, `adapters`,
-`generated`, `sheets`) are refused by name. `toCollection()` converts a server
-payload and reports each field it leaves out.
+`generated`) are refused by name. `toCollection()` converts a server payload
+and reports each field it leaves out, including a server's `sheetSlots`, which
+index its private `/media/sheets` pages.
 
 - **Required:** `format`, `version`, `corpus.id` and `clips` (1 to 50,000).
   Each clip needs a non-empty `id`.
@@ -67,8 +68,114 @@ payload and reports each field it leaves out.
   validated and carried. The wall does not use it yet.
 - **`images.cors`** declares that covers on other origins send CORS headers.
   Without it, the loader warns that such covers stay blank in the 3D views. A
-  DOM-tile fallback for them is not built.
+  DOM-tile fallback for them is not built. **`images.sheets`** says what
+  sprite-sheet cells are for clips that also name a file (below).
 - **`viewState`** (optional) is the document's starting piles and grouping.
+- **`sheets`** and per-clip **`sheetSlots`** (optional) ship covers as cells
+  of a few sprite-sheet images; see [Sprite sheets](#sprite-sheets).
+
+### Sprite sheets
+
+A collection of a few hundred covers is a few hundred files to host and a few
+hundred requests to open. A document can instead ship its covers packed into
+a few large images, and point each clip at its cell:
+
+```json
+{
+  "sheets": [
+    { "src": "sheets/9f…e1.webp", "edge": 64,  "width": 2040, "height": 564 },
+    { "src": "sheets/b4…72.webp", "edge": 480, "width": 1936, "height": 1918 }
+  ],
+  "clips": [
+    { "id": "a1", "title": "Example title", "sheetSlots": [[0, 2, 2, 64, 36], [1, 2, 2, 480, 270]] }
+  ]
+}
+```
+
+- **`sheets`**: 1 to 4,096 pages, each `{ src, edge, width, height }`. `src`
+  follows the image rule above (http(s), `data:image/` or `blob:`, relative
+  to the document). `edge` names the page's level: the longest edge a cell
+  on it may have, 1 to 4,096 px. `width` and `height` are the page's pixel
+  size, up to 16,384.
+- **`sheetSlots`**: 1 to 8 cells per clip, each `[sheet, x, y, w, h]` in
+  integer pixels: an index into `sheets`, then the cover's rectangle on that
+  page. A cell must lie inside its page, may not be larger than its page's
+  `edge`, and a clip has at most one cell per level. Cells without a
+  `sheets` list are an error; a page no cell uses is a warning.
+- **Which cell a view uses.** Each view asks for the size it draws, in device
+  pixels, and takes the cell of the smallest level at least that large, else
+  the largest. The overview and the 3D atlases draw from the small levels
+  (the near atlas asks for 160 px, so its working set stays decoded); a
+  reading zoom, the detail pane and 3D cards crop from the largest. A tile
+  moves up a level as a zoom needs more pixels, never down. Pages load when
+  a cell on them is first needed, so the overview waits only for its own
+  level.
+- **Cells and files together.** A clip with cells and no file (`cover`,
+  `coverVariants` or `media`) reads every view from its cells. For a clip
+  with both, `images.sheets` decides:
+  - `"overview"` (the default, and what a wunderkammer server's baked pages
+    are): the cells feed only the overview canvas, and the file serves every
+    other view. Small sheets beside full-size files work this way.
+  - `"covers"`: the cells serve every view, and the file loads only for a
+    cell whose page fails. Use it when the largest level holds each cover at
+    full size.
+
+  A `detailCover` still wins in the detail pane, so a document can pair
+  sheets with larger files that load only when someone opens an item.
+- **A page that fails** (missing, unpublished, refused) withdraws its cells.
+  A clip with a file falls back to the file in every view: the flat wall and
+  overview, the detail pane, the 3D atlases and cards, the album walls and the
+  comparison evidence. A clip without one takes another level that loaded. A
+  document can therefore name pages before they are published: until they
+  are, it loads one file per item as before, after one failed request per
+  page.
+- **How each view draws a cell.** The flat overview paints straight from the
+  decoded page (`wall/overview-sheets.mjs`). Views that need an `<img>` (wall
+  tiles at a reading zoom, the detail pane, 3D cards, comparison evidence)
+  get the cell cropped on a canvas and encoded once as a `blob:` URL, shared
+  by every view that asks (`wall/sprite-covers.mjs`). The 3D atlases and the
+  album walls draw the crop into their own textures. No item text is
+  involved, so the `textContent`-only rule is unaffected.
+- **Pages are opaque and need CORS off-origin.** Pages are fetched and
+  cropped, so a page on another origin must send CORS headers or its covers
+  stay blank in every view; the loader warns when `images.cors` is not true.
+  At most 32 Mpx of pages stay decoded (eight 2,048-px pages); others reload
+  from the HTTP cache.
+- **Building sheets:** `scripts/collection-sheets.py` reads a document,
+  fetches or reads each clip's cover, packs every cover at 64 and 160 px and
+  at its own size (`--levels 64,160,full`) into 2,048-px WebP pages, and
+  writes the document back with `sheets` and `sheetSlots`. It reuses
+  `sheets.py`'s page rules (2-px edge-replicated gutters, pages named by the
+  SHA-256 of their bytes) but keeps each cover's aspect, and never enlarges a
+  cover to fill a level. Each clip keeps its `cover` as the fallback; a
+  `detailCover` or `media` that only repeats it is removed. When the largest
+  level holds every cover at full size, the document gets
+  `images.sheets: "covers"`. Pages go in `sheets/` beside the document, or in
+  `--sheets-dir`, named relative to the document or under `--sheets-url` when
+  they will be hosted elsewhere. `--drop-covers` removes the files instead,
+  leaving cells as the only source.
+- **Publishing:** `scripts/check-public.mjs` treats a sheet page as chosen
+  media when a collection document in the tree names it in `sheets` and its
+  file name is the SHA-256 of its bytes.
+
+The Psychodeli example (`examples/psychodeli/collection.json`) names 16 pages
+on the public demo site (`https://andyed.github.io/clipwall-demo/sheets/`)
+and keeps its 297 per-file covers there as the fallback. The pages are not in
+this repository. Until they are published there, the example loads the
+per-file covers. Its numbers are in [PERF.md](PERF.md#collection-sprite-sheets).
+
+**Verification:** `tests/collection.test.mjs` (validation: bounds, schemes,
+levels, roles, warnings), `tests/sprite-covers.test.mjs` (level choice, crop
+rectangle, one encode per cell, page failure and fallback, the decode
+budget), `tests/collection-view.test.mjs` (the flat wall, detail pane,
+overview canvas, 3D atlas, album walls and evidence thumbnails each show the
+right cell's colour with no per-item request; with `"covers"`, cells win where
+files exist; with the sheet pages missing, every view shows the files'
+colours instead), `tests/test_collection_sheets.py` (the builder) and
+`tests/check-public.test.mjs` (the gate). Sixteen mutations in
+`scripts/check-mutations.mjs` (`MUTATION_FILTER=sprite`) each remove one
+protection, one view's cell path or one step of the fallback, and show a test
+failing.
 
 **Loading** (`wall/collection-source.mjs`). The first match wins:
 

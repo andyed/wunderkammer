@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { test, before, after } from 'node:test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { deflateSync, crc32 } from 'node:zlib';
 import { chromium } from 'playwright';
 
 // A static host: the wall's files and some JSON, no wunderkammer API. Every /api/
 // request is recorded, because a collection must never reach for a server.
 let server, origin, browser, mediaServer, mediaOrigin;
-const apiHits = [], mediaHits = [], remoteHits = [];
+const apiHits = [], mediaHits = [], remoteHits = [], sheetHits = [];
 const svg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="${color}"/></svg>`;
 const doc = () => ({
   format: 'wunderkammer.collection', version: 1, corpus: { id: 'fixture:collection' },
@@ -31,6 +32,57 @@ const bad = () => {
   const d = doc(); d.format = 'wunderkammer'; d.clips[0].sourceUrl = 'javascript:alert(1)'; d.clips[4].captured = 'May 1994';
   return d;
 };
+// Sprite sheets: each cover is a solid colour of its own, so a crop from the
+// wrong cell, or one that bleeds into a neighbour, shows as the wrong colour.
+const spriteColor = i => [40 + (i * 53) % 200, 40 + (i * 97) % 200, 40 + (i * 151) % 200];
+function png(width, height, pixel) {
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) raw.set(pixel(x, y), y * (width * 3 + 1) + 1 + x * 3);
+  const chunk = (type, data) => {
+    const head = Buffer.alloc(4); head.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type), data]), tail = Buffer.alloc(4); tail.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([head, body, tail]);
+  };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+// Two levels, as scripts/collection-sheets.py lays them out: cells in rows,
+// a 2-px gutter of the cell's own colour around each.
+const SPRITE_LEVELS = [{ name: 'small', edge: 32, w: 32, h: 18, perRow: 10 }, { name: 'large', edge: 120, w: 120, h: 68, perRow: 8 }];
+const spriteSheets = Object.fromEntries(SPRITE_LEVELS.map(l => {
+  const cw = l.w + 4, ch = l.h + 4, rows = Math.ceil(30 / l.perRow);
+  return [l.name, png(cw * l.perRow, ch * rows, (x, y) => {
+    const i = Math.floor(y / ch) * l.perRow + Math.floor(x / cw);
+    return i < 30 ? spriteColor(i) : [5, 5, 16];
+  })];
+}));
+const spriteDoc = () => {
+  const d = doc(); d.corpus.revision = 'r1';
+  d.sheets = SPRITE_LEVELS.map(l => ({ src: `sheets/${l.name}.png`, edge: l.edge, width: (l.w + 4) * l.perRow, height: (l.h + 4) * Math.ceil(30 / l.perRow) }));
+  d.clips.forEach((c, i) => {
+    delete c.cover;
+    c.sheetSlots = SPRITE_LEVELS.map((l, s) => [s, (i % l.perRow) * (l.w + 4) + 2, Math.floor(i / l.perRow) * (l.h + 4) + 2, l.w, l.h]);
+  });
+  return d;
+};
+// The same cells beside per-file covers: "covers" makes the cells serve every
+// view, and the files stand in when a sheet page fails (here: never published).
+const spriteWithFiles = ({ missing = false } = {}) => {
+  const d = spriteDoc(); d.images = { sheets: 'covers' };
+  d.clips.forEach((c, i) => { c.cover = `media/${i % 3}.svg`; });
+  if (missing) d.sheets.forEach(s => { s.src = s.src.replace('sheets/', 'sheets/unpublished-'); });
+  return d;
+};
+const fileColor = n => ({ 0: [0x50, 0x8e, 0xae], 1: [0xad, 0x58, 0x40], 2: [0x6a, 0x5a, 0xcd] })[n % 3];
+/** The centre pixel of each decoded <img>, keyed by the "Cover NN" its tile or item names. */
+const PIXELS = selector => [...document.querySelectorAll(selector)].filter(img => img.complete && img.naturalWidth > 0).map(img => {
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+  const label = img.closest('[aria-label]')?.getAttribute('aria-label') || img.alt || '';
+  return { n: Number(label.match(/Cover (\d+)/)?.[1]), src: img.src.slice(0, 5), w: img.naturalWidth, rgb: [...ctx.getImageData(c.width >> 1, c.height >> 1, 1, 1).data.slice(0, 3)] };
+});
+const near = (a, b) => a.every((v, k) => Math.abs(v - b[k]) <= 10);
+
 const host = `<!doctype html><meta charset="utf-8"><div id="w" style="height:700px"></div>
 <script type="module">
 import * as Wunderkammer from '/wall/embed.mjs';
@@ -59,6 +111,15 @@ before(async () => {
     if (p === '/data/cmp.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(cmpDoc())); return; }
     if (p === '/data/cmp-obs.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(cmpObservations())); return; }
     if (p === '/data/bad.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(bad())); return; }
+    if (p === '/data/sprite.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteDoc())); return; }
+    if (p === '/data/sprite-files.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles())); return; }
+    if (p === '/data/sprite-missing.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles({ missing: true }))); return; }
+    if (p.startsWith('/data/sheets/')) {
+      sheetHits.push(p);
+      const sheet = spriteSheets[p.slice('/data/sheets/'.length, -'.png'.length)];
+      if (!sheet) { res.writeHead(404); res.end(); return; }
+      res.setHeader('content-type', 'image/png'); res.end(sheet); return;
+    }
     if (p.startsWith('/data/media/')) {
       mediaHits.push(p); res.setHeader('content-type', 'image/svg+xml'); res.end(svg(['#508eae', '#ad5840', '#6a5acd'][Number(p.at(-5))] || '#888')); return;
     }
@@ -256,5 +317,185 @@ test('compare.html shows remote CORS covers from a collection, in the evidence a
     await page.waitForFunction(() => window.comparisonDebug().scene?.loadedArtwork > 0, null, { timeout: 10000 });
     assert.ok(remoteHits.some(hit => hit.cors), 'the walls request covers with CORS');
     assert.deepEqual(apiHits, [], 'no /api/clips and no /api/proxy');
+  } finally { await page.close(); }
+});
+
+test('a collection whose covers are sprite-sheet cells shows them on the wall and in the detail pane, from two requests', async () => {
+  apiHits.length = 0; mediaHits.length = 0; sheetHits.length = 0;
+  const page = await newPage();
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite.json`);
+    await ready(page);
+    assert.equal(await page.locator('#canvas > .tile').count(), 30);
+    // Every tile in view takes its cell as a blob: URL, cropped at the level its size needs.
+    await page.waitForFunction(() => {
+      const shown = [...document.querySelectorAll('#canvas > .tile')].filter(t => t.style.visibility !== 'hidden').map(t => t.querySelector('img'));
+      return shown.length && shown.every(img => img.src.startsWith('blob:') && img.complete && img.naturalWidth > 0);
+    }, null, { timeout: 15000 });
+    const tiles = await page.evaluate(PIXELS, '#canvas > .tile img');
+    assert.ok(tiles.length >= 6, `${tiles.length} tiles in view`);
+    for (const t of tiles) assert.ok(near(t.rgb, spriteColor(t.n)), `Cover ${t.n} shows ${t.rgb}, its cell is ${spriteColor(t.n)}`);
+    // The detail pane shows the largest cell.
+    await page.locator('#canvas > .tile[aria-label="Cover 07"]').click();
+    await page.waitForFunction(() => { const img = document.querySelector('.detail-content > img'); return img?.src.startsWith('blob:') && img.naturalWidth === 120; }, null, { timeout: 10000 });
+    const [detail] = await page.evaluate(PIXELS, '.detail-content > img');
+    assert.ok(near(detail.rgb, spriteColor(7)), `detail shows ${detail.rgb}`);
+    assert.deepEqual(mediaHits, [], 'no per-item files');
+    assert.deepEqual(apiHits, []);
+    assert.ok(sheetHits.length >= 1 && sheetHits.every(p => /^\/data\/sheets\/(small|large)\.png$/.test(p)), sheetHits.join(','));
+    assert.ok(new Set(sheetHits).size <= 2 && sheetHits.length <= 4, `each page is fetched about once: ${sheetHits.join(',')}`);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('the 3D view draws sprite-sheet cells into its atlas', async () => {
+  const page = await newPage();
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite.json`);
+    await ready(page);
+    await page.locator('#view-3d').click();
+    await page.waitForFunction(() => {
+      const v = window.__cwSpatial, a = v?.field?.atlases;
+      if (!v?.built || !a) return false;
+      let far = 0; for (let i = 0; i < v.field.count; i++) if (a.farSlot[i] >= 0) far++;
+      return far === v.field.count && !a._farQueue.length;
+    }, null, { timeout: 20000 });
+    const atlas = await page.evaluate(() => {
+      const v = window.__cwSpatial, a = v.field.atlases, out = [];
+      for (let i = 0; i < v.field.count; i++) {
+        const r = a.far.slotRect(a.farSlot[i]);
+        out.push({ n: Number(v.clips[i].title.match(/Cover (\d+)/)[1]), rgb: [...a.far.ctx.getImageData(r.x + (r.w >> 1), r.y + (r.h >> 1), 1, 1).data.slice(0, 3)] });
+      }
+      return { failed: a._failed.size, out };
+    });
+    assert.equal(atlas.failed, 0);
+    assert.equal(atlas.out.length, 30);
+    for (const t of atlas.out) assert.ok(near(t.rgb, spriteColor(t.n)), `atlas tile for Cover ${t.n} is ${t.rgb}, its cell is ${spriteColor(t.n)}`);
+    assert.deepEqual(mediaHits, []);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('compare.html shows sprite-sheet cells as evidence thumbnails and on the album walls', async () => {
+  apiHits.length = 0; mediaHits.length = 0;
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}/wall/compare.html?collection=/data/sprite.json`);
+    await page.waitForSelector('body[data-comparison-ready="true"]');
+    await page.waitForFunction(() => { const imgs = [...document.querySelectorAll('#evidence-items img')]; return imgs.length && imgs.every(img => img.src.startsWith('blob:') && img.complete && img.naturalWidth > 0); }, null, { timeout: 10000 });
+    const thumbs = await page.evaluate(PIXELS, '#evidence-items img');
+    assert.ok(thumbs.length >= 6);
+    for (const t of thumbs) assert.ok(near(t.rgb, spriteColor(t.n)), `thumbnail for Cover ${t.n} is ${t.rgb}`);
+    await page.waitForSelector('body[data-scene-ready="true"]', { timeout: 20000 });
+    await page.waitForFunction(() => { const d = window.comparisonDebug().scene; return d && d.loadedArtwork > 0 && !d.pendingArtwork; }, null, { timeout: 10000 });
+    const scene = await page.evaluate(() => window.comparisonDebug().scene);
+    assert.equal(scene.failedArtwork, 0, 'every cover on the walls came from a cell');
+    assert.ok(scene.loadedArtwork >= 20, `${scene.loadedArtwork} covers on the walls`);
+    assert.deepEqual(mediaHits, []);
+    assert.deepEqual(apiHits, []);
+  } finally { await page.close(); }
+});
+
+test('the overview canvas paints sprite-sheet cells', async () => {
+  sheetHits.length = 0;
+  // A small stage makes 30 tiles overview-sized at Fit.
+  const page = await browser.newPage({ viewport: { width: 520, height: 420 }, reducedMotion: 'reduce' });
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite.json`);
+    await ready(page);
+    for (let i = 0; i < 6 && !(await page.evaluate(() => !document.querySelector('canvas.overview-surface')?.hidden)); i++) {
+      await page.locator('#zoom-out').click(); await page.waitForTimeout(250);
+    }
+    await page.waitForFunction(() => {
+      const shown = [...document.querySelectorAll('#canvas > .tile')].filter(t => t.style.visibility !== 'hidden');
+      return shown.length && shown.every(t => t.classList.contains('overview-painted'));
+    }, null, { timeout: 10000 });
+    const painted = await page.evaluate(() => {
+      const canvas = document.querySelector('canvas.overview-surface'), box = canvas.getBoundingClientRect(), ctx = canvas.getContext('2d');
+      return [...document.querySelectorAll('#canvas > .tile')].filter(t => t.style.visibility !== 'hidden').map(t => {
+        const r = t.getBoundingClientRect(), sx = canvas.width / box.width, sy = canvas.height / box.height;
+        const x = Math.round((r.left + r.width / 2 - box.left) * sx), y = Math.round((r.top + r.height / 2 - box.top) * sy);
+        return { n: Number(t.getAttribute('aria-label').match(/Cover (\d+)/)[1]), rgb: [...ctx.getImageData(x, y, 1, 1).data.slice(0, 3)] };
+      });
+    });
+    assert.ok(painted.length >= 20, `${painted.length} tiles painted`);
+    for (const t of painted) assert.ok(near(t.rgb, spriteColor(t.n)), `overview paints Cover ${t.n} as ${t.rgb}, its cell is ${spriteColor(t.n)}`);
+    assert.ok(sheetHits.includes('/data/sheets/small.png'), sheetHits.join(','));
+  } finally { await page.close(); }
+});
+
+test('with images.sheets "covers", cells serve every view even where a cover file exists', async () => {
+  mediaHits.length = 0; sheetHits.length = 0;
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite-files.json`);
+    await ready(page);
+    await page.waitForFunction(() => {
+      const shown = [...document.querySelectorAll('#canvas > .tile')].filter(t => t.style.visibility !== 'hidden').map(t => t.querySelector('img'));
+      return shown.length && shown.every(img => img.src.startsWith('blob:') && img.complete && img.naturalWidth > 0);
+    }, null, { timeout: 15000 });
+    for (const t of await page.evaluate(PIXELS, '#canvas > .tile img')) assert.ok(near(t.rgb, spriteColor(t.n)), `Cover ${t.n} shows ${t.rgb}`);
+    await page.locator('#canvas > .tile[aria-label="Cover 04"]').click();
+    await page.waitForFunction(() => { const img = document.querySelector('.detail-content > img'); return img?.src.startsWith('blob:') && img.naturalWidth === 120; }, null, { timeout: 10000 });
+    assert.deepEqual(mediaHits, [], 'the files are only a fallback');
+  } finally { await page.close(); }
+});
+
+test('when a sheet page is missing, the wall, the detail pane and 3D fall back to each clip\'s own file', async () => {
+  mediaHits.length = 0; sheetHits.length = 0;
+  const page = await newPage();
+  const errors = [];
+  page.on('pageerror', err => errors.push(err.message));
+  try {
+    await page.goto(`${origin}/?collection=/data/sprite-missing.json`);
+    await ready(page);
+    await page.waitForFunction(() => {
+      const shown = [...document.querySelectorAll('#canvas > .tile')].filter(t => t.style.visibility !== 'hidden').map(t => t.querySelector('img'));
+      return shown.length && shown.every(img => img.src.includes('/data/media/') && img.complete && img.naturalWidth > 0);
+    }, null, { timeout: 15000 });
+    const tiles = await page.evaluate(PIXELS, '#canvas > .tile img');
+    assert.ok(tiles.length >= 6);
+    for (const t of tiles) assert.ok(near(t.rgb, fileColor(t.n)), `Cover ${t.n} shows ${t.rgb}, its file is ${fileColor(t.n)}`);
+    assert.ok(sheetHits.some(p => p.includes('unpublished-')), 'the missing page was asked for');
+    assert.ok(await page.locator('#canvas > .tile.broken').count() === 0, 'no tile is left broken');
+    await page.locator('#canvas > .tile[aria-label="Cover 05"]').click();
+    await page.waitForFunction(() => { const img = document.querySelector('.detail-content > img'); return img?.src.includes('/data/media/2.svg') && img.complete && img.naturalWidth > 0; }, null, { timeout: 10000 });
+    await page.locator('.detail-content .close').click();
+    await page.locator('#view-3d').click();
+    await page.waitForFunction(() => {
+      const v = window.__cwSpatial, a = v?.field?.atlases;
+      if (!v?.built || !a) return false;
+      let far = 0; for (let i = 0; i < v.field.count; i++) if (a.farSlot[i] >= 0) far++;
+      return far === v.field.count && !a._farQueue.length && !a._inflight;
+    }, null, { timeout: 20000 });
+    const atlas = await page.evaluate(() => {
+      const v = window.__cwSpatial, a = v.field.atlases, out = [];
+      for (let i = 0; i < v.field.count; i++) {
+        const r = a.far.slotRect(a.farSlot[i]);
+        out.push({ n: Number(v.clips[i].title.match(/Cover (\d+)/)[1]), rgb: [...a.far.ctx.getImageData(r.x + (r.w >> 1), r.y + (r.h >> 1), 1, 1).data.slice(0, 3)] });
+      }
+      return { failed: a._failed.size, out };
+    });
+    assert.equal(atlas.failed, 0);
+    for (const t of atlas.out) assert.ok(near(t.rgb, fileColor(t.n)), `atlas tile for Cover ${t.n} is ${t.rgb}`);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('when a sheet page is missing, compare.html falls back to the files in the evidence and on the walls', async () => {
+  const page = await newPage();
+  try {
+    await page.goto(`${origin}/wall/compare.html?collection=/data/sprite-missing.json`);
+    await page.waitForSelector('body[data-comparison-ready="true"]');
+    await page.waitForFunction(() => { const imgs = [...document.querySelectorAll('#evidence-items img')]; return imgs.length && imgs.every(img => img.src.includes('/data/media/') && img.complete && img.naturalWidth > 0); }, null, { timeout: 10000 });
+    await page.waitForSelector('body[data-scene-ready="true"]', { timeout: 20000 });
+    await page.waitForFunction(() => { const d = window.comparisonDebug().scene; return d && d.loadedArtwork > 0 && !d.pendingArtwork; }, null, { timeout: 15000 });
+    const scene = await page.evaluate(() => window.comparisonDebug().scene);
+    assert.equal(scene.failedArtwork, 0, 'every wall cover came from its file');
+    assert.ok(scene.loadedArtwork >= 20);
   } finally { await page.close(); }
 });

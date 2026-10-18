@@ -29,8 +29,10 @@ Then open:
   it.
 
 The example's 297 images are low-resolution screenshots from the Psychodeli
-visualizer, served from the public demo site with CORS. The repository holds
-only the collection document.
+visualizer, served from the public demo site with CORS. The collection
+document names 16 sprite-sheet pages there, of which the overview needs
+three, and keeps each image's own file as the fallback. The repository holds
+only the document.
 
 ## For language models
 
@@ -39,6 +41,8 @@ The full contract is in [docs/CONTRACT.md](docs/CONTRACT.md). In short:
 1. **Collection document** (`wunderkammer.collection`, version 1): items with
    an id, title, cover image, and attributes in `props`. A strict validator
    lists every problem with its path, so a model's first draft fails loudly.
+   Covers can be one file each or cells of a few sprite sheets;
+   `python3 scripts/collection-sheets.py <collection.json>` packs them.
 2. **Comparison recipe**: 2–6 groups, a measured attribute, and counts or
    shares.
 3. **Observations** (`wunderkammer.observations`): claims that cite matrix

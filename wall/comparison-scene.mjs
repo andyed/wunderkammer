@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { remote } from './media-policy.mjs';
+import { spriteCovers, spriteSource, isSpriteSource } from './sprite-covers.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AlbumWalls } from './album-walls.mjs';
 
@@ -17,7 +18,10 @@ const same = (a, b) => a?.value === b?.value && a?.cohort === b?.cohort && (a?.o
 const match = (pick, datum) => pick?.cells ? pick.cells.some(c => c.value === datum.value && c.cohort === datum.cohort)
   : (!pick?.value || pick.value === datum.value) && (!pick?.cohort || pick.cohort === datum.cohort);
 
-function coverSource(clip) {
+/** A cover served by sprite-sheet cells becomes a texture from its cell. */
+const coverSource = clip => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip);
+
+function fileSource(clip) {
   const variants = (clip?.coverVariants || []).filter(v => v?.src && v.width > 0)
     .sort((a, b) => a.width - b.width);
   const source = (variants.find(v => v.width >= 128) || variants.at(-1))?.src || clip?.cover;
@@ -360,7 +364,28 @@ export class ComparisonScene {
           record = { texture: null, ready: false, failed: false };
           this.textureRecords.set(source, record);
           const generation = this.generation;
-          record.texture = new THREE.TextureLoader().load(source, texture => {
+          if (isSpriteSource(source)) {
+            record.texture = new THREE.Texture();
+            record.texture.colorSpace = THREE.SRGBColorSpace;
+            void spriteCovers.bitmap(clip, 128).then(bitmap => {
+              if (this.disposed || generation !== this.generation || this.textureRecords.get(source) !== record) { bitmap?.close?.(); return; }
+              if (!bitmap) {
+                // The cell's page failed: the clip's own file, when it has one.
+                const file = fileSource(clip);
+                if (!file) { record.failed = true; this.invalidate(); return; }
+                new THREE.TextureLoader().load(file, texture => {
+                  if (this.disposed || generation !== this.generation || this.textureRecords.get(source) !== record) { texture.dispose(); return; }
+                  record.texture.image = texture.image; record.texture.needsUpdate = true; record.ready = true; this.invalidate();
+                }, undefined, () => { record.failed = true; this.invalidate(); });
+                return;
+              }
+              // A canvas, not the bitmap: WebGL ignores flipY for an ImageBitmap.
+              const canvas = document.createElement('canvas');
+              canvas.width = bitmap.width; canvas.height = bitmap.height;
+              canvas.getContext('2d').drawImage(bitmap, 0, 0); bitmap.close?.();
+              record.texture.image = canvas; record.texture.needsUpdate = true; record.ready = true; this.invalidate();
+            });
+          } else record.texture = new THREE.TextureLoader().load(source, texture => {
             if (this.disposed || generation !== this.generation || this.textureRecords.get(source) !== record) { texture.dispose(); return; }
             texture.colorSpace = THREE.SRGBColorSpace;
             record.ready = true;

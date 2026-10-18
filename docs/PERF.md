@@ -11,6 +11,85 @@ uniformly smooth dense transitions are not established. Stable reader geometry,
 reversible approach/return, bounded animation and image queues, and the flat
 overview picture are described in [SMOOTH_SPATIAL.md](SMOOTH_SPATIAL.md).
 
+## Collection sprite sheets: 297 cover files → 16 pages (2026-10-17)
+
+**Change.** A collection document can ship its covers as cells of a few
+sprite sheets (CONTRACT.md, [Sprite sheets](CONTRACT.md#sprite-sheets)).
+`scripts/collection-sheets.py` converted `examples/psychodeli`. Its 297
+covers are 480 px wide and 270–912 px tall, loaded one file each from
+`andyed.github.io/clipwall-demo`. They become 16 WebP pages:
+- one at 64 px (311 KB);
+- two at 160 px;
+- thirteen holding each cover at its own size.
+
+The pages total 9.88 MB at WebP quality 75. The sources were already WebP
+quality 72, so a higher setting added bytes, not detail. The document names
+the pages on the demo site and keeps every per-file cover there as the
+fallback (`images.sheets: "covers"`). The pages are not in this repository.
+
+**Measured** with `node scripts/perf-collection.mjs <document> --runs 5
+[--throttle 4g]`: headless Chromium, 1440×900 at 2×, cold cache, median of
+five runs after one warm-up. "Overview complete" means every visible tile
+shows its image, perf.mjs's definition. Before and after were served by the
+same local HTTP/1.1 server:
+- before: the original document, with its 297 covers mirrored beside it;
+- after: a build with the pages beside it (`collection-sheets.py --out`),
+  byte-identical to the pages staged for the demo site.
+
+4G is Chrome's throttle at 60 ms latency and 12 Mbit/s.
+
+| | Before: 297 files | After: sheets |
+|---|---|---|
+| Image requests until the overview is complete | 297 | 3 |
+| Image bytes until then | 8,317 KB | 1,812 KB |
+| Overview complete, unthrottled | 1,142 ms (1,007–1,172) | 376 ms (365–390) |
+| Overview complete, 4G | 7,712 ms (7,629–7,776) | 1,569 ms (1,566–1,571) |
+| Document | 520 KB | 500 KB |
+| Files to host | 297 | 16 pages, plus the 297 files as fallback |
+| Bytes to host | 8.5 MB | 9.9 MB of pages |
+
+The shipped document, unchanged and fetching from GitHub Pages over HTTP/2,
+took 1,911 ms (1,827–3,380) for the same 297 requests and 8,335 KB. Under 4G
+the before run made 308 image requests: the overview's own loader and the
+tile `<img>` asked for some covers twice.
+
+**Before the pages are published**, the committed document meets a 404 for
+each page it asks for and falls back to the files on the same site. Measured
+against the live demo site: overview complete in 2,154 ms (2,066–2,345), 316
+image requests (the 297 covers plus the failed pages and a few repeats),
+8,435 KB. The original document took 1,911 ms on the same site earlier that
+evening, so the failed requests cost a few hundred milliseconds.
+
+**What the numbers do not cover.** The overview needs only the 64 px page to
+paint every tile and the 160 px pages to sharpen them. The full-size pages
+load when a reading zoom, the detail pane, a 3D card or an evidence thumbnail
+first needs a cell on them. A visit that reads the whole wall therefore
+still fetches all 9.9 MB, 17% more than the files they replace, because the
+two small levels are extra. A full-size page decodes about 3.6 Mpx to show
+any cell on it, and at most 32 Mpx stay decoded. In the proof captures, the
+reading zoom (174 tiles in view at 1×) made 18 sheet requests beyond the
+overview's 3, against an earlier build with a 480 px top level.
+
+**Fixes the measurement found.** Boot renders at scale 1 and fits in the
+next frame, the same frame queued image work starts in. A sprite tile took
+its cell at scale 1, so every boot fetched two full-size pages and encoded
+eight cells the overview then covered. Sprite work now waits one more frame
+and skips a moving camera; boot makes no full-size request. In 3D the near
+tier asked for 256 px, which is the full-size level. Its 256 nearest covers
+spanned about ten pages, more than the decode budget, so pages evicted each
+other and a tile out of retries failed (2 of 297 in one run). The near
+atlas now draws the 160 px cells. The nearest covers are DOM cards that use
+the full-size cell. Opening 3D then loaded 7 pages, none twice, with no
+failed tile. Keeping per-file covers as the fallback found two more problems:
+- **Fallback files were being fetched anyway.** The overview's handoff starts
+  any tile `<img>` it finds with a `data-src`. With the fallback file stored
+  there, a reading zoom fetched 151 per-file covers alongside the cells. The
+  file now waits in `data-file` until the cells' pages have failed.
+- **A failed overview level left the next level idle.** `covers()` still
+  promised that level, so tiles kept off their files. With no camera motion
+  to call `ensure()` again (reduced motion, or a static view), the wall
+  stayed blank while the pages 404'd. A failed level now starts the next.
+
 ## Overview sheets: boot images 4.6 s → 0.1 s (2026-10-13)
 
 **Problem.** HTTP caching already worked: on a warm reload 1,659 of the Music

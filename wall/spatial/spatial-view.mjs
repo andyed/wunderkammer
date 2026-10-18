@@ -26,6 +26,8 @@ import { HybridField } from './lib/hybrid.js';
 import { PileLayout } from './lib/piles.js';
 import { FieldNavigator } from './lib/navigate.js';
 import { CardHost, supported as drawableSupported } from './lib/cards.js';
+import { RETRY } from './lib/atlas.js';
+import { spriteCovers } from '../sprite-covers.mjs';
 import { RowMotion } from './lib/motion.js';
 import { groupBy, layout, SIMILARITY, isSimilarity } from '../layout.mjs';
 import { spreadScale, HOVER_PX } from '../similarity-layout.mjs';
@@ -346,6 +348,8 @@ export class SpatialView {
     this._unsubscribePaint = null;
 
     const clips = this.clips;
+    // Both tiers ask for many covers at once; have their sheets decoding first.
+    if (spriteCovers.available) { spriteCovers.warm(64); spriteCovers.warm(160); }
 
     // Drawable cards: source near-tier tiles from live DOM instead of images,
     // so a tile keeps its text in find-in-page and Cmd+F can move the camera.
@@ -395,9 +399,21 @@ export class SpatialView {
       // `_capturing` brackets our own drawElementImage calls: a capture
       // repaints the card, and a repaint is indistinguishable from a find at
       // the event level.
-      resolveSource: this.cardHost
+      // A cover kept as sprite-sheet cells has no URL for the image path: both
+      // tiers draw its cell straight from the decoded sheet, and RETRY waits
+      // the frames a page takes to arrive (sprite-covers.mjs). The near tier
+      // asks for 160 px, not its 256 px slot: the 256 nearest covers span most
+      // of a collection's full-size level (~45 Mpx for the Psychodeli example,
+      // over the decode budget, so pages evicted each other and tiles ran out
+      // of retries), and the closest ones become DOM cards with the full cell.
+      resolveSource: this.cardHost || spriteCovers.available
         ? (i, tier) => {
-          if (tier !== 'near' || this.host.hidden) return null;
+          if (spriteCovers.has(clips[i])) {
+            // No cell (its page failed): null takes the image path to the clip's file.
+            const need = tier === 'near' ? 160 : 64;
+            return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;
+          }
+          if (!this.cardHost || tier !== 'near' || this.host.hidden) return null;
           this._capturing = true;
           try { return this.cardHost?.capture(i) ?? null; }
           finally { queueMicrotask(() => { this._capturing = false; }); }
@@ -471,14 +487,20 @@ export class SpatialView {
     const clip = this.clips[i];
     if (!clip) return;
 
+    const sprite = spriteCovers.has(clip);
     const src = sourceFor(clip, 340) || '';   // the card is authored 340 px wide
-    if (src) {
+    if (src || sprite) {
       const img = document.createElement('img');
       img.className = 'sp-thumb';
       // The DOM pool renders a plain <img> and is fine cross-origin. A drawable
       // is not: cross-origin content inside one is dropped from the snapshot,
       // leaving the hero blank while the rest of the card draws.
-      img.src = proxyHero ? proxied(src) : src;
+      const file = src && (proxyHero ? proxied(src) : src);
+      if (sprite) {
+        // A pooled card can be rebuilt for another item before the cell
+        // arrives; only an <img> still in its card takes it.
+        void spriteCovers.coverUrl(clip, 340 * Math.min(2, window.devicePixelRatio || 1), file).then(url => { if (url && img.parentNode === el) img.src = url; });
+      } else img.src = file;
       img.alt = '';
       img.draggable = false;
       img.addEventListener('error', () => el.classList.add('broken'), { once: true });
