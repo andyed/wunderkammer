@@ -289,6 +289,23 @@ const cases = [
     from: 'if (collection) setProxyAvailable(false);', to: '',
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html shows remote CORS covers',
   },
+  // The flat wall's cached overview picture during a zoom-out: MUTATION_FILTER=zoom-out
+  {
+    name: 'zoom-out painted tiles hide their hit targets', file: 'wall/overview-surface.css',
+    from: '.tile.overview-painted > img { visibility: hidden; }', to: '.tile.overview-painted { visibility: hidden; }',
+    test: 'tests/smooth-overview.test.mjs', pattern: 'zoom-out exposes decoded DOM at cached-picture edges',
+  },
+  {
+    name: 'zoom-out repaints instead of showing decoded DOM at picture edges', file: 'wall/overview-surface.mjs',
+    from: 'if (!covered && !(tile.image?.complete && tile.image.naturalWidth > 0) && !this.sheets?.slot(tile.source)) return false;',
+    to: 'if (!covered) return false;',
+    test: 'tests/smooth-overview.test.mjs', pattern: 'zoom-out exposes decoded DOM at cached-picture edges',
+  },
+  {
+    name: 'zoom-out keeps exposed tiles hidden under a blank picture edge', file: 'wall/overview-surface.mjs',
+    from: "else { this.painted.delete(node); node.classList.remove('overview-painted'); }", to: 'else {}',
+    test: 'tests/smooth-overview.test.mjs', pattern: 'zoom-out exposes decoded DOM at cached-picture edges',
+  },
   // Sprite sheets (docs/CONTRACT.md, "Sprite sheets"): MUTATION_FILTER=sprite
   {
     name: 'sprite cells accepted outside their sheet', file: 'wall/collection.mjs',
