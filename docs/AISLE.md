@@ -57,7 +57,10 @@ validates both existing views and optional aisle/highlight fields. Permalink
 history remains the only durable view route.
 
 `scripts/build-demo.mjs` includes these main-wall modules while excluding
-`compare.html` and `comparison-*`. The experimental comparison route remains
+`compare.html`, `comparison.css` and `comparison-*`. The one exception is
+`comparison-copy.mjs`, which supplies `album-walls.mjs`'s neutral wall labels;
+`tests/demo-bundle.test.mjs` builds the demo and checks that every import its
+page can reach resolves. The experimental comparison route remains
 available on local instances; its statistics and recipe machinery are not
 required by the main aisle. This does not yet supply a Cartographer adapter.
 

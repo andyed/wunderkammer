@@ -27,6 +27,13 @@
   multiple of the atlas's column count could show part of its neighbour.
   Both are fixed upstream (muriel `99ea62b`) and re-vendored; the floating
   space no longer patches them itself.
+- **The static demo's aisle starts again.** `scripts/build-demo.mjs` left
+  out every `comparison-*` file, including `comparison-copy.mjs`, which the
+  aisle's wall labels come from since the wording change. The demo's
+  `?view=aisle` got a 404 on that import and stayed on the flat wall. The
+  build now ships that one file and still leaves the comparison workbench
+  out; `tests/demo-bundle.test.mjs` builds the demo and follows every import
+  its page can reach.
 - **Counts use the collection's own nouns.** The wall's count, the aisle's
   rack labels, the floating space's status line and the group labels read
   for assistive technology now say what the collection calls its items
