@@ -12,9 +12,10 @@ before(async () => {
   server = createServer(async (req, res) => {
     const path = new URL(req.url, 'http://fixture.test').pathname;
     const image = path.match(/^\/fixtures\/(alpha|beta|gamma|delta)\.svg$/);
-    if (image) {
+    const flat = path.match(/^\/fixtures\/flat\/([0-9a-f]{6})\.svg$/);
+    if (image || flat) {
       res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${colors[image[1]]}"/></svg>`);
+      res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${image ? colors[image[1]] : `#${flat[1]}`}"/></svg>`);
       return;
     }
     if (!/^\/(wall\/|tests\/fixtures\/)/.test(path)) {
@@ -84,11 +85,11 @@ async function expectRenderedColor(page, index, expected) {
       ctx.drawImage(image, 0, 0);
       return [...ctx.getImageData(point.x, point.y, 1, 1).data].slice(0, 3);
     }, { png: shot.toString('base64'), point });
-    // The custom shader's output transfer differs from DOM image output;
-    // accept either transfer while still requiring the source's actual color.
-    const linear = expected.map((value) => Math.round(255 * (value / 255 <= 0.04045
-      ? value / 255 / 12.92 : ((value / 255 + 0.055) / 1.055) ** 2.4)));
-    if ([expected, linear].some((color) => actual.every((value, i) => Math.abs(value - color[i]) < 8))) return;
+    // The source's colour as sRGB, nothing else. This used to accept the
+    // linear value as well, on the theory that the shader's output transfer
+    // simply differed from the DOM's; it was the TileField encoding bug, and
+    // the allowance hid it (see the per-tile test below).
+    if (actual.every((value, i) => Math.abs(value - expected[i]) < 8)) return;
     await page.waitForTimeout(100);
   }
   assert.fail(`rendered tile ${index}: expected RGB ${expected}, got ${actual}`);
@@ -141,6 +142,126 @@ test('GPU pixels refresh after an index is reused and after the same id changes 
   await expectRenderedColor(page, 0, [32, 224, 64]);
   if (process.env.WUNDERKAMMER_SPATIAL_SHOT_PREFIX) {
     await page.screenshot({ path: `${process.env.WUNDERKAMMER_SPATIAL_SHOT_PREFIX}-gpu.png` });
+  }
+});
+
+// 25 flat covers make a 5 x 5 far atlas (slots 5, 10, 15, 20 sit at multiples
+// of its column count) and fill the first 25 slots of the 16-wide near atlas
+// (slot 16 is the multiple there). Each of those differs sharply from the slot
+// before it, and mid and dark tones are there because gamma error is largest
+// on them. Tile 3's cover 404s, so its slot is freed (the shader's slotless
+// output); tile 12 has no cover, so its slot stays empty (the sampled output
+// with nothing in it). Both must draw TileField's emptyColor.
+const FLAT = ['d70009', 'a7aab0', '1a2a6c', null, '00ff00', 'ff00ff', '808080', '2a9d8f', '000000', 'ffff00',
+  '0000ff', 'fa8072', null, '8b4513', 'cccccc', '333333', '00ffff', '800080', 'ff8000', '32cd32',
+  'f3e5ab', '445566', '808000', 'c0392b', '6c5ce7'];
+const MISSING = 3, COVERLESS = 12, EMPTY = [0x1b, 0x24, 0x30];
+const flatClips = FLAT.map((hex, i) => ({
+  id: `flat-${i}`, title: `Flat ${i}`, url: `https://example.test/flat/${i}`, source: 'Fixture', tags: [],
+  cover: i === MISSING ? '/fixtures/flat/missing.svg' : i === COVERLESS ? null : `/fixtures/flat/${hex}.svg`,
+  props: { dims: ['400x300'] },
+}));
+
+// Mirrors FloatView.isolatedSamples: draw one tile with every other instance
+// suppressed, and read a 5 x 5 grid of frame pixels over the middle 70% of its
+// face, in its own plane, so a turned tile is sampled where it really is.
+// readPixels runs in the same task as the render, so no preserveDrawingBuffer.
+const isolatedSamples = page => page.evaluate(async () => {
+  const THREE = await import('three');
+  const f = view.field, renderer = view.webglRenderer, gl = renderer.getContext();
+  const opacity = f.aOpacity.array, saved = opacity.slice(), px = new Uint8Array(4);
+  const q = new THREE.Quaternion(), centre = new THREE.Vector3(), p = new THREE.Vector3();
+  view.camera.updateMatrixWorld();
+  const tiles = [];
+  for (let index = 0; index < f.count; index++) {
+    for (let i = 0; i < f.count; i++) opacity[i] = i === index ? saved[i] : 0;
+    f.aOpacity.needsUpdate = true;
+    renderer.render(view.scene, view.camera);
+    const w = f.sizes[index * 2], h = f.sizes[index * 2 + 1];
+    q.fromArray(f.rotations, index * 4); centre.fromArray(f.centres, index * 3);
+    const samples = [];
+    for (let row = 0; row < 5; row++) for (let col = 0; col < 5; col++) {
+      p.set((col / 4 - 0.5) * 0.7 * w, (row / 4 - 0.5) * 0.7 * h, 0).applyQuaternion(q).add(centre).project(view.camera);
+      gl.readPixels(Math.round((p.x + 1) / 2 * gl.drawingBufferWidth), Math.round((p.y + 1) / 2 * gl.drawingBufferHeight),
+        1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      samples.push([px[0], px[1], px[2]]);
+    }
+    tiles.push(samples);
+  }
+  opacity.set(saved); f.aOpacity.needsUpdate = true; view.invalidate();
+  return tiles;
+});
+
+test('3D tiles draw their cover colour as sRGB across the whole face, at every atlas slot, in both tiers', async (t) => {
+  const page = await fixture(t);
+  await page.evaluate(async (clips) => {
+    const THREE = await import('three');
+    view.setClips(clips);
+    view.motion.enabled = false;
+    view.basePos.set(0, 0, 2400); view.lookTarget.set(0, 0, 0);
+    view.camera.position.copy(view.basePos); view.camera.lookAt(view.lookTarget);
+    view.scene.traverse((object) => { if (object.isLineSegments) object.visible = false; });
+    // A 5 x 5 grid, each column turned the other way about Y, so depth varies
+    // across every quad: perspective-correct interpolation of the slot index
+    // is what lands it just under an integer.
+    const turn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < clips.length; i++) {
+      const col = i % 5, row = Math.floor(i / 5);
+      turn.setFromAxisAngle(up, (col % 2 ? -1 : 1) * 0.45);
+      view.field.place(i, (col - 2) * 420, (2 - row) * 330, 0, 360, 270, turn);
+    }
+    view.field.layout();
+    // Near first: every tile inside the band, so near slots are taken in index order.
+    view.field.nearDistance = 1e6;
+    view.hybrid.setFocus(-1); view.hybrid.promoteDistance = 0; view.hybrid.update(view.camera);
+    view.invalidate();
+  }, flatClips);
+
+  // Both tiers are read before asserting, so a failure names every bad slot.
+  const wrong = [];
+  for (const tier of ['near', 'far']) {
+    if (tier === 'far') await page.evaluate(() => { view.field.nearDistance = 0; view.invalidate(); });
+    // Settled means, on the same frame: nothing loading, queued or waiting to
+    // upload, and every tile on this tier's slot. Checked apart, the slots can
+    // settle first (the 404 often lands before the other covers have loaded),
+    // and the frame then shows empty slots. A failed load frees its slot
+    // without marking the field dirty, so an idle field that is not yet
+    // settled is asked for one more tier pass. Only when idle: invalidating
+    // every frame would keep the view off the path that flushes the atlases.
+    const settled = await page.evaluate(async ({ tier, missing }) => {
+      const f = view.field, a = f.atlases, frame = () => new Promise(r => requestAnimationFrame(r));
+      const idle = () => !a._inflight && !a._farQueue.length && !a._nearQueue.length && !a.far._dirty && !a.near._dirty;
+      const slots = tier === 'near' ? a.nearSlot : a.farSlot, want = tier === 'near' ? 1 : 0;
+      const placed = () => Array.from(f.aSlot.array).every((s, i) => i === missing ? s === -1 : s >= 0 && s === slots[i] && f.aTier.array[i] === want);
+      for (let k = 0; k < 900; k++) {
+        await frame();
+        if (!idle()) continue;
+        if (placed()) return true;
+        view.invalidate();
+      }
+      return false;
+    }, { tier, missing: MISSING });
+    assert.ok(settled, `${tier} tier settled`);
+    const atlas = await page.evaluate((tier) => {
+      const a = view.field.atlases;
+      return { cols: (tier === 'near' ? a.near : a.far).cols, slots: Array.from(tier === 'near' ? a.nearSlot : a.farSlot) };
+    }, tier);
+    // Guard the fixture: if the atlas widths or the slot order drifted, the
+    // multiple-of-columns slots would no longer be exercised.
+    assert.equal(atlas.cols, tier === 'near' ? 16 : 5, `${tier} atlas width`);
+    assert.deepEqual(atlas.slots, FLAT.map((_, i) => i === MISSING ? -1 : i), `${tier} slot i holds tile i`);
+
+    const tiles = await isolatedSamples(page);
+    for (const [i, hex] of FLAT.entries()) {
+      const want = hex ? [0, 2, 4].map(k => parseInt(hex.slice(k, k + 2), 16)) : EMPTY;
+      tiles[i].forEach((pixel, k) => {
+        if (pixel.some((v, c) => Math.abs(v - want[c]) > 4)) wrong.push(`${tier} tile ${i} (slot ${atlas.slots[i]}) sample ${k}: ${pixel} vs ${want}`);
+      });
+    }
+  }
+  assert.deepEqual(wrong, [], `${wrong.length} of 1,250 samples off their cover colour`);
+  if (process.env.WUNDERKAMMER_SPATIAL_SHOT_PREFIX) {
+    await page.screenshot({ path: `${process.env.WUNDERKAMMER_SPATIAL_SHOT_PREFIX}-flat-tiles.png` });
   }
 });
 

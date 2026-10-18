@@ -430,15 +430,35 @@ const cases = [
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
-    name: 'float frames skip sRGB output encoding', file: 'wall/float-view.mjs',
-    from: 'vec3 shown = linearToOutputTexel(vec4(${rgb}, 1.0)).rgb;', to: 'vec3 shown = ${rgb};',
+    // Upstream TileField encodes its output. The float view's dim patch is
+    // anchored on those output lines, so reverting their text would also trip
+    // the anchor guard (dimMode 'hidden') and prove nothing about the pixel
+    // check. A macro turns the encoder into the identity instead: the anchors
+    // still match, the dim patch still applies, and only encoding is gone.
+    name: 'float frames skip sRGB output encoding', file: 'wall/spatial/lib/instanced.js',
+    from: 'const FRAG = /* glsl */`\n', to: 'const FRAG = /* glsl */`\n#define linearToOutputTexel(value) (value)\n',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
-    name: 'float slot lookup floors an interpolated index', file: 'wall/float-view.mjs',
-    from: "'float slotIndex = floor(vSlot + 0.5);\\n  float row = floor((slotIndex + 0.5) / grid.x);\\n  float col = slotIndex - row * grid.x;'",
-    to: "'float col = mod(vSlot, grid.x);\\n  float row = floor(vSlot / grid.x);'",
+    name: 'float slot lookup floors an interpolated index', file: 'wall/spatial/lib/instanced.js',
+    from: 'float slotIndex = floor(vSlot + 0.5);\n  float row = floor((slotIndex + 0.5) / grid.x);\n  float col = slotIndex - row * grid.x;',
+    to: 'float col = mod(vSlot, grid.x);\n  float row = floor(vSlot / grid.x);',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
+  },
+  {
+    // The 3D view draws the upstream shader unpatched, so the plain revert to
+    // the old output lines is the honest mutation here.
+    name: 'spatial 3D tiles skip sRGB output encoding', file: 'wall/spatial/lib/instanced.js',
+    change: source => source
+      .replace('gl_FragColor = linearToOutputTexel(vec4(emptyColor, 1.0));', 'gl_FragColor = vec4(emptyColor, 1.0);')
+      .replace('gl_FragColor = linearToOutputTexel(vec4(c.rgb, c.a * vOpacity));', 'gl_FragColor = vec4(c.rgb, c.a * vOpacity);'),
+    test: 'tests/spatial-view.test.mjs', pattern: '3D tiles draw their cover colour',
+  },
+  {
+    name: 'spatial 3D slot lookup floors an interpolated index', file: 'wall/spatial/lib/instanced.js',
+    from: 'float slotIndex = floor(vSlot + 0.5);\n  float row = floor((slotIndex + 0.5) / grid.x);\n  float col = slotIndex - row * grid.x;',
+    to: 'float col = mod(vSlot, grid.x);\n  float row = floor(vSlot / grid.x);',
+    test: 'tests/spatial-view.test.mjs', pattern: '3D tiles draw their cover colour',
   },
   {
     name: 'float dimmed items take clicks', file: 'wall/float-view.mjs',

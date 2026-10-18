@@ -364,24 +364,27 @@ shares.
   256. A fly-to frames a few neighbours, and the smaller texture halved the
   arrival hitch (see PERF.md).
 
-The view patches the vendored fragment shader on its own material and leaves
-`lib/` unedited. If the source text it expects is missing, the patch fails
-loudly: `dimMode` becomes `hidden`, a status line appears and the tests fail.
-
-1. **Output encoding.** The shader samples the sRGB-tagged atlas, which the GPU
-   decodes to linear, and writes the result without re-encoding. Covers draw
-   about 2.2 gamma dark, and dark covers turn black. Measured: atlas 169
-   renders as 96.
-2. **Slot lookup.** The slot index arrives as an interpolated float. At an
-   exact multiple of the atlas's column count it can arrive as 4.9999…, and
-   `floor` then picks the previous row: slot 5 of a 5-column atlas drew a band
-   of slot 4.
-3. **Dimming.** TileField writes per-instance opacity as 0 or 1 and draws
-   with the depth buffer, not blending. The patch reads the value as
-   brightness instead.
-
-The 3D view shares the first two bugs. In the Psychodeli 3D view, atlas
-215, 0, 9 renders as 172, 0, 1. Both should be fixed upstream in muriel.
+- **Dimming.** TileField writes per-instance opacity as 0 or 1 and draws
+  with the depth buffer, not blending. The view patches the vendored fragment
+  shader on its own material, leaving `lib/` unedited, to read the value as
+  brightness. The step runs after each of the shader's two output lines (the
+  sampled tile and the `emptyColor` placeholder), on the colour upstream has
+  already encoded, so `FLOAT_DIM` is a share of displayed brightness. If the
+  output lines it anchors on are missing, the patch fails loudly: `dimMode`
+  becomes `hidden`, a status line appears and the tests fail.
+- **Fixed upstream.** The float view used to patch two more shader bugs,
+  which the 3D view shared. muriel fixed both in `99ea62b`, and `lib/` now
+  vendors that commit.
+  - **Output encoding.** The shader sampled the sRGB-tagged atlas, which the
+    GPU decodes to linear, and wrote the result without re-encoding. Covers
+    drew about 2.2 gamma dark, and dark covers turned black. In the
+    Psychodeli 3D view, atlas 215, 0, 9 rendered as 172, 0, 1. Both outputs
+    now pass through `linearToOutputTexel`.
+  - **Slot lookup.** The slot index arrives as an interpolated float. At an
+    exact multiple of the atlas's column count it could arrive as 4.9999…, and
+    `floor` then picked the previous row: slot 5 of a 5-column atlas drew a
+    band of slot 4. The index is now rounded before the row and column are
+    derived.
 
 ### Proof
 
@@ -402,7 +405,21 @@ The 3D view shares the first two bugs. In the Psychodeli 3D view, atlas
   - plane exactness under declumping, using a three-shot burst that shares one place;
   - swapping, label placement after Fit, and the phone toolbar and fill.
   - Link tests cover exact and live round trips, partial links, and the four refusals.
-- `scripts/check-mutations.mjs` has 35 float cases, all detected.
+- `tests/spatial-view.test.mjs` "3D tiles draw their cover colour…" does the
+  same per-tile check on the 3D view, which draws the shader unpatched. 25
+  flat covers fill both atlases so slots at a multiple of the column count
+  are drawn (5, 10, 15, 20 in the far atlas; 16 in the near one), a 404 and a
+  missing cover take the two `emptyColor` paths, and 25 points per tile are
+  read in both tiers, 1,250 samples in all. The old shader failed 961 of
+  them. With only the encoding fix reverted, 950 failed. With only the slot
+  fix reverted, 13 failed: far slots 5 and 15, and near slot 16.
+- **On real covers** (the Psychodeli example in the 3D view, 400 points over
+  80 tiles, frame pixel against the atlas texel it samples), the old shader
+  drew the frame at 0.43× the atlas's brightness, a bias of about −40 per
+  channel. The fixed one draws it at 1.01×, a bias under 1.
+- `scripts/check-mutations.mjs` has 35 float cases and 2 for the 3D view's
+  shader, all detected. The two float shader cases now mutate the vendored
+  upstream file, not a patch in the float view.
 - Frame times are in [PERF.md](PERF.md): 120 fps throughout at 297 items, and
   at 1,793 items apart from the fly-to arrival.
 

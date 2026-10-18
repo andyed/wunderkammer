@@ -7,9 +7,9 @@ library that other consumers are still tracking.
 | | |
 |---|---|
 | upstream | [muriel](https://github.com/andyed/muriel) `render_assets/_lib/`, from a checkout beside this repository (or `MURIEL_ROOT`) |
-| commit | `6cc2bc945900f589051509d4ee957b1766cd2b36` |
-| verified | 2026-09-20 |
-| branch | main (also contained in feat/html-in-canvas-probe) |
+| commit | `99ea62be11066374e6f9f851f0af81fbd2cbb452` |
+| verified | 2026-10-18 |
+| branch | fix/tilefield-shader (one commit on main d691564; not yet merged or pushed) |
 
 Every vendored byte matches that commit exactly — checked file by file against
 `git show 6cc2bc9:render_assets/_lib/…`, not against the upstream working tree.
@@ -33,3 +33,4 @@ node wall/spatial/lib/sync.mjs --pull   # re-copy and update this file
 2026-09-10 (perf pass): pulled upstream **working-tree** changes that are not yet committed in muriel — `TileField.update` now budgets the near tier to the nearest `capacity` instances via quickselect (no per-instance eviction scans), `takeDirty()` / `flush()` / `setRenderer()` support render-on-demand consumers, `HybridField.update` is allocation-free and returns whether the pool changed, `HybridField.sort` skips redundant z-index writes, and `TileAtlas` uploads dirty slots through `WebGLRenderer.copyTextureToTexture` instead of re-uploading the whole canvas. Upstream tests: `tests/spatial-field-select.test.mjs` (new) plus the existing hybrid/piles/cards tests, 19 passing. The commit hash above is the last committed base; the vendored bytes are ahead of it until muriel commits.
 2026-09-11: pulled the membership mask (`TileField.setActive/isActive/activeCount`, honoured by `HybridField.update`, `pickAt` and `FieldNavigator`), complete far residency (near residents also hold a far tile), and `HybridField._demote` clearing the element. Upstream tests: 20 passing. Still uncommitted upstream.
 2026-09-20: upstream recorded those changes in `6cc2bc9`. All nine vendored JS/CSS files were compared byte-for-byte with that immutable commit; all match, so no re-copy was needed. The read-only sync check and all 20 upstream spatial tests pass. The earlier working-tree-only notes above are historical.
+2026-10-18: pulled the TileField fragment-shader fixes (upstream `99ea62b` on `fix/tilefield-shader`): both outputs are encoded with `linearToOutputTexel`, so tiles no longer draw about 2.2 gamma dark, and the slot index is rounded before the row and column are derived, so a slot at a multiple of the column count no longer samples its neighbour. Only `instanced.js` changed; the other eight files were already byte-identical to upstream main. Upstream test: `tests/spatial-tile-pixels.test.mjs` (new) plus the existing spatial tests, 23 passing. Until that branch merges, the commit above is reachable only on it.

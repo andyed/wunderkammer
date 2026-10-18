@@ -14,6 +14,12 @@
   categorical facet as labelled planes). Missing values wait in labelled
   slots, greys get their own hue slot, and declumping never moves an item off
   its attribute value. [SPATIAL.md](docs/SPATIAL.md#axes-a-chosen-dimension-on-each-axis).
+- **3D covers draw at their real brightness.** The vendored muriel tile
+  shader drew every GPU tile about 2.2 gamma dark (on the Psychodeli example,
+  0.43× the cover's brightness; dark covers went black), and a tile at a
+  multiple of the atlas's column count could show part of its neighbour.
+  Both are fixed upstream (muriel `99ea62b`) and re-vendored; the floating
+  space no longer patches them itself.
 
 ## 0.1.0 — 2026-10-18
 

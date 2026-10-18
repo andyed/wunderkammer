@@ -41,36 +41,33 @@ const FRONT = new THREE.Vector3(0, 0, 1);
 const fitDirection = arrangement => arrangement === 'az' ? FRONT : arrangement === 'axes' ? AXES_DIRECTION : FIT_DIRECTION;
 
 /**
- * Three corrections to the vendored TileField fragment shader, applied to this
- * view's material only (lib/ is a copy of muriel's and is not edited here):
+ * Dimming, patched into the vendored TileField fragment shader on this view's
+ * material only (lib/ is a copy of muriel's and is not edited here). TileField
+ * writes per-instance opacity as 1 or 0 and draws with the depth buffer, not
+ * blending, so a fractional opacity would not show. Read it as brightness,
+ * applied after each output line, to the colour the shader has already
+ * encoded, so FLOAT_DIM is a share of displayed brightness. Take most of the
+ * saturation with it: in a space arranged by colour, a dimmed tile must not
+ * compete on colour.
  *
- * 1. Output encoding. The shader samples the sRGB-tagged atlas, which the GPU
- *    decodes to linear, and writes the result without re-encoding, so every
- *    cover draws about 2.2 gamma too dark (measured: atlas 169 → frame 96;
- *    dark covers turn black). Encode on output with linearToOutputTexel.
- * 2. Dimming. TileField writes per-instance opacity as 1 or 0 and draws with
- *    the depth buffer, not blending, so a fractional opacity would not show.
- *    Read it as brightness, applied after encoding so FLOAT_DIM is a share of
- *    displayed brightness, and take most of the saturation with it: in a
- *    space arranged by colour, a dimmed tile must not compete on colour.
- * 3. Slot lookup. The slot index arrives as an interpolated float, and at an
- *    exact multiple of the atlas's column count it can arrive as 4.9999…:
- *    floor() then picks the previous row and part of the tile samples its
- *    neighbour's picture (seen: slot 5 of a 5-column atlas drew a band of
- *    slot 4). Round the index and derive the column from the row.
+ * Both of the shader's outputs get the step, the sampled tile and the
+ * emptyColor placeholder. Output encoding and the slot lookup used to be
+ * patched here too; muriel fixed both upstream (99ea62b), so the anchors are
+ * its encoded output lines and the encoding is upstream's, not ours.
  *
  * The patch fails loudly (dimMode 'hidden', a status line, failing tests) if
  * the source it expects is gone.
  */
-const DIMMED = rgb => `vec3 shown = linearToOutputTexel(vec4(${rgb}, 1.0)).rgb;
-  if (vOpacity < 0.999) shown = mix(vec3(dot(shown, vec3(0.2126, 0.7152, 0.0722))), shown, 0.35);
-  gl_FragColor = vec4(shown * vOpacity, 1.0);`;
+const DIM = `
+  {
+    vec3 shown = gl_FragColor.rgb;
+    if (vOpacity < 0.999) shown = mix(vec3(dot(shown, vec3(0.2126, 0.7152, 0.0722))), shown, 0.35);
+    gl_FragColor = vec4(shown * vOpacity, 1.0);
+  }`;
 const FRAGMENT_PATCHES = [
-  ['float col = mod(vSlot, grid.x);\n  float row = floor(vSlot / grid.x);',
-    'float slotIndex = floor(vSlot + 0.5);\n  float row = floor((slotIndex + 0.5) / grid.x);\n  float col = slotIndex - row * grid.x;'],
-  ['gl_FragColor = vec4(c.rgb, c.a * vOpacity);', DIMMED('c.rgb')],
-  ['gl_FragColor = vec4(emptyColor, 1.0);', `{ ${DIMMED('emptyColor')} }`],
-];
+  'gl_FragColor = linearToOutputTexel(vec4(c.rgb, c.a * vOpacity));',
+  'gl_FragColor = linearToOutputTexel(vec4(emptyColor, 1.0));',
+].map(output => [output, output + DIM]);
 function patchFragment(material) {
   let source = material.fragmentShader;
   for (const [from, to] of FRAGMENT_PATCHES) { if (!source.includes(from)) return false; source = source.replace(from, to); }
