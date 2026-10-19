@@ -207,8 +207,12 @@ that, a pinned lens value.
   - the April 2026 scope (35 frames) framed in its corner of the space;
   - one lit frame framed alone.
 - On the fixture, a framed floating-space shot rebuilt from its exact link has
-  the same camera and, in all but 2 of about 120 runs under heavy load, the
-  same bytes. See [open defects](#open-defects).
+  the same camera and the same bytes: 200 of 200 runs, with cover loads
+  delayed 0–400 ms under parallel load. On three r169, 20 of 200 such runs
+  differed, because `copyTextureToTexture` could send a far tile's cover to
+  the wrong texture and leave its placeholder
+  ([mrdoob/three.js#33153](https://github.com/mrdoob/three.js/pull/33153));
+  three 0.186.1 fixed it.
 - **Tests.**
   - `tests/still.test.mjs` adds four tests:
     - lit and framing in the floating space;
@@ -400,35 +404,6 @@ This is the recommended order. Each step ships with tests in
    - A brand file sets the caption type.
 8. **Formats.** WebP through an optional encoder; a transparent background, if
    a deck wants it (open).
-
-## Open defects
-
-- **A far tile can draw its placeholder.** Twice in about 120 floating-space
-  shots of the 16-item fixture, rendered under heavy load, one or two dimmed
-  tiles drew their placeholder instead of their cover. The atlas reported all
-  16 covers resident, none failed and none loading.
-  - The tiles are on the far tier, not near the camera. Their pixels are in
-    the atlas canvas but never reached the GPU texture.
-  - Cause: three r169's `copyTextureToTexture` can write into the wrong
-    texture. It binds the destination to texture unit 0 but does not make
-    unit 0 active when the destination is already bound there. The far atlas
-    sits on unit 0, so its copy goes into whatever the active unit holds: the
-    near atlas, or nothing.
-  - The atlas uses that copy when four or fewer covers land between uploads,
-    which is what happens when covers trickle in under load. A later
-    whole-atlas upload repairs a lost tile, so the placeholder stays only when
-    the lost copy was the tile's last upload.
-  - Measured on 200 shots with cover loads delayed 0–400 ms: 34 of 34 tiles
-    whose last copy missed the far texture drew the placeholder, and 0 of 766
-    whose last upload landed there did.
-  - three.js fixed this in r184 ([mrdoob/three.js#33153](https://github.com/mrdoob/three.js/pull/33153)).
-    The fix here is upgrading three.js from r169, in this repository and in
-    muriel. Until that lands, the framed-shot test keeps its 0.2% pixel
-    allowance; afterwards it should demand identical bytes again.
-  - The same loss can happen in the live floating space, outside shots.
-  - Each sidecar records the atlas's state (`render.atlas`). That record
-    cannot tell a lost copy from a good one, because the atlas canvas is
-    complete either way.
 
 ## Open questions
 
