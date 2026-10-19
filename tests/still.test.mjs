@@ -360,9 +360,10 @@ test('scripts/still.mjs frames lit items, and the sidecar\'s exact link reproduc
   const again = run('--collection', collection, '--view', sidecar.view.link, '--size', '640x400', '--scale', '1', '--out', path.join(dir, 'lit2.png'));
   assert.equal(again.status, 0, again.stderr);
   // The camera and framing must match exactly. The pixels are compared with a
-  // small allowance: twice in about 120 runs under heavy load, two dimmed tiles
-  // near the camera drew their placeholder while the atlas reported every cover
-  // resident (docs/SHOTS.md, open defects). 0.2% is twice what that case differed by.
+  // small allowance until three.js is upgraded past r169: its
+  // copyTextureToTexture can lose a far tile's upload under load, leaving that
+  // tile's placeholder (docs/SHOTS.md, open defects). 0.2% is twice what the
+  // observed case differed by. After the upgrade this should demand identical bytes.
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'lit2.json'), 'utf8')).view.spec.float, sidecar.view.spec.float, 'the same camera from the exact link');
   const differ = await pixelShare(await readFile(path.join(dir, 'lit.png')), await readFile(path.join(dir, 'lit2.png')));
   assert.ok(differ <= 0.002, `the same pixels from the exact link, all but ${(differ * 100).toFixed(3)}%`);
