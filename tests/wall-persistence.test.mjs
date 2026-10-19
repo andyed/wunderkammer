@@ -67,8 +67,12 @@ async function fixture(t, options = {}) {
   return { page, transport };
 }
 
+// The 3D button opens the floating space, or the stacks once a reader has
+// chosen them; the stacks are the last entry in the space's menu.
 async function openSpatial(page) {
   if (await page.locator('#view-3d').getAttribute('aria-pressed') !== 'true') await page.evaluate(() => document.getElementById('view-3d').click());
+  await page.waitForFunction(() => ['3d', 'float'].includes(document.body.dataset.viewMode) && (window.__cwFloat?.built || window.__cwSpatial?.built));
+  if (await page.evaluate(() => document.body.dataset.viewMode === 'float')) await page.locator('.float-arrange label:has(input[value=stacks])').click();
   await page.waitForFunction(() => window.__cwSpatial?.built && !document.querySelector('#sp-host').hidden);
 }
 

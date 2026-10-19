@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **3D opens the floating space in Axes.** The 3D button used to open the
+  stacks, facet groups as piles whose positions repeat the flat wall's group
+  headings. It now opens Axes with the collection's time across, lightness up
+  and hue in depth, so the first 3D view shows each item's colour on the
+  timeline. The stacks are the last entry in the Arrange by menu, Axes ·
+  OKLab · OKLCH · HSL · A–Z · Stacks. They keep that menu in a strip below
+  them, and the 3D button and `3` key reopen whichever 3D view was last used.
+  The separate ✺ button is gone, which frees a 40 px slot in the phone
+  header row. `?view=3d` links and saved piles still open the stacks; a
+  `?view=float` link that names no arrangement now opens Axes instead of
+  OKLab.
+  [SPATIAL.md](docs/SPATIAL.md#the-3d-entry).
 - **Sideways scroll is a walk in the 3D hallways.** In the wall page's aisle and on
   the comparison page's walls, a sideways wheel or trackpad scroll moves along
   the aisle, as the Walk aisle slider does, and the travel is kept in the link
@@ -15,7 +27,7 @@
 - **A level button row on phones, with every button in view.** On a touch
   phone the header's view, Fit, showcase and link buttons are all 40×44 on
   one centre line; only ▥ and ↗ were 44 px tall before. Pinch zooms in every
-  view, so − and + are left off the row there, and all eight buttons fit a
+  view, so − and + are left off the row there, and every button fits a
   375 px screen without the sideways scroll. Desktop keeps − and +.
 
 ## 0.2.0 — 2026-10-18

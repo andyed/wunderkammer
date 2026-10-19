@@ -76,9 +76,11 @@ steps and traps.
    With the document under the checkout, `npx http-server -p 8080 .` then
    open `http://localhost:8080/?collection=/cats/collection.json`.
    - URL keys: `group=era`, `facet.coat=ginger`, `q=<search>`,
-     `view=aisle` (a hallway with one rack per group), `view=3d`, and
-     `view=float&arrange=oklch` (a colour space; also `oklab`, `hsl`, `az`,
-     or `axes&across=era&up=lightness&depth=hue`).
+     `view=aisle` (a hallway with one rack per group), `view=float` (what
+     the 3D button opens: Axes, with the collection's time across, lightness
+     up and hue in depth; name them with `arrange=axes&across=era&up=lightness&depth=hue`,
+     or pick a colour space with `arrange=oklch`, `oklab`, `hsl` or `az`), and
+     `view=3d` (each group as a stack).
    - Covers on another origin need CORS headers and
      `"images": { "cors": true }`, or they stay blank in the 3D views.
    - To embed the wall in a page:

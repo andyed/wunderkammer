@@ -216,11 +216,18 @@ test('snapshot failure retains a self-contained URL; invalid or wrong-corpus lin
   } finally { failSnapshots = false; await page.close(); await other.close(); }
 });
 
+// The 3D button opens the floating space; the stacks are the last entry in its menu.
+async function openStacks(page) {
+  await page.click('#view-3d');
+  await page.locator('.float-arrange label:has(input[value=stacks])').click();
+  await page.waitForFunction(() => window.__cwSpatial?.built && document.body.dataset.viewMode === '3d');
+}
+
 test('spatial expanded pile and custom camera restore without writing mutable saved piles', async () => {
   const page = await newPage(), other = await newPage();
   try {
     await page.goto(origin); await settle(page); await page.selectOption('#group', 'color');
-    await page.evaluate(() => document.getElementById('view-3d').click()); await page.waitForFunction(() => window.__cwSpatial?.built && document.querySelector('#view-3d').getAttribute('aria-pressed') === 'true');
+    await openStacks(page);
     // First normal 3D entry may load the saved grouping; deliberate grouping wins in its permalink.
     await page.selectOption('#group', 'color'); await settle(page);
     await page.evaluate(() => { const s = window.__cwSpatial; s._activate(s.piles.piles[0].indices[0]); s.zoomBy(1.3); s.panBy(30, -10); });
@@ -306,8 +313,7 @@ test('restoring a spatial link refreshes membership in an already built renderer
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   try {
     await page.goto(origin); await settle(page);
-    await page.click('#view-3d');
-    await page.waitForFunction(() => window.__cwSpatial?.built);
+    await openStacks(page);
     await page.locator('[data-facet="source"][data-value="new"]').click(); await settle(page);
     const url = page.url(), writes = puts;
     await page.evaluate(() => { window.savedSpatialInstance = window.__cwSpatial; });
@@ -336,8 +342,8 @@ test('switching to spatial hides flat group controls and preserves their return 
   try {
     await page.goto(origin); await page.selectOption('#group', 'source'); await settle(page);
     assert.equal(await page.locator('#row-title').isVisible(), true, 'overview uses its readable flat group control');
-    await page.click('#view-3d');
-    await page.waitForFunction(() => window.__cwSpatial?.built);
+    // Once chosen, the stacks are what the 3D button reopens.
+    await openStacks(page);
     assert.equal(await page.locator('#row-title').isHidden(), true, 'flat group control never overlays the spatial field');
     await page.click('#view-3d'); await settle(page);
     assert.equal(await page.locator('#row-title').isVisible(), true, 'flat group control returns with its presentation');

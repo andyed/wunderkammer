@@ -465,7 +465,7 @@ test('group approach preserves scope and explicit filtering or context headings 
 
 /** The phone header's button row: which buttons show, their boxes, and whether the
  * sideways-scrolling group hides any of them (scrollWidth past clientWidth). */
-const PHONE_ROW = ['tour', 'view-3d', 'view-aisle', 'view-float', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view'];
+const PHONE_ROW = ['tour', 'view-3d', 'view-aisle', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view'];
 const phoneRow = page => page.evaluate(ids => {
   const shown = ids.map(id => document.getElementById(id)).filter(b => b && b.offsetParent)
     .map(b => { const r = b.getBoundingClientRect(); return { id: b.id, w: r.width, h: r.height, left: r.left, right: r.right, mid: r.top + r.height / 2 }; });
@@ -501,6 +501,8 @@ test('on a phone the wall takes the width, the rail is an overlay that closes af
     const stage = await page.locator('#stage').boundingBox();
     assert.equal(stage.width, 390, 'the wall has the whole width');
     assert.ok(stage.y < 130, `header is compact (stage starts at ${stage.y})`);
+    // One 3D entry: the floating space's ✺ folded into 3D, which gave the row back a slot.
+    assert.equal(await page.locator('#view-float').count(), 0, 'no second 3D button');
     // The view, Fit and link buttons share one header row: level 44 px tall
     // targets, not a jagged mix of 32 and 44, and none scrolled out of sight.
     assertPhoneRow(await phoneRow(page));

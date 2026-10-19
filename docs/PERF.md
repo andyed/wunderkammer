@@ -19,6 +19,13 @@ corpus, cold cache.
 - **297 items:** the Psychodeli example collection, served statically.
 - **1,793 items:** a local music library through `serve.mjs`.
 
+Since the 3D entry change (later the same day), `perf.mjs` reaches both 3D
+views through the 3D button. The float scenario now runs before the spatial
+one. "float open" builds the space in Axes and then switches to OKLab,
+unmeasured, so the rows below keep their meaning. "spatial open" is the
+hand-over from the floating space to the stacks. Neither table below has
+been re-measured since.
+
 Each row has two measures:
 - **Frame:** the interval between animation frames, so 8.3 ms is 120 fps.
 - **Work:** the view's own time per render (billboard, tier pass and draw

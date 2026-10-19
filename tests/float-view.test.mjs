@@ -67,7 +67,7 @@ after(async () => { await browser?.close(); await new Promise(r => server?.close
 afterEach(() => { assert.deepEqual(errors.splice(0), []); assert.equal(writes.splice(0).some(([, p]) => p === '/api/view-state'), false, 'the floating space never writes pile state'); });
 
 const debug = p => p.evaluate(() => window.wunderkammerFloatDebug());
-async function open(query = '?view=float&rail=0', { mobile = false, motion = false } = {}) {
+async function open(query = '?view=float&arrange=oklab&rail=0', { mobile = false, motion = false } = {}) {
   const p = await browser.newPage({ viewport: { width: mobile ? 390 : 1440, height: mobile ? 844 : 1000 }, isMobile: mobile, hasTouch: mobile, reducedMotion: motion ? 'no-preference' : 'reduce' });
   p.on('pageerror', e => errors.push(e.message));
   await p.goto(query.startsWith('http') ? query : `${origin}/${query}`);
@@ -128,7 +128,7 @@ test('float arrangement places each item at its dominant colour in OKLab, OKLCH 
     near(scene.screen[key('ff0000')].slice(2, 3), [scene.screen[key('0000ff')][2]], 1, 'Fit sees the flat wall square on');
   } finally { await p.close(); }
   // Without reduced motion, items travel to their new places rather than jumping.
-  const m = await open('?view=float&rail=0', { motion: true }); try {
+  const m = await open('?view=float&arrange=oklab&rail=0', { motion: true }); try {
     // Count animation frames alongside renders: a transition draws at most once per frame.
     await m.evaluate(() => { window.__frames = 0; const count = () => { window.__frames++; requestAnimationFrame(count); }; requestAnimationFrame(count); window.__renders0 = window.__cwFloat.renderCount; });
     await m.locator('.float-arrange input[value=hsl]').check();
@@ -257,7 +257,7 @@ test('float fly-to: clicking an item flies to it and opens the detail pane; the 
 });
 
 test('float scope dims items outside the search and facets in place, without moving any item or the camera', async () => {
-  const p = await open('?view=float'); try {
+  const p = await open('?view=float&arrange=oklab'); try {
     // A fitted camera refits when the stage resizes (the scope bar appears with
     // a filter), so step off Fit first: a placed camera must not move at all.
     if (await p.locator('#rail.hidden').count()) { await p.locator('#toggle-rail').click(); await settled(p); }
@@ -311,8 +311,8 @@ test('float arrangement and camera survive fresh exact links, live links, URL in
     await p.locator('#copy-live-view').click();
     const live = new URL(await p.evaluate(() => navigator.clipboard.readText()));
     assert.equal(live.searchParams.get('view'), 'float'); assert.equal(live.searchParams.get('arrange'), 'hsl'); assert.equal(live.hash, '');
-    await p.locator('#view-float').click(); assert.equal((await debug(p)).mode, 'flat');
-    await p.locator('#view-float').click(); s = await debug(p);
+    await p.locator('#view-3d').click(); assert.equal((await debug(p)).mode, 'flat');
+    await p.locator('#view-3d').click(); s = await debug(p);
     assert.equal(s.mode, 'float'); assert.equal(s.scene.arrangement, 'hsl'); near(s.view.float.position, r.view.float.position, 1e-6, 'camera kept across a flat visit');
   } finally { await fresh?.close(); await p.close(); }
   const bad = await browser.newPage(); try {
@@ -361,8 +361,83 @@ test('float Axes choices survive exact and live links; a link naming an axis the
   }
 });
 
+test('the 3D button opens the floating space in Axes; Stacks hands over to the stacks and back; old links still open the stacks', async () => {
+  const p = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }); let fresh; try {
+    p.on('pageerror', e => errors.push(e.message));
+    await p.goto(`${origin}/?rail=0`); await p.waitForSelector('body[data-view-ready=true]');
+    const button = p.locator('#view-3d'), mode = async () => (await debug(p)).mode;
+    // One 3D entry, named for what it does; the colour-only ✺ is gone.
+    assert.equal(await p.locator('#view-float').count(), 0);
+    assert.match(await button.getAttribute('aria-label'), /three axes/);
+    assert.equal(await button.getAttribute('aria-pressed'), 'false');
+    await button.click(); await settled(p);
+    let s = await debug(p);
+    assert.equal(s.mode, 'float'); assert.equal(s.scene.arrangement, 'axes');
+    assert.deepEqual(s.scene.axes, { across: 'captured', up: 'lightness', depth: 'hue' }, 'the collection\'s time, then lightness and hue');
+    assert.equal(await button.getAttribute('aria-pressed'), 'true');
+    // The menu leads with the default and ends with the stacks.
+    assert.deepEqual(await p.locator('.float-arrange input').evaluateAll(inputs => inputs.map(i => i.value)), ['axes', 'oklab', 'oklch', 'hsl', 'az', 'stacks']);
+    assert.equal(await p.locator('.float-arrange input:checked').inputValue(), 'axes');
+
+    // Stacks hands over to the stacks renderer, which keeps the menu in a strip below it.
+    await p.locator('.float-arrange label:has(input[value=stacks])').click();
+    await p.waitForFunction(() => window.__cwSpatial?.built && document.body.dataset.viewMode === '3d');
+    const strip = p.locator('.sp-arrange');
+    assert.equal(await strip.isVisible(), true); assert.equal(await p.locator('#float-host').isVisible(), false);
+    assert.equal(await strip.locator('input:checked').inputValue(), 'stacks');
+    assert.equal(await button.getAttribute('aria-pressed'), 'true', 'the stacks are 3D too');
+    // The stacks end above the strip and fit there: every pile, top to bottom, is in the shortened host.
+    const host = await p.locator('#sp-host').boundingBox(), bar = await strip.boundingBox(), stage = await p.locator('#stage').boundingBox();
+    assert.ok(Math.abs(host.y + host.height - bar.y) <= 1 && bar.y + bar.height <= stage.y + stage.height + 1, `host ${JSON.stringify(host)} ends at the strip ${JSON.stringify(bar)}`);
+    await p.waitForTimeout(400);
+    const ys = await p.evaluate(() => {
+      const s3 = window.__cwSpatial, box = s3._box, out = [];
+      for (const y of [box.min.y, box.max.y]) { const v = box.getCenter(new s3.camera.position.constructor()); v.y = y; v.z = box.max.z; out.push(v.project(s3.camera).y); }
+      return out;
+    });
+    assert.ok(ys.every(y => Math.abs(y) <= 1), `the stacks' top and bottom are inside the host (NDC ${ys})`);
+
+    // The button, and its 3 key, return to the last 3D presentation.
+    await button.click(); assert.equal(await mode(), 'flat'); assert.equal(await strip.isVisible(), false);
+    await button.click(); await p.waitForFunction(() => document.body.dataset.viewMode === '3d');
+    await p.locator('#search').evaluate(n => n.blur()); await p.keyboard.press('3'); assert.equal(await mode(), 'flat');
+    await p.keyboard.press('3'); await p.waitForFunction(() => document.body.dataset.viewMode === '3d');
+
+    // An exact link made in the stacks reopens them, piled as they were (view state version 1).
+    await p.waitForFunction(() => location.hash.includes('s=')); await p.waitForTimeout(450);
+    const stacked = (await debug(p)).view;
+    assert.equal(stacked.presentation.mode, '3d'); assert.equal(stacked.spatial.mode, 'piles');
+    fresh = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    fresh.on('pageerror', e => errors.push(e.message));
+    await fresh.goto(p.url()); await fresh.waitForFunction(() => window.__cwSpatial?.built && document.body.dataset.viewMode === '3d');
+    const reopened = await fresh.evaluate(() => window.wunderkammerFloatDebug().view.spatial);
+    assert.equal(reopened.mode, 'piles'); assert.deepEqual(reopened.arrangement.piles.map(pile => pile.label), stacked.spatial.arrangement.piles.map(pile => pile.label));
+
+    // Any other arrangement in the strip hands back to the floating space, in that arrangement.
+    await strip.locator('label:has(input[value=oklch])').click(); await settled(p);
+    s = await debug(p); assert.equal(s.mode, 'float'); assert.equal(s.scene.arrangement, 'oklch');
+    assert.equal(await p.locator('.float-arrange input:checked').inputValue(), 'oklch');
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await p.locator('#copy-live-view').click();
+    const live = new URL(await p.evaluate(() => navigator.clipboard.readText()));
+    assert.deepEqual([live.searchParams.get('view'), live.searchParams.get('arrange')], ['float', 'oklch']);
+  } finally { await fresh?.close(); await p.close(); }
+  // A link that names the stacks still opens them; one that names no arrangement opens Axes.
+  const stacks = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }); try {
+    stacks.on('pageerror', e => errors.push(e.message));
+    await stacks.goto(`${origin}/?view=3d&group=year&rail=0`);
+    await stacks.waitForFunction(() => window.__cwSpatial?.built && document.body.dataset.viewMode === '3d');
+    const { view } = await stacks.evaluate(() => window.wunderkammerFloatDebug());
+    assert.equal(view.presentation.group, 'year'); assert.equal(view.spatial.mode, 'piles');
+    assert.equal(await stacks.locator('.sp-arrange input:checked').inputValue(), 'stacks');
+  } finally { await stacks.close(); }
+  const bare = await open('?view=float&rail=0'); try {
+    assert.equal((await debug(bare)).scene.arrangement, 'axes');
+  } finally { await bare.close(); }
+});
+
 test('float phone layout keeps every control inside the viewport and reachable', async () => {
-  const p = await open('?view=float', { mobile: true }); try {
+  const p = await open('?view=float&arrange=oklab', { mobile: true }); try {
     assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const bar = await p.locator('.float-toolbar').boundingBox();
     assert.ok(bar.x >= 0 && bar.x + bar.width <= 390 && bar.y + bar.height <= 844, 'toolbar inside the viewport');

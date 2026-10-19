@@ -1,5 +1,5 @@
 import { validateView } from './view-schema.mjs';
-import { ARRANGEMENTS, AXES, isAxisName } from './float-space.mjs';
+import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, AXES, isAxisName } from './float-space.mjs';
 
 // A readable live intent projects into the same ViewSpec as an exact permalink.
 // It does not evaluate collection membership or carry frozen corpus revisions.
@@ -76,7 +76,7 @@ export function applyViewIntent(url, defaultView) {
   const axisParams = AXES.filter(axis => p.has(axis));
   if (view.presentation.mode === 'float' || p.has('arrange') || axisParams.length) {
     // A live link names the arrangement; the camera is the receiver's Fit.
-    view.float ??= { version: 1, arrangement: 'oklab', position: [0, 0, 4000], target: [0, 0, 0], fitted: true, selection: null };
+    view.float ??= { version: 1, arrangement: DEFAULT_ARRANGEMENT, position: [0, 0, 4000], target: [0, 0, 0], fitted: true, selection: null };
     if (p.has('arrange')) {
       if (!ARRANGEMENTS.includes(p.get('arrange'))) invalid(`arrange must be one of ${ARRANGEMENTS.join(', ')}`);
       view.float.arrangement = p.get('arrange'); view.float.fitted = true;

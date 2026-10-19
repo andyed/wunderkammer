@@ -24,13 +24,15 @@ different view of the same collection:
   out.
 - **[The hallway](https://andyed.github.io/clipwall-demo/?view=aisle&group=year)**: one rack per year. Walk it
   with the slider, drag to look around, and select a frame to open it.
-- **[Stacks in 3D](https://andyed.github.io/clipwall-demo/?view=3d&group=year)**: each year as a stack you can
-  open and spread.
+- **[In 3D](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=captured&up=lightness&depth=hue)**:
+  what the **3D** button opens. Capture date runs across, lightness up and hue
+  in depth, so each frame's colour sits on the collection's timeline. Change
+  any axis from the menus.
 - **[The colour space](https://andyed.github.io/clipwall-demo/?view=float&arrange=oklch)**: every frame floats at
   its dominant colour, with hue around the ring and lightness up. Click one
   to fly to it.
-- **[Your own axes](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=year&up=lightness&depth=hue)**:
-  year across, lightness up, hue in depth. Change any axis from the menus.
+- **[Stacks](https://andyed.github.io/clipwall-demo/?view=3d&group=year)**: each year as a stack you can
+  open and spread. Stacks is the last arrangement under 3D.
 
 **Status: early public release (0.2).** The interfaces below are versioned and
 validated. The renderer is tested in desktop and mobile Chromium; physical
@@ -78,12 +80,14 @@ to the years in question.
 
 Choose a dimension and every image floats in 3D at its place along it.
 Choose another and the same images travel to their new places, so one item
-can be followed from arrangement to arrangement. In the floating space (✺), a
-dimension is an image's dominant colour (OKLab, OKLCH or HSL) or its title
-(A–Z). Under Axes, each axis takes a dimension of its own: the lightness,
-chroma or hue of the colour, or an attribute such as year or a facet. With a search or facets
-set, the images outside the scope dim in place and nothing moves. Click an
-image to fly to it and open it.
+can be followed from arrangement to arrangement. **3D** opens Axes, where each
+axis takes a dimension of its own: the lightness, chroma or hue of the
+colour, or an attribute such as capture date, year or a facet. It starts with
+the collection's time across, lightness up and hue in depth, which the wall's
+groups do not show. The other arrangements place an image by its dominant
+colour (OKLab, OKLCH or HSL) or its title (A–Z), and Stacks piles each group.
+With a search or facets set, the images outside the scope dim in place and
+nothing moves. Click an image to fly to it and open it.
 
 ![The bundled example's 297 frames pivoted on colour, in OKLCH: hue around a ring labelled from red to magenta, lightness from 0.00 at the bottom to 0.85 at the top.](docs/screenshots/6-colour.webp)
 
@@ -103,8 +107,7 @@ npx http-server -p 8080 .
 Then open:
 
 - `http://localhost:8080/?collection=/examples/psychodeli/collection.json`
-  for the wall. Search, choose facets, group, press **3D** or **✺**, or open
-  an item.
+  for the wall. Search, choose facets, group, press **3D**, or open an item.
 - `http://localhost:8080/wall/compare.html?collection=/examples/psychodeli/collection.json&observations=/examples/psychodeli/observations.json`
   for a comparison with two observations. Select one to see the items behind
   it.
