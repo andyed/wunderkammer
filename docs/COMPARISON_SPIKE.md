@@ -149,7 +149,7 @@ whole library. Tagged release chronology is not listening/acquisition history.
 | Isolated correctness and interaction checks | `tests/comparison-{model,state,view}.test.mjs` |
 | Explicit-target rendered proof | `scripts/check-comparison.mjs`, `scripts/check-comparison-walls.mjs` |
 
-The renderer imports the same pinned Three.js 0.169.0 version as the existing
+The renderer imports the same pinned Three.js 0.186.1 version as the existing
 spatial view. Vendored Muriel files are unchanged.
 
 ```sh

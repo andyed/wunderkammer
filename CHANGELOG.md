@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **A far tile no longer draws its placeholder after its cover loaded.** When
+  four or fewer covers landed between atlas uploads, three.js r169's
+  `copyTextureToTexture` could write a far tile into the near atlas, or into
+  no texture, so the tile showed its placeholder until a later whole-atlas
+  upload repaired it (mrdoob/three.js#33153, fixed in r184). `index.html` and
+  `wall/compare.html` now load three 0.186.1. The vendored muriel lib is
+  unchanged: r170–r186 needed no code changes in it or in the 3D views.
 - **No item dropdown in the 3D views.** The floating space and the aisle each
   carried an Item dropdown ("Choose an item…") and an Inspect button that every
   visitor saw and almost none needed. Both are gone. When 3D graphics fail, the
