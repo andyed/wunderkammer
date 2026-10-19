@@ -27,6 +27,8 @@ before(async () => {
   out = path.join(dir, 'out');
   await mkdir(path.join(published, 'media'), { recursive: true });
   await writeFile(path.join(published, 'collection.json'), JSON.stringify(doc));
+  // The build refuses a collection whose covers the output lacks (tests/build-demo.test.mjs).
+  for (const clip of doc.clips) await writeFile(path.join(published, clip.cover), 'webp');
   // --reuse-corpus builds from a published corpus, with no running instance or cwebp.
   execFileSync(process.execPath, ['scripts/build-demo.mjs', '--reuse-corpus', published, '--out', out], { cwd: root, stdio: 'pipe' });
 });

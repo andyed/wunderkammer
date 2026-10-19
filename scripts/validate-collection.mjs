@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { validateCollection, CollectionError } from '../wall/collection.mjs';
+import { validateCollection, collectionImages, CollectionError } from '../wall/collection.mjs';
 import { validateObservations, resolveObservation, ObservationError } from '../wall/observations.mjs';
 import { buildComparison } from '../wall/comparison-model.mjs';
 import { collectionNouns, counted } from '../wall/nouns.mjs';
@@ -64,18 +64,9 @@ async function load(source, label) {
 
 /** Local media the page will request: files named relative to a local document. */
 function missingLocalMedia(collection) {
-  const urls = [];
-  for (const [i, clip] of collection.clips.entries()) {
-    const at = `clips[${i}]`;
-    if (clip.cover) urls.push([`${at}.cover`, clip.cover]);
-    if (clip.detailCover) urls.push([`${at}.detailCover`, clip.detailCover]);
-    for (const [j, v] of (clip.coverVariants || []).entries()) urls.push([`${at}.coverVariants[${j}].src`, v.src]);
-    for (const [j, m] of (clip.media || []).entries()) urls.push([`${at}.media[${j}].src`, m.src]);
-  }
-  for (const [i, sheet] of (collection.sheets || []).entries()) urls.push([`sheets[${i}].src`, sheet.src]);
   const missing = [];
-  for (const [where, url] of urls) {
-    if (typeof url !== 'string' || !url.startsWith(`${LOCAL}/`)) continue;
+  for (const [where, url] of collectionImages(collection)) {
+    if (!url.startsWith(`${LOCAL}/`)) continue;
     const file = fileURLToPath('file://' + new URL(url).pathname);
     if (!existsSync(file)) missing.push(`${where} ${file} does not exist`);
   }

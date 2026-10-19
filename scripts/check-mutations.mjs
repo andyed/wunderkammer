@@ -438,6 +438,26 @@ const cases = [
     test: 'tests/demo-bundle.test.mjs', pattern: 'the demo bundle leaves the comparison workbench out',
   },
   {
+    name: 'demo: a reused corpus leaves its sheet pages behind', file: 'scripts/build-demo.mjs',
+    from: "  if (sheets) await cp(path.join(published, 'sheets'), path.join(out, 'sheets'), { recursive: true });\n", to: '',
+    test: 'tests/build-demo.test.mjs', pattern: 'a reused corpus carries its sheet pages and media',
+  },
+  {
+    name: 'demo: a build writes a collection that names files the output lacks', file: 'scripts/build-demo.mjs',
+    from: 'if (missing.length || !named.size) {', to: 'if (!named.size) {',
+    test: 'tests/build-demo.test.mjs', pattern: 'names a file the output lacks',
+  },
+  {
+    name: 'demo: a build that checks no file passes', file: 'scripts/build-demo.mjs',
+    from: 'if (missing.length || !named.size) {', to: 'if (missing.length) {',
+    test: 'tests/build-demo.test.mjs', pattern: 'names no file on the demo site',
+  },
+  {
+    name: 'demo: the check skips the sheet pages', file: 'wall/collection.mjs',
+    from: "  for (const [i, sheet] of (collection.sheets || []).entries()) add(`sheets[${i}].src`, sheet?.src);\n", to: '',
+    test: 'tests/build-demo.test.mjs', pattern: 'names a file the output lacks',
+  },
+  {
     name: 'wording: the 3D scene ignores the page nouns', file: 'wall/comparison-app.mjs',
     from: '{wording,onSelect:select,', to: '{onSelect:select,',
     test: 'tests/comparison-view.test.mjs', pattern: 'a music library keeps its album wording',
