@@ -14,7 +14,7 @@
  *
  * It fails, writing nothing, when the collection or the link is refused, the
  * page throws, the view never settles, or flat-wall tiles are left undrawn
- * (--allow-undrawn accepts them). See docs/STILLS.md.
+ * (--allow-undrawn accepts them). See docs/SHOTS.md.
  */
 import { createServer } from 'node:http';
 import { readFile, writeFile, stat } from 'node:fs/promises';

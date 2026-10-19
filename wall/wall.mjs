@@ -36,7 +36,7 @@ import { AXES, axisDimensions } from './float-space.mjs';
 import { arrangeMenu, MENU, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
-/** `?chrome=none` shows the stage alone, for stills (docs/STILLS.md). Set
+/** `?chrome=none` shows the stage alone, for stills (docs/SHOTS.md). Set
  * before the first layout, so the stage is measured at its full size. */
 if (new URL(location.href).searchParams.get('chrome') === 'none') document.documentElement.dataset.chrome = 'none';
 

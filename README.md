@@ -119,7 +119,7 @@ node scripts/still.mjs --collection examples/psychodeli/collection.json --view '
 ```
 
 It writes `axes.png` and `axes.json`, which records the exact link, the
-camera and the items shown. [STILLS.md](docs/STILLS.md) has the details and
+camera and the items shown. [SHOTS.md](docs/SHOTS.md) has the details and
 the roadmap.
 
 The example's 297 images are low-resolution screenshots from the Psychodeli

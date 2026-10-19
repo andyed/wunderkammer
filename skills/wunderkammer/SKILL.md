@@ -139,7 +139,7 @@ steps and traps.
      and says why.
    - Stills cover the flat wall and the floating space so far. Frame the
      claim with a facet or a highlight, so the evidence is what is lit.
-     [STILLS.md](https://github.com/andyed/wunderkammer/blob/main/docs/STILLS.md)
+     [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.
 
 ## Traps

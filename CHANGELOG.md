@@ -20,8 +20,9 @@
     every cover landed, nothing moving, every flat-wall tile in view drawn.
     "View ready" only meant the link was restored.
   - It covers the flat wall and the floating space so far.
-  - [STILLS.md](docs/STILLS.md) has the roadmap: punchline framing and
-    captions, camera angles, and 3D carousel embeds.
+  - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
+    brushing by identity, framing on the evidence, captions from the page's
+    counts, and camera angles. Interactive embeds are deferred.
 - **No item dropdown in the 3D views.** The floating space and the aisle each
   carried an Item dropdown ("Choose an item…") and an Inspect button that every
   visitor saw and almost none needed. Both are gone. When 3D graphics fail, the

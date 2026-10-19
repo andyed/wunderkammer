@@ -20,6 +20,6 @@ test('the skill\'s example collection and observations pass the page validators'
 });
 
 test('the skill names a validator script and contract that exist', async () => {
-  for (const file of ['../scripts/validate-collection.mjs', '../scripts/collection-sheets.py', '../scripts/still.mjs', '../docs/CONTRACT.md', '../docs/STILLS.md', '../wall/embed.mjs', '../wall/compare.html'])
+  for (const file of ['../scripts/validate-collection.mjs', '../scripts/collection-sheets.py', '../scripts/still.mjs', '../docs/CONTRACT.md', '../docs/SHOTS.md', '../wall/embed.mjs', '../wall/compare.html'])
     await readFile(new URL(file, import.meta.url));
 });
