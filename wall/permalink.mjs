@@ -29,7 +29,7 @@ export function createPermalinks({ capture, restore, notice, onHistory, snapshot
   for (const event of ['pointerup', 'pointercancel', 'blur']) window.addEventListener(event, () => { pointerActive = false; }, true);
   let candidate = '', since = 0, queuedRestore = Promise.resolve(), pending = Promise.resolve();
   const cache = new Map();
-  const semantic = v => canonical({ scope: v.scope, presentation: v.presentation, focus: v.ui.focus, lens: v.ui.lens ?? null, highlight: v.ui.highlight ?? null });
+  const semantic = v => canonical({ scope: v.scope, presentation: v.presentation, focus: v.ui.focus, lens: v.ui.lens ?? null, highlight: v.ui.highlight ?? null, lit: v.ui.lit ?? null });
   const read = async () => {
     const p = new URLSearchParams(location.hash.slice(1));
     if (!p.has('s') && !p.has('ref')) {

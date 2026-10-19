@@ -22,6 +22,7 @@ localStorage, or the mutable current saved-pile document.
 | Arrangement | Pile/layer membership and transforms, expanded piles, active stack and other settled spatial presentation state |
 | Camera | Fit intent or deliberately positioned view; store each renderer's view when available |
 | Focus | Selected item identity, selected media source and detail open/closed |
+| Lit set | Items lit by identity (`ui.lit`, at most 10,000), the rest of the scope receding in place ([SHOTS.md](SHOTS.md)). A live link repeats `lit=` once per item, within its 1,000-key budget. A live link's `frame=evidence` is applied once on restore; the link stores the camera it produced, not the request |
 | UI configuration | Filter-rail visibility, detail width as a bounded proportion, and enabled presentation experiments |
 
 Keep source rules for explaining cluster branches, but preserve exact branch

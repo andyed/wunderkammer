@@ -346,7 +346,7 @@ test('float arrangement and camera survive fresh exact links, live links, URL in
   const bad = await browser.newPage(); try {
     bad.on('pageerror', e => errors.push(e.message));
     await bad.goto(`${origin}/?view=float&arrange=rgb`); await bad.waitForSelector('#link-status:not([hidden])');
-    assert.match(await bad.locator('#link-message').textContent(), /arrange must be one of oklab, oklch, hsl, az, axes/);
+    assert.match(await bad.locator('#link-message').textContent(), /arrange must be one of oklab, oklch, hsl, az, axes, cloud/);
   } finally { await bad.close(); }
 });
 

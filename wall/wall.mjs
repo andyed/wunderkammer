@@ -32,9 +32,23 @@ import { ViewStateStore, mergePileState } from './view-state.mjs';
 import { perf } from './instrument.mjs';
 import { collectionSource, loadCollection, collectionViewState, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
-import { AXES, axisDimensions } from './float-space.mjs';
+import { AXES, axisDimensions, ARRANGEMENT_LABELS } from './float-space.mjs';
+import { figureOverrides, renderBand, renderGroups } from './figure.mjs';
 import { arrangeMenu, MENU, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
+
+/** `?chrome=none` shows the stage alone, for stills (docs/SHOTS.md). Set
+ * before the first layout, so the stage is measured at its full size. */
+const CHROMELESS = new URL(location.href).searchParams.get('chrome') === 'none';
+if (CHROMELESS) document.documentElement.dataset.chrome = 'none';
+/** A still's figure layer (wall/figure.mjs): a caption band under the stage, on by
+ * default with chrome=none; figure=none leaves the stage alone. The band's
+ * height is reserved now, so every Fit and framing already sees the shorter stage. */
+const FIGURE = CHROMELESS && new URL(location.href).searchParams.get('figure') !== 'none';
+if (FIGURE) document.documentElement.dataset.figure = 'band';
+// Word overrides for the figure (title=, label.*=). A bad one fails the still, not the page.
+let figureLabels = { title: null, lit: null, rest: null, groups: new Map(), axes: {} }, figureLabelError = null;
+if (FIGURE) try { figureLabels = figureOverrides(new URL(location.href).searchParams); } catch (err) { figureLabelError = err.message; }
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
@@ -68,6 +82,7 @@ const state = {
   groupKey: 'none',
   sort: { key: 'none', direction: 'asc' },
   selected: null,
+  lit: null,           // item keys lit by identity (lit=); the rest of the scope recedes (docs/SHOTS.md)
   spatial: null,       // lazily constructed SpatialView
   mode: 'flat',
   get spatialOn() { return this.mode !== 'flat'; },
@@ -104,6 +119,9 @@ const el = {
   detail: document.getElementById('detail'),
   empty: document.getElementById('empty')
 };
+// The figure's two layers: the caption band below the stage, and group names over it.
+const figureBand = FIGURE ? document.body.appendChild(Object.assign(document.createElement('div'), { className: 'figure-band' })) : null;
+const figureGroups = FIGURE ? el.stage.appendChild(Object.assign(document.createElement('div'), { className: 'figure-groups' })) : null;
 
 const detailPane = createDetailPane(el.detail, el.stage);
 const viewport = new Viewport(el.stage, el.canvas, onViewportChange);
@@ -132,7 +150,8 @@ let stageSize = null;
 function syncOverview() { perf.span('overview/sync', syncOverviewNow); }
 function syncOverviewNow() {
   cancelAnimationFrame(overviewFrame); overviewFrame = 0;
-  const enabled = !state.spatialOn && !el.canvas.hasAttribute('data-brush-key');
+  // The overview paints covers on a canvas, which a tile's own dimming cannot reach: a lens or a lit set needs the DOM images.
+  const enabled = !state.spatialOn && !el.canvas.hasAttribute('data-brush-key') && !state.lit;
   // Leaving for the 3D view hides the flat stage, so its images can return at
   // once; a lens keeps the desk on screen and hands tiles back gradually.
   overview.setEnabled(enabled, { gradual: !state.spatialOn });
@@ -201,17 +220,20 @@ function captureView() {
     ...((state.floatSnapshot || state.float?.captureView()) ? {float:state.floatSnapshot || state.float?.captureView()} : {}),
     ui: { lens: brush.getPinned(), ...(brush.getPinnedValue()!==null?{highlight:{key:brush.getPinned(),value:brush.getPinnedValue()}}:{}), mediaSource: state.detailMedia, rail: !el.rail.classList.contains('hidden'), context: state.contextVisible, scopeBar: !document.getElementById('scope-bar').hidden,
       focus: state.clips.find(c => c.id === state.selected) ? clipKey(state.clips.find(c => c.id === state.selected)) : state.unresolvedFocus,
-      detailWidth: Number.isFinite(preferred) ? Math.min(1, preferred / window.innerWidth) : null },
+      detailWidth: Number.isFinite(preferred) ? Math.min(1, preferred / window.innerWidth) : null,
+      ...(state.lit ? { lit: [...state.lit] } : {}) },
   };
 }
 async function restoreView(spec, { intent = false } = {}) {
   if (spec.corpus.id !== state.corpus.id) throw new Error('This link belongs to a different corpus');
   // An axis this collection cannot carry is refused, never silently replaced by a default.
+  const offered = () => new Set(axisDimensions(state.clips, attributeKeys(), key => state.facetLabels[key]).map(d => d.id));
   if (spec.float?.arrangement === 'axes' && spec.float.axes) {
-    const offered = new Set(axisDimensions(state.clips, attributeKeys(), key => state.facetLabels[key]).map(d => d.id));
-    const bad = AXES.find(axis => spec.float.axes[axis] !== undefined && !offered.has(spec.float.axes[axis]));
+    const dims = offered(), bad = AXES.find(axis => spec.float.axes[axis] !== undefined && !dims.has(spec.float.axes[axis]));
     if (bad) throw new Error(`${bad}=${spec.float.axes[bad]} is not a dimension this collection can place on an axis`);
   }
+  if (spec.float?.front && !offered().has(spec.float.front.replace(/^-/, '')))
+    throw new Error(`front=${spec.float.front} is not a dimension this collection can order by`);
   hydrating = true; document.body.inert = true; document.body.dataset.restoring = 'true'; cancelAnimationFrame(filterFrame); viewport.resetEdge();
   const warnings = [];
   if (spec.corpus.revision !== state.corpus.revision) warnings.push('Corpus changed since this link was made');
@@ -225,6 +247,7 @@ async function restoreView(spec, { intent = false } = {}) {
     state.branches = structuredClone(spec.scope.branches);
     state.sort = spec.presentation.sort || { key: 'none', direction: 'asc' };
     brush.clear(); brush.setPinned(spec.ui.lens || null, spec.ui.highlight?.value ?? null);
+    state.lit = spec.ui.lit?.length ? new Set(spec.ui.lit) : null;
     state.aisleSnapshot=spec.aisle || null;
     state.floatSnapshot=spec.float || null;
     buildReviewControls();
@@ -278,6 +301,9 @@ async function restoreView(spec, { intent = false } = {}) {
       const scale = view.scale * ratio;
       viewport.restore({ ...view, scale, x: r.width / 2 - (old.w / 2 - view.x) * ratio, y: r.height / 2 - (old.h / 2 - view.y) * ratio });
     }
+    applyLit();
+    // A live link may ask for a framing; the camera it makes is what the exact link keeps.
+    if (intent && new URL(location.href).searchParams.get('frame') === 'evidence') await frameEvidence();
     setBackgroundRevealed(!!spec.ui.context);
     await frames();
     linkNotice(warnings.join(' · '));
@@ -376,10 +402,217 @@ function exportView() {
     view: { mode: state.mode, group: state.groupKey },
     focus: focus ? entry(focus) : null,
     highlight: highlighted ? { key, value: String(value), count: highlighted.length, keys: highlighted.map(clipKey) } : null,
+    lit: state.lit ? litSummary() : null,
     count: state.filtered.length, total: state.clips.length,
     evidence: state.filtered.map(entry),
   };
 }
+/* ------------------------------------------------------------------ lit --- */
+
+/**
+ * Items lit by identity (`lit=` in a live link, `ui.lit` in a view): the rest
+ * of the scope recedes in place, so a shot can point at exactly the items a
+ * claim cites (docs/SHOTS.md). Unlike a filter, nothing leaves the view; unlike
+ * a lens value, the set is named item by item.
+ */
+function litSummary() {
+  const keys = state.filtered.map(clipKey).filter(key => state.lit.has(key));
+  const known = new Set(state.clips.map(clipKey));
+  return { count: keys.length, keys, unresolved: [...state.lit].filter(key => !known.has(key)).length };
+}
+function markUnlit() {
+  for (const [id, node] of state.tileEls) {
+    const clip = state.positions.get(id)?.clip;
+    node.classList.toggle('unlit', !!state.lit && !!clip && !state.lit.has(clipKey(clip)));
+  }
+  if (state.lit) el.canvas.dataset.lit = 'true'; else delete el.canvas.dataset.lit;
+}
+function applyLit() {
+  markUnlit(); syncOverview(); state.float?.setLit(state.lit); renderCount();
+}
+function setLit(keys) {
+  state.lit = keys && keys.size ? new Set(keys) : null;
+  applyLit(); invalidatePreview();
+}
+/**
+ * frame=evidence: point the camera at the evidence. That is the lit items, else
+ * in the floating space a narrowed scope, else a pinned lens value. In the
+ * floating space Fit frames those items; on the wall the camera zooms to their
+ * tiles. Throws when there is nothing to frame, so a link asking for it fails
+ * with a reason instead of showing the whole collection.
+ */
+async function frameEvidence() {
+  const inScope = state.filtered;
+  let keys = [];
+  if (state.lit) keys = inScope.map(clipKey).filter(key => state.lit.has(key));
+  else if (state.mode === 'float' && inScope.length < state.clips.length) keys = inScope.map(clipKey);
+  else if (brush.getPinned() && brush.getPinnedValue() !== null) {
+    const values = new Set([String(brush.getPinnedValue())]);
+    keys = inScope.filter(clip => matchesFacet(clip, brush.getPinned(), values)).map(clipKey);
+  }
+  if (!keys.length) throw new Error('frame=evidence has nothing to frame: light items with lit=, narrow the scope, or pin a highlight');
+  if (state.mode === 'float') state.float.frameItems(keys, { animate: false });
+  else if (state.mode === 'flat') {
+    const want = new Set(keys), boxes = [...state.positions.values()].filter(p => want.has(clipKey(p.clip)));
+    if (!boxes.length) throw new Error('frame=evidence: none of the items to frame are on the wall');
+    const x = Math.min(...boxes.map(p => p.x)), y = Math.min(...boxes.map(p => p.y));
+    const w = Math.max(...boxes.map(p => p.x + p.w)) - x, h = Math.max(...boxes.map(p => p.y + p.h)) - y;
+    const r = el.stage.getBoundingClientRect(), pad = viewport.fitPadding(r) * 2;
+    viewport.focus({ x, y, w, h }, Math.min((r.width - pad * 2) / w, (r.height - pad * 2) / h));
+  } else throw new Error(`frame=evidence works on the flat wall and in the floating space so far, not view=${state.mode}`);
+  await frames();
+}
+
+/* --------------------------------------------------------------- stills --- */
+
+/** Views a still can wait for: their renderers say when their pixels are final. */
+const STILL_MODES = ['flat', 'float'];
+/** What would still change the picture on screen. Empty means final. */
+function stillPending({ allowUndrawn = false } = {}) {
+  const out = [];
+  if (document.body.dataset.viewReady !== 'true') return ['the view is still loading'];
+  if (document.fonts && document.fonts.status !== 'loaded') out.push('fonts are loading');
+  if (state.spatialLoading) out.push('the 3D renderer is loading');
+  if (state.mode === 'float') out.push(...(state.float ? state.float.stillPending() : ['the floating space has not started']));
+  else if (state.mode === 'flat') {
+    if (viewport.zooming || performance.now() < viewport.settlesAt) out.push('the camera is moving');
+    if (movingNodes().size) out.push('tiles are moving to a new layout');
+    if (imageWork.pending || imageWork.running) out.push(`${imageWork.pending + imageWork.running} images are loading`);
+    if (overview.busy) out.push('the overview is painting');
+    // The queues only know the tiles already asked for: right after a layout,
+    // a tile in view may not have been asked for yet. Its pixels decide.
+    const undrawn = allowUndrawn ? 0 : undrawnTiles();
+    if (undrawn) out.push(`${undrawn} tiles in view are not drawn yet`);
+  }
+  return out;
+}
+/** Flat wall: tiles in view that show neither their own image nor the overview's
+ * pixels. revealTiles keeps `shown` current, so most tiles cost no measurement. */
+function undrawnTiles() {
+  const stage = el.stage.getBoundingClientRect();
+  let undrawn = 0;
+  for (const [id, node] of state.tileEls) {
+    if (!state.positions.get(id)?.shown) continue;
+    const r = node.getBoundingClientRect();
+    if (!r.width || r.right <= stage.left || r.left >= stage.right || r.bottom <= stage.top || r.top >= stage.bottom) continue;
+    if (node.classList.contains('no-media') || node.classList.contains('broken') || node.classList.contains('overview-painted')) continue;
+    const img = node.querySelector(':scope > img');
+    if (img?.complete && img.naturalWidth > 0) continue;
+    undrawn++;
+  }
+  return undrawn;
+}
+/**
+ * Resolves once the picture on screen is final, for a still: "view ready"
+ * means the link is restored, not that every image has landed. It waits for
+ * `quietFrames` frames in a row with nothing pending, and rejects after
+ * `timeout` ms naming what is still pending, or at once for a view it cannot
+ * judge. On the flat wall every tile in view must show its image or the
+ * overview's pixels; `allowUndrawn` settles without that, and `undrawn` in the
+ * result counts the tiles still showing only their tint.
+ */
+async function whenStill({ timeout = 30000, quietFrames = 3, allowUndrawn = false } = {}) {
+  if (figureLabelError) throw new Error(figureLabelError);
+  const start = performance.now();
+  let quiet = 0, pending = [];
+  for (;;) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    pending = stillPending({ allowUndrawn });
+    if (document.body.dataset.viewReady === 'true' && !STILL_MODES.includes(state.mode))
+      throw new Error(`Stills support the flat wall and the floating space so far, not view=${state.mode}`);
+    if (pending.includes('3D graphics are unavailable')) throw new Error('3D graphics are unavailable in this browser');
+    quiet = pending.length ? 0 : quiet + 1;
+    if (quiet >= quietFrames) break;
+    if (performance.now() - start > timeout) throw new Error(`The view did not settle within ${timeout} ms: ${pending.join('; ')}`);
+  }
+  const undrawn = state.mode === 'flat' ? undrawnTiles() : 0;
+  // The figure is drawn last, over a picture that no longer changes.
+  const figure = FIGURE ? renderFigure() : null;
+  if (figure) await frames();
+  return { mode: state.mode, waitedMs: Math.round(performance.now() - start), undrawn, figure };
+}
+
+/* -------------------------------------------------------------- figure --- */
+
+/**
+ * What the figure says, from the page's own state: the count line, a legend
+ * with counts, and a note naming the collection and the view. Overrides change
+ * words, never numbers, and every text records whether it is the page's or an
+ * override.
+ */
+function figureData() {
+  const labels = figureLabels, nouns = state.nouns, total = state.clips.length, inScope = state.filtered.length;
+  const narrowed = inScope < total, scope = narrowed ? ` · ${scopeLabel()}` : '';
+  const source = text => text === null ? 'page' : 'override';
+  const entry = (role, fallback, count) => ({ role, label: labels[role] ?? fallback, count, source: source(labels[role]) });
+  let counts, legend = [];
+  const pinned = brush.getPinned(), value = brush.getPinnedValue();
+  if (state.lit) {
+    const lit = litSummary().count;
+    counts = `${lit} of ${counted(inScope, nouns)} lit${scope}`;
+    // In the floating space the items outside the scope recede too.
+    legend = [entry('lit', 'Lit', lit), entry('rest', 'Receded', (state.mode === 'float' ? total : inScope) - lit)];
+  } else if (narrowed && state.mode === 'float') {
+    counts = `${inScope} of ${counted(total, nouns)}${scope}`;
+    legend = [entry('lit', 'In scope', inScope), entry('rest', 'Outside the scope', total - inScope)];
+  } else if (pinned && value !== null) {
+    const matches = state.filtered.filter(clip => matchesFacet(clip, pinned, new Set([String(value)]))).length;
+    const name = `${state.facetLabels[pinned] || pinned}: ${value}`;
+    counts = `${matches} of ${counted(inScope, nouns)} · ${name}${scope}`;
+    legend = [entry('lit', name, matches), entry('rest', 'Other values', inScope - matches)];
+  } else counts = narrowed ? `${inScope} of ${counted(total, nouns)}${scope}` : counted(total, nouns);
+  return { headline: labels.title ?? counts, headlineSource: source(labels.title), counts, legend, notes: viewNotes(),
+    groups: state.mode === 'flat' ? groupLabels() : [],
+    axes: state.mode === 'float' ? Object.fromEntries(AXES.map(axis => [axis, labels.axes[axis] ? 'override' : 'page'])) : null };
+}
+/**
+ * The collection's title and what the view does, in the page's words (axis
+ * titles may be overridden), longest first: without the title, then with the
+ * axis titles' detail dropped, then the arrangement's name alone. The band
+ * shows the longest that fits.
+ */
+function viewNotes() {
+  let view = '', brief = '', name = '';
+  if (state.mode === 'float' && state.float) {
+    const info = state.float.layout?.axisInfo, arrangement = state.float.arrangement;
+    if (arrangement === 'axes' && info) {
+      const title = axis => figureLabels.axes[axis] ?? info[axis].title;
+      view = `Axes: ${AXES.map(axis => `${axis} ${title(axis)}`).join(' · ')}`;
+      // "lightness (OKLab L)" → "lightness", "hue (OKLCH) from 220°" → "hue"; an override is kept whole.
+      brief = `Axes: ${AXES.map(axis => `${axis} ${figureLabels.axes[axis] ?? title(axis).replace(/\s*\(.*?\)|\s+from\s+\d+°/g, '')}`).join(' · ')}`;
+      name = 'Axes';
+    } else if (arrangement === 'az') view = name = 'Shelved A–Z by title';
+    else if (arrangement === 'cloud') {
+      // The cloud's only claim is its order; the note says what decided it.
+      const lead = state.lit ? 'the lit items in front, the rest behind' : state.filtered.length < state.clips.length ? 'the scope in front, the rest behind' : '';
+      const order = state.float.describeFront();
+      view = `Cloud${lead || order ? ': ' : ''}${[lead, order && (lead ? `each ${order}` : order)].filter(Boolean).join('; ')}`;
+      name = 'Cloud';
+    }
+    else { view = `Placed by dominant colour in ${ARRANGEMENT_LABELS[arrangement]}`; name = ARRANGEMENT_LABELS[arrangement]; }
+  } else if (state.mode === 'flat') {
+    const key = state.groupKey;
+    view = name = key === SIMILARITY ? 'Similarity map' : key === SIMILARITY_GRID ? 'Similarity grid' : !key || key === 'none' ? 'Ungrouped' : `Grouped by ${state.facetLabels[key] || key}`;
+  }
+  const notes = [[document.title, view].filter(Boolean).join(' · '), view, brief, name].filter(Boolean);
+  return [...new Set(notes)];
+}
+/** Group names for the wall's blocks in view, at their top-left corners on the stage. */
+function groupLabels() {
+  const r = el.stage.getBoundingClientRect(), s = viewport.scale;
+  return (state.blocks || []).filter(b => b.label && b.label !== '—').map(b => {
+    const left = b.x * s + viewport.x, top = b.y * s + viewport.y, width = b.w * s;
+    return { label: b.label, text: figureLabels.groups.get(b.label) ?? b.label, count: b.count, source: figureLabels.groups.has(b.label) ? 'override' : 'page',
+      left: Math.max(0, left) + 6, top: Math.max(0, top) + 6, width: Math.min(width, r.width - Math.max(0, left)) - 12, onStage: left < r.width && top < r.height && left + width > 0 && top + b.h * s > 0 };
+  }).filter(g => g.onStage && g.width >= 60).map(({ onStage, ...g }) => g);
+}
+/** Draw the figure and say what it says; `clipped` lists any text that did not fit. */
+function renderFigure() {
+  const { notes, ...figure } = figureData();
+  const band = renderBand(figureBand, { ...figure, notes }), groups = renderGroups(figureGroups, figure.groups);
+  return { ...figure, note: band.note, noteFull: notes[0], groups: figure.groups.map(({ left, top, width, ...g }) => g), clipped: [...band.clipped, ...groups] };
+}
+
 function scopeSnapshot() {
   return { query: state.query, active: new Map([...state.active].map(([k, v]) => [k, new Set(v)])),
     branches: state.branches?.map(b => ({ label: b.label, keys: [...b.keys] })) ?? null,
@@ -710,7 +943,7 @@ async function toggleSpatial(on, kind='3d', { arrangement=null }={}) {
         const {FloatView}=await import('./float-view.mjs');
         // The detail pane overlays the stage's right edge; fly-to lands beside it.
         // Stacks in its menu hands over to the stacks renderer.
-        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0,onStacks:()=>toggleSpatial(true,'3d')});
+        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0,onStacks:()=>toggleSpatial(true,'3d'),axisTitles:figureLabels.axes});
       }else{
         const {SpatialView,keyOfClip}=await import('./spatial/spatial-view.mjs');
         state.clipKey=keyOfClip;state.spatial=new SpatialView(el.spHost,hooks);
@@ -812,6 +1045,7 @@ function refreshSpatial() {
     // The whole corpus floats; scope only dims, so positions keep their meaning.
     state.floatDirty=false;
     state.float.setClips(state.clips,state.filtered,{nouns:state.nouns});
+    state.float.setLit(state.lit);
     state.float.setFocused?.(state.clips.find(c=>c.id===state.selected)?clipKey(state.clips.find(c=>c.id===state.selected)):null);
     renderScopeEmpty();syncArrangement();return;
   }
@@ -931,6 +1165,7 @@ function renderNow() {
   syncOverview();
   perf.span('render/background', () => renderBackground(result, bounds));
   perf.span('render/brush', () => {brush.refresh();syncLensValue();});
+  markUnlit();
   applyScaleStyles(viewport.scale, { force: true });
 
   renderCount();
@@ -965,6 +1200,7 @@ function renderCount() {
   const strong = document.createElement('b');
   strong.textContent = String(state.filtered.length);
   el.count.append(strong, document.createTextNode(` of ${counted(state.clips.length, state.nouns)}`));
+  if (state.lit) el.count.append(document.createTextNode(` · ${litSummary().count} lit`));
   if (state.viewStateError) el.count.append(document.createTextNode(` · ${state.viewStateError}`));
 }
 
@@ -1778,10 +2014,11 @@ function applyZoomDetail() {
   zoomDetailTimer = 0;
   if (state.preview && !previewByZoom) return;              // a hover preview is the user's more recent intent
   const stage = el.stage.getBoundingClientRect();
-  // 3D, the full-window mobile reader and hydration never preview by zoom.
+  // 3D, the full-window mobile reader and hydration never preview by zoom, and
+  // nor does a still: a pane opened by the zoom would cover the shot.
   // Zoomed all the way out is never zoomed in, however few items fill the view.
   const floor = viewport.scaleFloor?.(), atFloor = viewport.fitted || (floor > 0 && viewport.scale <= floor * 1.01);
-  const pick = state.spatialOn || hydrating || atFloor || window.innerWidth <= 800 ? null
+  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor || window.innerWidth <= 800 ? null
     : zoomDetailCandidate({
       tiles: state.positions.values(), pose: viewport.snapshot(), stage,
       // The pane's width whether or not it is open, so opening it moves nothing.
@@ -2287,6 +2524,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!state.spatialOn && viewport.undoEdge()) { e.preventDefault(); return; }
     if (!state.spatialOn && returnFromTray()) { e.preventDefault(); return; }
+    // Esc closes the detail pane first (the capture handler above), then puts out a lit set.
+    if (state.lit && !el.detail.classList.contains('open')) { e.preventDefault(); setLit(null); return; }
     closeDetail(); el.search.blur(); return;
   }
   if (typing) return;
@@ -2344,7 +2583,7 @@ links = createPermalinks({ capture: captureView, restore: restoreView, notice: l
 document.getElementById('copy-view').addEventListener('click', () => links.copy().catch(err => linkNotice(err.message)));
 document.getElementById('copy-live-view').addEventListener('click',async()=>{try{const spec=captureView();if(!spec)throw new Error('The view is not ready');await navigator.clipboard.writeText(targetedViewURL(spec,location.href).href);linkNotice('Live view link copied · opens the current collection');}catch(error){linkNotice(error.message);}});
 // Read-only diagnostics for the explicit-target rendering proof.
-window.wunderkammer = Object.freeze({ export: exportView });
+window.wunderkammer = Object.freeze({ export: exportView, whenStill });
 window.wunderkammerAisleDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.aisle?.getDiagnostics()||null});
 window.wunderkammerFloatDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.float?.getDiagnostics()||null});
 document.getElementById('new-view').addEventListener('click', () => { links.newView(); linkNotice(''); });

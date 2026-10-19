@@ -795,3 +795,45 @@ body[data-view-mode=aisle] .review-tip .brush-key { font-size:16px; }
 .scene-jump input::placeholder { color:#bcbcc9; opacity:1; }
 .scene-jump input:focus-visible { outline:3px solid #aaffaa; outline-offset:2px; }
 .scene-jump-count { color:#f3f3f7; font:16px/1.3 system-ui,sans-serif; white-space:nowrap; }
+
+/* ---------- stills: ?chrome=none (docs/SHOTS.md) ----------
+ * The stage alone, for an image: no header, filter rail, scope bar, toolbars,
+ * help lines or link notice. Axis, shelf and group labels stay; they belong to
+ * the figure. A refused link still sets #link-status, which scripts/still.mjs
+ * reads, so hiding it here hides nothing from the tool. */
+:root[data-chrome="none"] :is(.bar, .rail, #scope-bar, #context-clusters, #link-status, #row-title,
+  .edge-undo, .tray-return, .tray-filter, .float-toolbar, .float-help, .aisle-toolbar, .aisle-help, .sp-arrange, .sp-back, #lens-value) { display: none !important; }
+:root[data-chrome="none"] .stage { top: 0; left: 0; right: 0; bottom: 0; }
+:root[data-chrome="none"] #stage > .sp-host { bottom: 0; }
+
+/* ---------- lit items (lit=, docs/SHOTS.md) ----------
+ * The rest of the scope recedes in place: dim, nearly grey, and without its
+ * caption, because dimmed text would fall under the 8:1 floor. */
+.tile.unlit img { opacity: .2; filter: saturate(.25); }
+.tile.unlit { border-color: transparent; background: var(--bg); }
+.tile.unlit .cap { visibility: hidden; }
+
+/* ---------- the figure layer of a shot (wall/figure.mjs, docs/SHOTS.md) ----------
+ * A caption band below the stage: the headline, the page's counts and a note
+ * on what the view does, with a legend at the right. The stage ends above it,
+ * so nothing it says covers the picture. On the wall, group names sit over
+ * their blocks in place of the native headings. Contrast on --bg (#050510):
+ * --text 17.8:1, --muted 12.2:1, --accent-text 17.0:1. */
+:root[data-figure="band"] { --figure-h: 80px; }
+:root[data-figure="band"] .stage { bottom: var(--figure-h); }
+:root[data-figure="band"] :is(.block h2, .review-tip) { display: none !important; }
+.figure-band { position: fixed; left: 0; right: 0; bottom: 0; height: var(--figure-h); box-sizing: border-box; padding: 10px 20px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "headline legend" "detail legend"; column-gap: 28px; row-gap: 4px; align-content: center;
+  background: var(--bg); border-top: 1px solid #697476; color: var(--text); }
+.figure-headline { grid-area: headline; margin: 0; min-width: 0; font-size: 22px; font-weight: 650; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.figure-detail { grid-area: detail; margin: 0; min-width: 0; display: flex; gap: 14px; font-size: 15px; line-height: 1.3; white-space: nowrap; overflow: hidden; }
+.figure-counts { flex: 0 0 auto; color: var(--text); font-weight: 600; }
+.figure-note { flex: 0 1 auto; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.figure-legend { grid-area: legend; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.figure-key { display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 1.25; white-space: nowrap; color: var(--text); }
+.figure-swatch { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 3px; }
+.figure-swatch-lit { background: var(--text); }
+.figure-swatch-rest { background: #2a2c38; box-shadow: inset 0 0 0 1px #697476; }
+.figure-groups { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.figure-group { position: absolute; left: 0; top: 0; box-sizing: border-box; padding: 3px 8px; border-radius: 4px; background: var(--bg);
+  color: var(--accent-text); font-size: 16px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -18,8 +18,8 @@ export const WORLD = 2000;
 export const MAX_STRETCH = 4;
 /** Cylinder radius for OKLCH and HSL. */
 export const RADIUS = 700;
-export const ARRANGEMENTS = Object.freeze(['oklab', 'oklch', 'hsl', 'az', 'axes']);
-export const ARRANGEMENT_LABELS = Object.freeze({ oklab: 'OKLab', oklch: 'OKLCH', hsl: 'HSL', az: 'A–Z', axes: 'Axes' });
+export const ARRANGEMENTS = Object.freeze(['oklab', 'oklch', 'hsl', 'az', 'axes', 'cloud']);
+export const ARRANGEMENT_LABELS = Object.freeze({ oklab: 'OKLab', oklch: 'OKLCH', hsl: 'HSL', az: 'A–Z', axes: 'Axes', cloud: 'Cloud' });
 export const isArrangement = value => ARRANGEMENTS.includes(value);
 /** The arrangement the space opens in, from the 3D button or a link that names
  * none. Axes puts the collection's time, lightness and hue on three axes
@@ -142,13 +142,14 @@ export function chromaStretch(labs) {
  *   order      — indices in the arrangement's own reading order (hue, or title)
  * plus bounds, labels and guide geometry for the renderer.
  */
-export function arrange(clips, arrangement, { edge = tileEdge(clips.length), axes, labelFor } = {}) {
+export function arrange(clips, arrangement, { edge = tileEdge(clips.length), axes, labelFor, priority } = {}) {
   if (!isArrangement(arrangement)) throw new Error(`Unknown arrangement: ${arrangement}`);
   const n = clips.length, positions = new Float32Array(n * 3), sizes = new Float32Array(n * 2);
   const labels = [], guides = [];
   let order, unplaced = [], stretch = 1;
   for (let i = 0; i < n; i++) { const [w, h] = sized(aspectOf(clips[i]), edge); sizes[i * 2] = w; sizes[i * 2 + 1] = h; }
   if (arrangement === 'axes') return arrangeAxes(clips, positions, sizes, edge, axes, labelFor);
+  if (arrangement === 'cloud') return arrangeCloud(clips, positions, sizes, edge, priority);
   if (arrangement === 'az') {
     order = alphabetical(clips, positions, sizes, edge, labels);
   } else {
@@ -475,7 +476,7 @@ function arrangeAxes(clips, positions, sizes, edge, requested, labelFor) {
   coords.forEach((c, k) => {
     guides.push([along(k, 0), along(k, 1)]);
     const [u, at, gap] = titleAt[k];
-    labels.push({ text: `${AXIS_LABELS[AXES[k]]} · ${c.title}`, kind: 'axis', point: along(k, u), side: at, gap });
+    labels.push({ text: `${AXIS_LABELS[AXES[k]]} · ${c.title}`, kind: 'axis', axis: AXES[k], point: along(k, u), side: at, gap });
   });
   coords.forEach((c, k) => {
     for (const s of c.slots) {
@@ -579,6 +580,50 @@ export function declump(positions, indices, minDist, cap, iterations = 4, free =
     if (d > 1e-3) moved++; maxShift = Math.max(maxShift, d); total += d;
   }
   return { moved, maxShift, meanShift: total / indices.length };
+}
+
+/**
+ * A cloud's order key (`front=`): a dimension id, highest first, or with a
+ * leading `-`, lowest first ("-captured": the earliest capture first).
+ */
+export const parseFront = front => front.startsWith('-') ? { id: front.slice(1), descending: false } : { id: front, descending: true };
+export const isFront = front => typeof front === 'string' && isAxisName(front) && isAxisName(parseFront(front).id);
+/**
+ * Values to order a cloud by, one per clip: the item's place along that
+ * dimension's axis, 0 to 1, so dates, numbers, ranks and the colour
+ * coordinates all compare the way Axes would place them; null where the item
+ * has no value (no date, a grey's hue). Throws for a dimension the collection
+ * cannot carry.
+ */
+export function orderValues(clips, id, labelFor) {
+  const { u } = axisCoordinates(clips, id, labelFor, clips.map(dominantColor));
+  return Array.from(u, v => v < 0 ? null : v);
+}
+/** Is this dimension a time (capture date, year, decade)? Its order reads latest or earliest first. */
+export const isTimeKey = id => TIME_KEYS.includes(id);
+
+/**
+ * Cloud: a picture, not a measurement. Items spiral out from the centre in
+ * priority order (`priority`: indices, first is front; the rest follow in
+ * collection order), each one a golden angle on from the last, so the front of
+ * the order holds the middle. Rank also sets depth and size: the first items
+ * stand closest to the camera and largest, and the cloud thins and recedes
+ * behind them. Nothing here encodes a value; the order is the only claim, and
+ * the figure says what decided it.
+ */
+function arrangeCloud(clips, positions, sizes, edge, priority = []) {
+  const n = clips.length, seen = new Set(), order = [];
+  for (const i of priority) if (Number.isInteger(i) && i >= 0 && i < n && !seen.has(i)) { seen.add(i); order.push(i); }
+  for (let i = 0; i < n; i++) if (!seen.has(i)) order.push(i);
+  const golden = Math.PI * (3 - Math.sqrt(5)), spacing = edge * 0.95, depth = WORLD * 0.9 / Math.max(1, n), front = Math.max(4, n * 0.06);
+  order.forEach((i, rank) => {
+    // Prominence falls from 1.9 to 0.7 over the front of the order.
+    const scale = 0.7 + 1.2 * Math.exp(-rank / front), r = spacing * Math.sqrt(rank) * (0.6 + 0.4 * scale), t = rank * golden;
+    positions[i * 3] = r * Math.cos(t); positions[i * 3 + 1] = r * Math.sin(t); positions[i * 3 + 2] = -rank * depth;
+    sizes[i * 2] *= scale; sizes[i * 2 + 1] *= scale;
+  });
+  return { arrangement: 'cloud', edge, stretch: 1, positions, exact: positions.slice(), sizes, order, labels: [], guides: [], unplaced: 0,
+    declumped: { moved: 0, maxShift: 0, meanShift: 0 }, bounds: boundsOf(positions, sizes, n) };
 }
 
 function boundsOf(positions, sizes, n) {

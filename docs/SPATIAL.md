@@ -389,7 +389,8 @@ the arrow keys and jump are the ways in; free flight is for looking around.
 ### State and links
 
 The ViewSpec gains `presentation.mode: 'float'` and
-`float: { version: 1, arrangement, axes?, position, target, fitted, selection }`.
+`float: { version: 1, arrangement, axes?, front?, position, target, fitted, selection }`.
+`front` orders a cloud (`arrange=cloud`; [SHOTS.md](SHOTS.md#the-cloud-phase-2c)): a dimension id, with a leading `-` for lowest first.
 These are validated in `wall/view-schema.mjs`, which the snapshot endpoint
 shares.
 - **Axes state.** `axes` is `{ across?, up?, depth? }`: dimension ids, distinct, each a colour name or a facet key. Any slot left out takes the collection's default. The version stays 1, since links without `axes` mean what they always did.

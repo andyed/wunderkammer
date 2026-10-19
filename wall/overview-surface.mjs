@@ -415,6 +415,10 @@ export class OverviewSurface {
     }
   }
 
+  /** A paint is scheduled or a cover is still loading. Stills wait on this
+   * (wall.mjs whenStill); a failed cover does not keep it busy. */
+  get busy() { return !!(this.frame || this._srcFrame) || this.pending.size > 0 || (this.active && this._dirty); }
+
   _schedule() {
     if (this.frame || !this.active || this.disposed || this._compositing || this._domFallback) return;
     this.frame = this._raf(() => { this.frame = 0; this._render(); });

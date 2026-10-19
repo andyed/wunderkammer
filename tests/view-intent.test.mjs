@@ -78,3 +78,34 @@ test('highlight alone selects its lens and changing lens clears a previous value
   assert.equal(cleared.ui.lens, 'year'); assert.equal(cleared.ui.highlight, undefined);
   assert.throws(() => validateView({ ...highlighted, ui: { ...highlighted.ui, lens: 'year' } }));
 });
+
+test('lit names items one identity per key, round-trips through exact and live links, and is refused when malformed', () => {
+  const v = applyViewIntent(base + '&lit=urn%3Aa&lit=https%3A%2F%2Fx.test%2Fp%3Fa%3D1%2C2&lit=urn%3Aa&frame=evidence', specimen());
+  // A URL identity may hold a comma, so lit repeats rather than splitting; duplicates collapse.
+  assert.deepEqual(v.ui.lit, ['urn:a', 'https://x.test/p?a=1,2']);
+  assert.deepEqual(decodeView(encodeView(v)).ui.lit, v.ui.lit);
+  const live = targetedViewURL(v, base);
+  assert.deepEqual(live.searchParams.getAll('lit'), v.ui.lit);
+  assert.equal(live.searchParams.has('frame'), false, 'a framing is applied once, never written back');
+  assert.equal(stripViewIntent(base + '&lit=urn%3Aa&frame=evidence').href, base, 'both keys belong to the link, not the instance');
+  for (const query of ['lit=', 'frame=all', 'frame=evidence&frame=evidence'])
+    assert.throws(() => applyViewIntent(`${base}&${query}`, specimen()), /Invalid targeted view/, query);
+  // A live link holds at most 1,000 keys in all; a larger lit set travels in an exact link, up to 10,000.
+  assert.throws(() => applyViewIntent(base + '&' + Array.from({ length: 1001 }, (_, i) => `lit=k${i}`).join('&'), specimen()), /link is too large/);
+  const many = Array.from({ length: 10000 }, (_, i) => `k${i}`);
+  assert.deepEqual(validateView({ ...specimen(), ui: { ...specimen().ui, lit: many } }).ui.lit.length, 10000);
+  assert.throws(() => validateView({ ...specimen(), ui: { ...specimen().ui, lit: [...many, 'k10000'] } }), /Invalid or unsupported view link/);
+  for (const lit of [[], [''], ['a', 'a'], 'a', [3]])
+    assert.throws(() => validateView({ ...specimen(), ui: { ...specimen().ui, lit } }), /Invalid or unsupported view link/, JSON.stringify(lit));
+});
+
+test('front orders a cloud: it implies arrange=cloud, round-trips, and is refused anywhere else', () => {
+  const v = applyViewIntent(base + '&view=float&front=-captured', specimen());
+  assert.equal(v.float.arrangement, 'cloud'); assert.equal(v.float.front, '-captured');
+  assert.deepEqual(decodeView(encodeView(v)).float.front, '-captured');
+  assert.equal(targetedViewURL(v, base).searchParams.get('front'), '-captured');
+  for (const [query, message] of [['front=', /front must name a dimension/], ['front=-', /front must name a dimension/],
+    ['arrange=axes&front=captured', /front applies only to arrange=cloud/], ['across=year&front=captured', /front applies only to arrange=cloud/]])
+    assert.throws(() => applyViewIntent(`${base}&${query}`, specimen()), message, query);
+  assert.throws(() => validateView({ ...v, float: { ...v.float, front: '' } }), /Invalid or unsupported view link/);
+});

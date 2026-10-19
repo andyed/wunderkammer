@@ -528,7 +528,7 @@ const cases = [
   },
   {
     name: 'float scope never dims', file: 'wall/float-view.mjs',
-    from: 'opacity[i] = this.inScope[i] ? 1 : dim;', to: 'opacity[i] = 1;',
+    from: 'opacity[i] = this.inScope[i] && (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;', to: 'opacity[i] = (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
@@ -889,6 +889,98 @@ const cases = [
     name: 'aisle keys: the live region stays silent', file: 'wall/aisle-view.mjs',
     from: 'const text = this.syncMark(); if (text) this.announcer.textContent = text;', to: 'this.syncMark();',
     test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'still: whenStill does not ask the floating space', file: 'wall/wall.mjs',
+    from: "  if (state.mode === 'float') out.push(...(state.float ? state.float.stillPending() : ['the floating space has not started']));", to: "  if (state.mode === 'float') { /* nothing */ }",
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits for every cover in the floating space',
+  },
+  {
+    name: 'still: whenStill takes the wall before every tile in view is drawn', file: 'wall/wall.mjs',
+    from: '    if (undrawn) out.push(`${undrawn} tiles in view are not drawn yet`);', to: '',
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits until every flat-wall tile in view is drawn',
+  },
+  {
+    name: 'still: chrome=none leaves the header', file: 'wall/wall.css',
+    from: ':root[data-chrome="none"] :is(.bar, .rail,', to: ':root[data-chrome="none"] :is(.rail,',
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits for every cover in the floating space',
+  },
+  {
+    name: 'still: the tool takes a still of a refused link', file: 'scripts/still.mjs',
+    from: '    if (/^Could not/.test(notice)) fail(`The view was refused: ${notice}`);', to: '',
+    test: 'tests/still.test.mjs', pattern: 'scripts/still.mjs refuses',
+  },
+  {
+    name: 'still: lit, the floating space lights everything in scope', file: 'wall/float-view.mjs',
+    from: '    for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] && (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;',
+    to: '    for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] ? 1 : dim;',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: lit, unlit wall tiles keep their brightness', file: 'wall/wall.css',
+    from: '.tile.unlit img { opacity: .2; filter: saturate(.25); }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'on the wall, unlit tiles recede',
+  },
+  {
+    name: 'still: lit, the exact link loses the lit set', file: 'wall/wall.mjs',
+    from: '      ...(state.lit ? { lit: [...state.lit] } : {}) },', to: '      },',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: lit, Esc leaves the lit set lit', file: 'wall/wall.mjs',
+    from: '    if (state.lit && !el.detail.classList.contains(\'open\')) { e.preventDefault(); setLit(null); return; }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'on the wall, unlit tiles recede',
+  },
+  {
+    name: 'still: frame=evidence is ignored', file: 'wall/wall.mjs',
+    from: "    if (intent && new URL(location.href).searchParams.get('frame') === 'evidence') await frameEvidence();", to: '',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: a zoom preview opens over the shot', file: 'wall/wall.mjs',
+    from: '  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor', to: '  const pick = state.spatialOn || hydrating || atFloor',
+    test: 'tests/still.test.mjs', pattern: 'a framed wall shot opens no detail pane',
+  },
+  {
+    name: 'still: figure, an overridden headline drops the page\'s counts', file: 'wall/figure.mjs',
+    from: "  if (figure.headline !== figure.counts) { const counts = element('span', 'figure-counts', figure.counts); counts.dataset.figure = 'counts'; detail.append(counts); }", to: '',
+    test: 'tests/still.test.mjs', pattern: 'overrides change the figure',
+  },
+  {
+    name: 'still: figure, the band covers the stage', file: 'wall/wall.css',
+    from: ':root[data-figure="band"] .stage { bottom: var(--figure-h); }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'the figure band says what the page counts',
+  },
+  {
+    name: 'still: figure, text that does not fit passes', file: 'wall/figure.mjs',
+    from: 'const clipped = nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.textContent);', to: 'const clipped = nodes => [];',
+    test: 'tests/still.test.mjs', pattern: 'scripts/still.mjs records the figure',
+  },
+  {
+    name: 'still: contrast under the floor passes', file: 'scripts/still.mjs',
+    from: '  const below = items.filter(item => item.ratio < floor);', to: '  const below = [];',
+    test: 'tests/still.test.mjs', pattern: 'contrast is read from the shot',
+  },
+  {
+    name: 'still: cloud, the order ignores the lit set and the scope', file: 'wall/float-view.mjs',
+    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || by(a, b) || a - b);', to: '    return [...this.keys.keys()].sort((a, b) => by(a, b) || a - b);',
+    test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
+  },
+  {
+    name: 'still: cloud, a scope change leaves the old order', file: 'wall/float-view.mjs',
+    from: "    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });\n    if (!this.inScopeKey(this.selection)) this.selection = null;",
+    to: "    if (!this.inScopeKey(this.selection)) this.selection = null;",
+    test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
+  },
+  {
+    name: 'still: cloud, front= is ignored', file: 'wall/float-view.mjs',
+    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || by(a, b) || a - b);', to: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);',
+    test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
+  },
+  {
+    name: 'still: cloud, the exact link loses front=', file: 'wall/float-view.mjs',
+    from: '...(this.front ? { front: this.front } : {}), ', to: '',
+    test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   }
 ];
 

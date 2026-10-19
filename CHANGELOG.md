@@ -9,6 +9,45 @@
   upload repaired it (mrdoob/three.js#33153, fixed in r184). `index.html` and
   `wall/compare.html` now load three 0.186.1. The vendored muriel lib is
   unchanged: r170–r186 needed no code changes in it or in the 3D views.
+- **Stills.** `node scripts/still.mjs --collection <doc> --view '<link keys>'
+  --size 1600x900 --out view.png` takes a still of a view, for a slide, a
+  post or a document. It also writes a sidecar JSON with the exact link, the
+  camera, the items in scope and lit, and the versions that drew it. It
+  refuses, writing nothing, when the collection or the link is refused or
+  the view never settles.
+  - `?chrome=none` shows the stage alone.
+  - `window.wunderkammer.whenStill()` resolves when the picture is final:
+    every cover landed, nothing moving, every flat-wall tile in view drawn.
+    "View ready" only meant the link was restored.
+  - It covers the flat wall and the floating space so far.
+  - `lit=<key>`, repeated once per item, lights exactly those items. The rest
+    of the scope recedes in place, in the floating space and on the wall, and
+    Esc puts the set out. The set is kept in the view (`ui.lit`), so exact and
+    live links carry it.
+  - `frame=evidence` brings the camera in on the lit items, a narrowed scope
+    or a pinned highlight. The exact link keeps the camera it made, and a link
+    with nothing to frame is refused.
+  - The figure: a band under the stage with the page's counts as the
+    headline, a legend with counts and a note on the view, and group names
+    on the wall.
+    - `--title` and `--label` (`title=`, `label.lit=`, `label.rest=`,
+      `label.group.<name>=`, `label.across=`…) override its words, never its
+      numbers, and the sidecar records whose words are whose.
+    - Text that does not fit fails the shot, except the note on the view,
+      which shortens.
+  - Every readable text box is measured against the shot's own pixels; under
+    8:1 the shot is refused (`--allow-low-contrast` records it instead).
+  - `arrange=cloud`: the collection as a cloud with the evidence in front.
+    - The lit items, else the scope, spiral out from the middle, closest and
+      largest.
+    - The rest recede behind, smaller and dimmed.
+    - The figure's note says what decided the order.
+    - `front=<dimension>` orders it within those tiers: `front=captured`
+      latest first, `front=chroma` most saturated first, `front=-captured`
+      earliest first. Exact and live links keep the order.
+  - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
+    brushing by identity, framing on the evidence, captions from the page's
+    counts, and camera angles. Interactive embeds are deferred.
 - **No item dropdown in the 3D views.** The floating space and the aisle each
   carried an Item dropdown ("Choose an item…") and an Inspect button that every
   visitor saw and almost none needed. Both are gone. When 3D graphics fail, the

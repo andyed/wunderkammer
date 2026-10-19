@@ -129,6 +129,34 @@ steps and traps.
    and titles. On the comparison page it returns the evidence for the selected
    cell or observation.
 
+8. **Make a still for a slide, a post or a document.**
+   `node scripts/still.mjs --collection cats/collection.json --view 'view=float&arrange=axes&facet.coat=ginger' --size 1600x900 --scale 2 --out ginger.png`
+   - `--view` takes the same keys as a live link.
+   - It writes the image and `ginger.json`. That sidecar names the exact
+     link, the items in scope and lit, and the camera; quote its counts, not
+     your own.
+   - It refuses, writing nothing, when the link or the collection is refused,
+     and says why.
+   - Point at the evidence. Add `lit=<key>` once per cited item (the item's
+     `url`, else `id:<id>`), so exactly those items stay bright and the rest
+     recede. Add `frame=evidence` to bring the camera in on them. With no lit
+     items, a facet or a highlight is the evidence instead.
+   - Under the picture goes the figure: the page's counts, a legend and a
+     note on the view. `--title 'Your headline'` and `--label lit='Ginger
+     cats'` (also `rest`, `group.<name>`, `across`, `up`, `depth`) change its
+     words. The counts stay the page's, and the sidecar records which words
+     were yours.
+   - It refuses a shot whose text does not fit or measures under 8:1 on the
+     image itself.
+   - For a picture rather than a measurement, `view=float&arrange=cloud`
+     puts the lit items (or the scope) front and centre, larger, with the
+     rest of the collection receding behind them. `front=captured` (latest
+     first) or `front=chroma` (most saturated first) orders them; a leading
+     `-` reverses it.
+   - Stills cover the flat wall and the floating space so far.
+     [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
+     has the roadmap.
+
 ## Traps
 
 - A `props` key that names a clip field is refused: `title`, `source`,
