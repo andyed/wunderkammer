@@ -795,16 +795,6 @@ const cases = [
     test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
   },
   {
-    name: 'item readout: it never names the item', file: 'wall/item-readout.mjs',
-    from: ': title ? `${title}', to: ': false ? `${title}',
-    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
-  },
-  {
-    name: 'item readout: the aisle no longer steps with [ ]', file: 'wall/aisle-view.mjs',
-    from: "    if (event.key === ']' || event.key === '[') { event.preventDefault(); this.step(event.key === ']' ? 1 : -1); return; }\n", to: '',
-    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
-  },
-  {
     name: 'item readout: the flat-wall fallback does nothing', file: 'wall/wall.mjs',
     from: ',onFlatWall:()=>toggleSpatial(false)', to: '',
     test: 'tests/float-view.test.mjs', pattern: 'without 3D graphics',
@@ -825,8 +815,8 @@ const cases = [
     test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
   },
   {
-    name: 'float keys: Enter in the jump box goes nowhere', file: 'wall/float-view.mjs',
-    from: 'this.closeJump(); if (first !== undefined) this.keyChoose(this.keys[first]);', to: 'this.closeJump();',
+    name: 'float keys: Enter in the jump box goes nowhere', file: 'wall/keyboard-path.mjs',
+    from: 'onClose(true); if (first !== undefined) onPick(first);', to: 'onClose(true);',
     test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
   },
   {
@@ -838,6 +828,31 @@ const cases = [
     name: 'float keys: the callout repeats what the title says', file: 'wall/float-space.mjs',
     from: "p.short && !title.startsWith(p.short) && all.findIndex", to: "p.short && all.findIndex",
     test: 'tests/float-navigation.test.mjs', pattern: 'describeItem',
+  },
+  {
+    name: 'aisle keys: → no longer crosses the far end', file: 'wall/aisle-keys.mjs',
+    from: "    if (deeper) { const other = -at.side, last = grid[other].length - 1; return last >= 0 ? cell(grid, other, last, at.row) : null; }\n", to: '',
+    test: 'tests/aisle-keys.test.mjs', pattern: 'walks the rack as a U',
+  },
+  {
+    name: 'aisle keys: plain arrows turn again', file: 'wall/aisle-view.mjs',
+    from: 'if (arrow && !event.shiftKey)', to: 'if (arrow && event.shiftKey)',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: the callout is never placed beside the cover', file: 'wall/aisle-view.mjs',
+    from: '    this.placeCallout();\n', to: '',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: a keyboard move keeps looking down the aisle', file: 'wall/aisle-view.mjs',
+    from: 'this.fitted = false; this.setCamera([cover.x - place.side * across, cover.y, cover.z + 1.2], cover.toArray());', to: 'this.fitted = true; this.applyPose();',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: the live region stays silent', file: 'wall/aisle-view.mjs',
+    from: 'const text = this.syncMark(); if (text) this.announcer.textContent = text;', to: 'this.syncMark();',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
   }
 ];
 

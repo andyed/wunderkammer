@@ -24,11 +24,11 @@ import { perf } from './instrument.mjs';
 import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys, attributeAxis, nearestAlong, describeItem } from './float-space.mjs';
 import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
+import { Callout, JumpBox, announcer, titleMatches as matchTitles } from './keyboard-path.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
-const titleOrder = new Intl.Collator(undefined, { numeric: true });
 /** Words for "No more items …" when an arrow finds nothing that way. */
 const EDGE_WORDS = { right: 'to the right', left: 'to the left', up: 'above', down: 'below', away: 'further away', toward: 'nearer' };
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
@@ -141,15 +141,10 @@ export class FloatView {
     // the selected item says where it sits in the arrangement's terms, and a
     // visually hidden live region says the same to a screen reader. Neither
     // takes room in the toolbar, so nothing moves when focus comes and goes.
-    this.callout = element('div', 'float-callout'); this.callout.hidden = true;
-    this.calloutTitle = element('strong', 'float-callout-title'); this.calloutWhere = element('span', 'float-callout-where');
-    // Its own layer: the axis-label overlay is rebuilt on every relayout. aria-hidden, as the announcer speaks for it.
-    this.callout.append(this.calloutTitle, this.calloutWhere); this.callout.setAttribute('aria-hidden', 'true');
-    this.announcer = element('p', 'item-readout float-announcer'); this.announcer.setAttribute('aria-live', 'polite'); this.announcer.setAttribute('aria-atomic', 'true');
-    this.jump = element('form', 'float-jump'); this.jump.hidden = true; this.jump.setAttribute('role', 'search');
-    this.jumpInput = element('input'); this.jumpInput.type = 'search'; this.jumpInput.placeholder = 'Jump to a title'; this.jumpInput.setAttribute('aria-label', 'Jump to a title');
-    this.jumpCount = element('span', 'float-jump-count'); this.jumpCount.setAttribute('aria-live', 'polite');
-    this.jump.append(this.jumpInput, this.jumpCount);
+    this.callout = new Callout('float-callout');
+    this.announcer = announcer('float-announcer');
+    this.jump = new JumpBox('float-jump', { matches: q => this.titleMatches(q), onPick: i => this.keyChoose(this.keys[i]),
+      onClose: refocus => { if (refocus) this.canvas?.focus({ preventScroll: true }); }, listen: (node, type, fn) => this.listen(node, type, fn) });
     this.fallback = element('button', 'view-fallback', 'Show the flat wall'); this.fallback.type = 'button';
     this.help = element('p', 'float-help', 'Drag to orbit · Arrows move between items, Shift+arrows orbit · / jumps to a title · Enter opens · W A S D fly · Home fits');
     try {
@@ -185,13 +180,9 @@ export class FloatView {
       this.listen(this.canvas, 'webglcontextrestored', () => { this.contextLost = false; this.host.dataset.graphicsState = 'ready'; this.updateStatus(); this.invalidate(); });
       this.host.dataset.graphicsState = 'ready';
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
-    this.host.append(this.overlay, this.callout, this.status, this.jump, this.toolbar, this.help, this.announcer);
+    this.host.append(this.overlay, this.callout.node, this.status, this.jump.node, this.toolbar, this.help, this.announcer);
     for (const [axis, select] of this.axisSelects) this.listen(select, 'change', () => { if (this.chooseAxis(axis, select.value)) this.interact(); });
     this.listen(this.fallback, 'click', () => this.callbacks.onFlatWall?.());
-    this.listen(this.jumpInput, 'input', () => { const n = this.titleMatches(this.jumpInput.value).length; this.jumpCount.textContent = !this.jumpInput.value.trim() ? '' : n ? `${n} ${n === 1 ? 'match' : 'matches'}` : 'No match'; });
-    this.listen(this.jump, 'submit', e => { e.preventDefault(); const [first] = this.titleMatches(this.jumpInput.value); this.closeJump(); if (first !== undefined) this.keyChoose(this.keys[first]); });
-    this.listen(this.jumpInput, 'keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeJump(); } });
-    this.listen(this.jumpInput, 'blur', () => { if (!this.jump.hidden) this.closeJump({ focus: false }); });
     this.syncRadios();
     // Debug handle, as in the 3D view (window.__cwSpatial): atlas failures and
     // GPU output are invisible from the DOM, so tests and probes reach them here.
@@ -372,11 +363,10 @@ export class FloatView {
   syncCallout() {
     const index = this.keyboardSelection ? this.indexOf?.get(this.selection) : undefined;
     const on = index !== undefined && this.inScope?.[index] === 1;
-    this.callout.hidden = !on; this.calloutSize = null;
-    if (!on) return null;
+    if (!on) { this.callout.hide(); return null; }
     const clip = this.clips[index], title = String(clip.title || this.keys[index]);
     const where = describeItem(clip, this.arrangement, { axes: this.axes, modelFor: id => this.modelFor(id), labelFor: this.callbacks.labelFor });
-    this.calloutTitle.textContent = title; this.calloutWhere.textContent = where.short.join(' · ');
+    this.callout.show(title, where.short.join(' · '));
     this.invalidate();
     return where.spoken ? `${title}. ${where.spoken}.` : `${title}.`;
   }
@@ -419,14 +409,7 @@ export class FloatView {
     }[screen];
   }
   /** In-scope items whose title starts with, then contains, `query`; punctuation is ignored. */
-  titleMatches(query) {
-    const norm = text => String(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(), q = norm(query);
-    if (!q) return [];
-    const titled = this.scoped().map(i => [i, norm(this.clips[i].title || this.keys[i])]).sort((a, b) => titleOrder.compare(a[1], b[1]));
-    return [...titled.filter(([, t]) => t.startsWith(q)), ...titled.filter(([, t]) => !t.startsWith(q) && t.includes(q))].map(([i]) => i);
-  }
-  openJump() { this.jump.hidden = false; this.jumpInput.value = ''; this.jumpCount.textContent = ''; this.jumpInput.focus(); }
-  closeJump({ focus = true } = {}) { this.jump.hidden = true; if (focus) this.canvas?.focus({ preventScroll: true }); }
+  titleMatches(query) { return matchTitles(this.scoped().map(i => [i, this.clips[i].title || this.keys[i]]), query); }
 
   /** Fly to an item without opening it (arrow keys, jump). */
   choose(key) {
@@ -542,7 +525,7 @@ export class FloatView {
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (key === 'Home' || key === '0') { event.preventDefault(); this.tween = null; this.fitView(); return; }
     if (key === 'Enter' && this.selection) { event.preventDefault(); this.open(this.selection, { fly: true }); return; }
-    if (key === '/') { event.preventDefault(); this.openJump(); return; }
+    if (key === '/') { event.preventDefault(); this.jump.show(); return; }
     if (key === 'PageUp' || key === 'PageDown') { event.preventDefault(); this.moveSelection(key === 'PageUp' ? 'away' : 'toward'); return; }
     const arrow = { ArrowRight: 'right', ArrowLeft: 'left', ArrowUp: 'up', ArrowDown: 'down' }[key];
     if (arrow && !event.shiftKey) { event.preventDefault(); this.moveSelection(arrow); return; }
@@ -750,27 +733,16 @@ export class FloatView {
    * hide rather than cover it.
    */
   placeCallout(occupied, t) {
-    if (this.callout.hidden || !this.field) return;
+    if (this.callout.node.hidden || !this.field) return;
     const index = this.indexOf.get(this.selection); if (index === undefined) return;
     const c = this.centreOf(index, new THREE.Vector3()), q = this.camera.quaternion;
     const right = c.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(q), this.field.sizes[index * 2] / 2);
     const top = c.clone().addScaledVector(new THREE.Vector3(0, 1, 0).applyQuaternion(q), this.field.sizes[index * 2 + 1] / 2);
     c.project(this.camera); right.project(this.camera); top.project(this.camera);
-    if (!(c.z > -1 && c.z < 1)) { this.callout.style.visibility = 'hidden'; return; }
-    this.callout.style.visibility = '';
-    if (!this.calloutSize) this.calloutSize = { w: this.callout.offsetWidth, h: this.callout.offsetHeight };
-    const { w, h } = this.calloutSize, gap = 12, px = v => (v + 1) / 2 * this.width, py = v => (1 - v) / 2 * this.height;
-    const cx = px(c.x), cy = py(c.y), halfW = Math.abs(px(right.x) - cx), halfH = Math.abs(py(top.y) - cy);
-    const floor = (t.offsetWidth ? t.offsetTop : this.height) - 8;
-    // Beside the item where a side has room; on a narrow stage, below it, or above when the toolbar is in the way.
-    let x, y;
-    if (cx + halfW + gap + w <= this.width - 8) { x = cx + halfW + gap; y = cy - h / 2; }
-    else if (cx - halfW - gap - w >= 8) { x = cx - halfW - gap - w; y = cy - h / 2; }
-    else { x = cx - w / 2; y = cy + halfH + gap + h <= floor ? cy + halfH + gap : cy - halfH - gap - h; }
-    x = clamp(x, 8, Math.max(8, this.width - w - 8));
-    y = clamp(y, 8, Math.max(8, floor - h));
-    this.callout.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-    occupied.push({ x: x + w / 2, y: y + h / 2, w: w / 2 + 4, h: h / 2 + 2 });
+    const px = v => (v + 1) / 2 * this.width, py = v => (1 - v) / 2 * this.height, cx = px(c.x), cy = py(c.y);
+    const box = this.callout.place({ cx, cy, halfW: Math.abs(px(right.x) - cx), halfH: Math.abs(py(top.y) - cy), width: this.width, height: this.height,
+      floor: (t.offsetWidth ? t.offsetTop : this.height) - 8, onScreen: c.z > -1 && c.z < 1 });
+    if (box) occupied.push({ x: box.x + box.w / 2, y: box.y + box.h / 2, w: box.w / 2 + 4, h: box.h / 2 + 2 });
   }
 
   /** Read one pixel at an item's centre straight after drawing it (tests). */
@@ -832,7 +804,7 @@ export class FloatView {
       moving: f?.moving || 0, flying: !!this.tween, edge: this.layout?.edge || 0, declumped: this.layout?.declumped || null,
       unplaced: this.layout?.unplaced || 0, labels: this.labels.map(l => l.node.textContent),
       axes: this.axes, axisInfo: this.layout?.axisInfo || null,
-      callout: this.callout.hidden ? null : { title: this.calloutTitle.textContent, where: this.calloutWhere.textContent }, announcement: this.announcer.textContent, dimensions: this.dimensions.map(d => d.id),
+      callout: this.callout.text, announcement: this.announcer.textContent, dimensions: this.dimensions.map(d => d.id),
       state: this.capture(), selection: this.selection, renderCount: this.renderCount, farResident,
       failed: f?.atlases._failed?.size ?? 0, loading: f ? (f.atlases._inflight || 0) + f.atlases._farQueue.length + f.atlases._nearQueue.length + (f.atlases.far._dirty || f.atlases.near._dirty ? 1 : 0) : 0,
       pickTargets, frameTimes: this.frameTimes.slice() };

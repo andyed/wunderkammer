@@ -36,13 +36,34 @@ test('aisle exact picking and keyboard item inspection share the existing detail
  const s=await debug(p),hit=s.scene.pickTargets[0],r=await p.locator('.aisle-canvas').boundingBox();
  await p.mouse.click(r.x+(hit.x+1)*r.width/2,r.y+(1-hit.y)*r.height/2);await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,hit.key);
  await p.keyboard.press('Escape');await p.waitForSelector('#detail.open',{state:'hidden'});
- // No item dropdown: the scene is the keyboard path. ] steps to the next item in aisle order, a live
- // readout names it, and Enter opens it.
+ // No item dropdown: the aisle is the keyboard path. An arrow moves on from the clicked cover;
+ // → walks the rack as a U, ↓ changes row, Page Up changes rack; a ring and a callout mark the cover, a hidden live
+ // region says where it is, Enter opens it, and / jumps to a title.
  assert.equal(await p.getByText(/Choose an item/).count(),0,'no item dropdown');assert.equal(await p.getByRole('button',{name:'Inspect',exact:true}).count(),0,'no Inspect button');
- await p.locator('.aisle-canvas').focus();await p.keyboard.press(']');const stepped=(await debug(p)).scene.selection;assert.ok(stepped&&stepped!==hit.key,'] steps to another item');
- const readout=p.locator('.aisle-readout');assert.equal(await readout.getAttribute('aria-live'),'polite');assert.ok((await readout.boundingBox()).width<=1,'the readout is a live region nobody sees');
- assert.match(await readout.textContent(),/ · \d+ of \d+ · Enter opens$/);
- await p.keyboard.press('Enter');await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,stepped,'Enter opens the stepped-to item');
+ await p.locator('.aisle-canvas').focus();await p.keyboard.press('ArrowRight');let k=(await debug(p)).scene;const first=k.place;
+ assert.equal(first.cohort,hit.cohort,'the first arrow moves on from the clicked cover, in its rack');
+ await p.keyboard.press('ArrowRight');k=(await debug(p)).scene;
+ assert.ok(k.place.side===-1&&k.place.column===first.column+1||k.place.side===1,`→ goes deeper along the left wall, or crosses at its far end (${JSON.stringify(k.place)})`);
+ assert.match(k.callout?.where||'',/ · (left|right) wall · row \d+ · column \d+$/,'the callout says where the cover is');
+ assert.match(k.announcement,/(left|right) wall, row \d+, column \d+ from the front\.$/,'the live region says the same');
+ const box=await p.locator('.aisle-callout').boundingBox(),canvasBox=await p.locator('.aisle-canvas').boundingBox(),m=k.markScreen;
+ assert.ok(Math.abs(m.x)<.8&&Math.abs(m.y)<.8&&m.z<1,`the move faces the cover, which sits in the frame (${JSON.stringify(m)})`);
+ const coverX=canvasBox.x+(m.x+1)/2*canvasBox.width,coverY=canvasBox.y+(1-m.y)/2*canvasBox.height;
+ assert.ok(await p.locator('.aisle-callout').isVisible()&&box.width>60&&Math.abs(box.x+box.width/2-coverX)<box.width/2+260&&Math.abs(box.y+box.height/2-coverY)<220,
+  `the callout is on screen beside the cover (${JSON.stringify(box)}, cover at ${coverX.toFixed(0)},${coverY.toFixed(0)})`);
+ assert.ok(await p.locator('.item-readout').evaluate(n=>n.getBoundingClientRect().width<=1),'the live region is never seen');
+ await p.keyboard.press('ArrowDown');const down=(await debug(p)).scene;
+ assert.ok(down.place.row===k.place.row+1||down.announcement==='Bottom of this column.',`↓ changes row (${JSON.stringify(down.place)})`);
+ await p.keyboard.press('PageUp');let next=(await debug(p)).scene;
+ if(next.announcement==='This is the last rack.'){assert.equal(next.place.rack,down.place.rack,'Page Up at the last rack stays put and says so');await p.keyboard.press('PageDown');next=(await debug(p)).scene;assert.equal(next.place.rack,down.place.rack-1,'Page Down goes to the rack before');}
+ else assert.equal(next.place.rack,down.place.rack+1,'Page Up goes to the next rack');
+ await p.keyboard.press('Shift+ArrowLeft');assert.deepEqual((await debug(p)).scene.place,next.place,'Shift+← turns without moving the mark');
+ await p.keyboard.press('Enter');await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,next.selection,'Enter opens the marked cover');
+ await p.keyboard.press('Escape');await p.waitForSelector('#detail.open',{state:'hidden'});
+ await p.locator('.aisle-canvas').focus();await p.keyboard.press('/');await p.keyboard.type('album 79');
+ assert.equal(await p.locator('.aisle-jump-count').textContent(),'1 match');await p.keyboard.press('Enter');
+ assert.equal((await debug(p)).scene.selection,'urn:album:79','Enter jumps to the match');
+ assert.equal(await p.locator('.aisle-canvas').evaluate(n=>n===document.activeElement),true,'focus returns to the aisle');
  }finally{await p.close();}});
 
 test('aisle sort, travel, camera and pin survive fresh exact links and flat round trips',async()=>{const p=await open('?view=aisle&group=decade&highlight.genre=Jazz&rail=0');let fresh;try{
@@ -71,7 +92,8 @@ test('captured value pins use canonical months and leave membership unchanged',a
  }finally{await p.close();}});
 
 test('restoring flat history retains a hidden aisle snapshot until its scope is installed',async()=>{const p=await open();try{
- await p.locator('.aisle-canvas').focus();await p.keyboard.press(']');const chosen=(await debug(p)).scene.selection;assert.ok(chosen);await p.locator('#view-aisle').click();await settled(p);
+ await p.locator('.aisle-canvas').focus();await p.keyboard.press('ArrowRight');const chosen=(await debug(p)).scene.selection;assert.ok(chosen);
+ const start=(await debug(p)).scene.place;assert.equal(start.rack,0,'with nothing chosen, the first arrow starts in the rack at the entrance');assert.equal(start.side,-1,'on the left wall');await p.locator('#view-aisle').click();await settled(p);
  const savedURL=p.url(),saved=(await debug(p)).view.aisle;
  await p.fill('#search','Album 70');await p.waitForFunction(()=>window.wunderkammerAisleDebug().scopeKeys.length===1);await p.locator('#view-aisle').click();
  assert.equal((await debug(p)).scene.itemCount,1);

@@ -16,8 +16,15 @@
   type part of a title, Enter flies to the first match. Shift+arrows orbit, as
   plain arrows did. On the 297-item demo, best-path arrow presses reach an item
   in a median of 9 (the old `[ ]` stepping: 75); 3 isolated items have no arrow
-  path in yet and are reached by jump or click. The aisle keeps `[ ]` for now,
-  with the same hidden live region.
+  path in yet and are reached by jump or click.
+- **Arrow keys walk the aisle's racks.** A rack walks as a U that matches the
+  screen: → goes deeper along the left wall, crosses at the far end and comes
+  back along the right; ← runs it backwards. ↑ and ↓ change row, Page Up and
+  Page Down change rack. Each move faces the cover's wall from across the
+  aisle; a ring marks the cover and a callout gives its title, rack, wall, row
+  and column, and the live region says the same. `/` jumps to a title, Enter
+  opens, Shift+arrows turn. Every one of the demo's 297 covers is reachable,
+  in a median of 11 best-path presses (`[ ]` stepping: 75).
 - **The ▶ showcase button is gone.** It acted only on the flat wall with no
   item open: in 3D, the hallway or beside the detail pane it turned to ⏸ and
   nothing moved. The idea, cards crossfading the rest of the collection
