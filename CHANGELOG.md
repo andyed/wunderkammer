@@ -12,6 +12,11 @@
   had kept "items" in the label it builds for each rack; it now reads the
   nouns too, and the overlay and item list show that one label, its count
   grouped as on the comparison page ("1,234 albums").
+- **A level button row on phones, with every button in view.** On a touch
+  phone the header's view, Fit, showcase and link buttons are all 40×44 on
+  one centre line; only ▥ and ↗ were 44 px tall before. Pinch zooms in every
+  view, so − and + are left off the row there, and all eight buttons fit a
+  375 px screen without the sideways scroll. Desktop keeps − and +.
 
 ## 0.2.0 — 2026-10-18
 

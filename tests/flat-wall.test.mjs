@@ -463,6 +463,35 @@ test('group approach preserves scope and explicit filtering or context headings 
   } finally { await page.close(); }
 });
 
+/** The phone header's button row: which buttons show, their boxes, and whether the
+ * sideways-scrolling group hides any of them (scrollWidth past clientWidth). */
+const PHONE_ROW = ['tour', 'view-3d', 'view-aisle', 'view-float', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view'];
+const phoneRow = page => page.evaluate(ids => {
+  const shown = ids.map(id => document.getElementById(id)).filter(b => b && b.offsetParent)
+    .map(b => { const r = b.getBoundingClientRect(); return { id: b.id, w: r.width, h: r.height, left: r.left, right: r.right, mid: r.top + r.height / 2 }; });
+  const group = document.querySelector('.main-controls .zoomctl');
+  return { shown, hiddenOverflow: group.scrollWidth - group.clientWidth, vw: innerWidth };
+}, PHONE_ROW);
+// Every shown button is at least 40×44, on one centre line, inside the viewport, with
+// nothing scrolled out of the group; pinch replaces − and +, so they are not shown.
+function assertPhoneRow({ shown, hiddenOverflow, vw }) {
+  assert.deepEqual(shown.map(b => b.id), PHONE_ROW.filter(id => id !== 'zoom-out' && id !== 'zoom-in'), `row at ${vw} px`);
+  for (const b of shown) assert.ok(b.w >= 40 && b.h >= 44, `${b.id} is at least 40×44 at ${vw} px (${b.w}×${b.h})`);
+  const mids = shown.map(b => b.mid);
+  assert.ok(Math.max(...mids) - Math.min(...mids) <= 1, `row buttons share a centre line at ${vw} px: ${JSON.stringify(shown)}`);
+  assert.ok(hiddenOverflow <= 0, `no button is scrolled out of the group at ${vw} px (${hiddenOverflow} px hidden)`);
+  for (const b of shown) assert.ok(b.left >= 0 && b.right <= vw, `${b.id} is inside the ${vw} px viewport (${b.left}–${b.right})`);
+}
+
+test('a 375 px phone shows every header button whole, level and touch-sized', async () => {
+  const page = await browser.newPage({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3, reducedMotion: 'reduce' });
+  try {
+    await contextFixture(page);
+    await page.goto(origin); await page.locator('.tile').first().waitFor(); await settled(page);
+    assertPhoneRow(await phoneRow(page));
+  } finally { await page.close(); }
+});
+
 test('on a phone the wall takes the width, the rail is an overlay that closes after a choice, and pinch zooms', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 664 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3, reducedMotion: 'reduce' });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -472,15 +501,9 @@ test('on a phone the wall takes the width, the rail is an overlay that closes af
     const stage = await page.locator('#stage').boundingBox();
     assert.equal(stage.width, 390, 'the wall has the whole width');
     assert.ok(stage.y < 130, `header is compact (stage starts at ${stage.y})`);
-    // The view, zoom and link buttons share one header row: every one is a 44 px
-    // touch target on the same centre line, not a jagged mix of 32 and 44.
-    const row = await page.evaluate(() => ['tour', 'view-3d', 'view-aisle', 'view-float', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view']
-      .map(id => document.getElementById(id)).filter(b => b && b.offsetParent)
-      .map(b => { const r = b.getBoundingClientRect(); return { id: b.id, w: r.width, h: r.height, mid: r.top + r.height / 2 }; }));
-    assert.ok(row.length >= 8, `header row buttons found: ${row.map(b => b.id)}`);
-    for (const b of row) assert.ok(b.w >= 44 && b.h >= 44, `${b.id} is a 44 px target (${b.w}×${b.h})`);
-    const mids = row.map(b => b.mid);
-    assert.ok(Math.max(...mids) - Math.min(...mids) <= 1, `header row buttons share a centre line: ${JSON.stringify(row)}`);
+    // The view, Fit and link buttons share one header row: level 44 px tall
+    // targets, not a jagged mix of 32 and 44, and none scrolled out of sight.
+    assertPhoneRow(await phoneRow(page));
     assert.equal(await page.locator('#rail').isVisible(), false, 'rail starts closed');
     assert.equal(await page.locator('#attribute-lens').isVisible(), false, 'hover-only controls are dropped');
     await page.locator('#toggle-rail').tap(); await settled(page);

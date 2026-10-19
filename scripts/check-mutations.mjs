@@ -744,8 +744,18 @@ const cases = [
   },
   {
     name: 'phone header: only two row buttons are touch targets again', file: 'wall/wall.css',
-    from: '.main-controls .zoomctl .btn, #copy-view, #copy-live-view { min-width:44px; min-height:44px; }', to: '#view-aisle,#copy-live-view { min-height:44px; }',
+    from: '.main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:40px; min-width:40px; min-height:44px; padding-inline:0; }', to: '#view-aisle,#copy-live-view { min-height:44px; }',
     test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
+  },
+  {
+    name: 'phone header: every row button is a 44 px square and the row overflows', file: 'wall/wall.css',
+    from: '.main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:40px; min-width:40px; min-height:44px; padding-inline:0; }', to: '.main-controls .zoomctl .btn, #copy-view, #copy-live-view { min-width:44px; min-height:44px; }',
+    test: 'tests/flat-wall.test.mjs', pattern: 'a 375 px phone shows every header button',
+  },
+  {
+    name: 'phone header: − and + show again beside pinch', file: 'wall/wall.css',
+    from: '#zoom-out, #zoom-in { display:none; }', to: '',
+    test: 'tests/flat-wall.test.mjs', pattern: 'a 375 px phone shows every header button',
   }
 ];
 
