@@ -34,6 +34,18 @@ Actual API surface, wider than the explainer describes — `layoutSubtree`,
 `onelementgeometryupdate`, `getElementTransform`, `captureElementImage`. The
 paint event's element list is **`e.changedElements`**.
 
+**2026-10-19: Canary renamed the opt-in.** On `Google Chrome 158.0.8110.5
+canary` the host needs `content="drawable"` (the `canvas.content` IDL
+attribute, default `"fallback"`). `layoutsubtree` alone no longer lays the
+children out: every card read `offsetWidth` 0, so `CardHost.capture()` returned
+`RETRY` until the field fell back to images, and a direct draw threw
+`DrawElementImage requires the canvas to have the content=drawable attribute`.
+A2 caught it, failing on every run. `CardHost` now sets both attributes (muriel
+`1e99163`). With `content="drawable"` set, a card draws 86,700 / 86,700 opaque
+px and the host fires a real `paint` event. The `drawable` attribute on the
+children is unchanged. P0.1's third error string below is the pre-rename
+wording.
+
 ## 2. Phase 0 table
 
 | id | verdict | evidence |
