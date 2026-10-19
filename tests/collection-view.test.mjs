@@ -258,6 +258,13 @@ test('mount() embeds a collection object and reports readiness; a bad object thr
   } finally { await page.close(); }
 });
 
+// The 3D button opens the floating space; the stacks are the last entry in its menu.
+async function openStacks(page) {
+  await page.locator('#view-3d').click();
+  await page.locator('.float-arrange label:has(input[value=stacks])').click();
+  await page.waitForFunction(() => window.__cwSpatial?.built && document.body.dataset.viewMode === '3d', null, { timeout: 20000 });
+}
+
 test('the 3D view of a collection loads remote covers directly with CORS, without the instance proxy', async () => {
   apiHits.length = 0; remoteHits.length = 0;
   const page = await newPage();
@@ -266,8 +273,7 @@ test('the 3D view of a collection loads remote covers directly with CORS, withou
   try {
     await page.goto(`${origin}/?collection=/data/remote.json`);
     await ready(page);
-    await page.locator('#view-3d').click();
-    await page.waitForFunction(() => document.getElementById('view-3d').getAttribute('aria-pressed') === 'true');
+    await openStacks(page);
     await page.waitForTimeout(1200);
     assert.equal(await page.locator('canvas').count() > 0, true);
     assert.deepEqual(apiHits, [], 'no /api/proxy, /api/view-state or /api/permalinks request');
@@ -426,7 +432,7 @@ test('the 3D view draws sprite-sheet cells into its atlas', async () => {
   try {
     await page.goto(`${origin}/?collection=/data/sprite.json`);
     await ready(page);
-    await page.locator('#view-3d').click();
+    await openStacks(page);
     await page.waitForFunction(() => {
       const v = window.__cwSpatial, a = v?.field?.atlases;
       if (!v?.built || !a) return false;
@@ -560,7 +566,7 @@ test('when a sheet page is missing, the wall, the detail pane and 3D fall back t
     await page.locator('#canvas > .tile[aria-label="Cover 05"]').click();
     await page.waitForFunction(() => { const img = document.querySelector('.detail-content > img'); return img?.src.includes('/data/media/2.svg') && img.complete && img.naturalWidth > 0; }, null, { timeout: 10000 });
     await page.locator('.detail-content .close').click();
-    await page.locator('#view-3d').click();
+    await openStacks(page);
     await page.waitForFunction(() => {
       const v = window.__cwSpatial, a = v?.field?.atlases;
       if (!v?.built || !a) return false;
@@ -607,7 +613,7 @@ test('the wall, the aisle and the floating space count in the collection\'s own 
     assert.ok(labels.includes('2000s · 1 cat'), labels.join(' | '));
     assert.ok(labels.includes('1970s · 10 cats'), labels.join(' | '));
     assert.ok(!labels.some(label => / items?$/.test(label)), labels.join(' | '));
-    await page.locator('#view-float').click();
+    await page.locator('#view-3d').click();
     await page.waitForFunction(() => document.querySelector('.float-scope')?.textContent, null, { timeout: 15000 });
     assert.equal(await page.locator('.float-scope').textContent(), 'All 31 cats');
   } finally { await page.close(); }

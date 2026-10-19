@@ -33,6 +33,7 @@ import { perf } from './instrument.mjs';
 import { collectionSource, loadCollection, collectionViewState, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
 import { AXES, axisDimensions } from './float-space.mjs';
+import { arrangeMenu, MENU, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
@@ -72,6 +73,9 @@ const state = {
   get spatialOn() { return this.mode !== 'flat'; },
   aisle: null, aisleSnapshot: null,
   float: null, floatSnapshot: null,
+  // The 3D button reopens the last 3D presentation: the floating space ('float')
+  // until a reader chooses Stacks ('3d'), as the wall icon returns to the last grouping.
+  last3d: 'float', stacksMenu: null,
   spatialLoading: false,
   flatDirty: false, spatialDirty: false, aisleDirty: true, floatDirty: true,
   detailReturn: null, trayReturn: null,
@@ -91,7 +95,6 @@ const el = {
   view3d: document.getElementById('view-3d'),
   viewAisle: document.getElementById('view-aisle'),
   aisleHost: document.getElementById('aisle-host'),
-  viewFloat: document.getElementById('view-float'),
   floatHost: document.getElementById('float-host'),
   canvas: document.getElementById('canvas'),
   rail: document.getElementById('rail'),
@@ -689,9 +692,11 @@ document.getElementById('scope-clear').addEventListener('click', () => {
  * slower for no reason.
  */
 function activeSpatial() { return state.mode==='aisle'?state.aisle:state.mode==='float'?state.float:state.spatial; }
-/** Sort and the attribute lens arrange or recolour the evidence; the 3D piles and the floating space place it by other rules. */
-const lensless = mode => mode==='3d' || mode==='float';
-async function toggleSpatial(on, kind='3d') {
+/** Both 3D presentations, the floating space and the stacks, belong to the 3D button. */
+const threeD = mode => mode==='3d' || mode==='float';
+/** Sort and the attribute lens arrange or recolour the evidence; the 3D views place it by other rules. */
+const lensless = threeD;
+async function toggleSpatial(on, kind='3d', { arrangement=null }={}) {
   if (state.spatialLoading) return;
   const next=on?kind:'flat';
   if (on && !(kind==='aisle'?state.aisle:kind==='float'?state.float:state.spatial)) {
@@ -704,7 +709,8 @@ async function toggleSpatial(on, kind='3d') {
       }else if(kind==='float'){
         const {FloatView}=await import('./float-view.mjs');
         // The detail pane overlays the stage's right edge; fly-to lands beside it.
-        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0});
+        // Stacks in its menu hands over to the stacks renderer.
+        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0,onStacks:()=>toggleSpatial(true,'3d')});
       }else{
         const {SpatialView,keyOfClip}=await import('./spatial/spatial-view.mjs');
         state.clipKey=keyOfClip;state.spatial=new SpatialView(el.spHost,hooks);
@@ -718,16 +724,18 @@ async function toggleSpatial(on, kind='3d') {
   viewport.resetEdge();viewport.enabled=!on;
   document.getElementById('edge-feedback').hidden=on;
   document.getElementById('pan-behavior').disabled=on;
-  state.mode=next;document.body.dataset.viewMode=next;
+  state.mode=next;document.body.dataset.viewMode=next;if(threeD(next))state.last3d=next;
   endPreview();state.spatial?._endHover?.();state.aisle?.cancelHover();state.float?.cancelHover();
   brush.setEnabled(!lensless(next));
   for(const id of ['sort-key','sort-direction','attribute-lens'])document.getElementById(id).disabled=lensless(next);
   updateSortDirection();syncLensValue();renderContext();
   if(on)setBackgroundRevealed(false);
+  if(next==='3d')stacksMenu().set(STACKS);
+  if(state.stacksMenu){state.stacksMenu.strip.hidden=next!=='3d';state.stacksMenu.sync();}
   el.spHost.hidden=next!=='3d';el.aisleHost.hidden=next!=='aisle';el.floatHost.hidden=next!=='float';
   state.aisle?.setVisible(next==='aisle');state.float?.setVisible(next==='float');
   el.canvas.style.visibility=on?'hidden':'';
-  for(const [button,mode] of [[el.view3d,'3d'],[el.viewAisle,'aisle'],[el.viewFloat,'float']]){button.setAttribute('aria-pressed',String(next===mode));button.classList.toggle('on',next===mode);}
+  for(const [button,on3] of [[el.view3d,threeD(next)],[el.viewAisle,next==='aisle']]){button.setAttribute('aria-pressed',String(on3));button.classList.toggle('on',on3);}
   if(!on){if(state.flatDirty){render();viewport.fit();}updateBackgroundVisibility();}
   syncOverview();
   if(on){
@@ -735,6 +743,8 @@ async function toggleSpatial(on, kind='3d') {
     if(refresh)refreshSpatial();
     if(next==='float'){
       if(state.floatSnapshot){state.float.restoreView(state.floatSnapshot);state.floatSnapshot=null;}
+      // Chosen in the stacks' menu: applied after any saved snapshot, which it overrides.
+      if(arrangement)state.float.setArrangement(arrangement,{animate:false});
       el.floatHost.querySelector('canvas')?.focus({preventScroll:true});
     }else if(next==='aisle'){
       if(state.aisleSnapshot){state.aisle.restoreView(state.aisleSnapshot);state.aisleSnapshot=null;}
@@ -747,6 +757,26 @@ async function toggleSpatial(on, kind='3d') {
 
 /** Facet groupings become 3D piles; no grouping and the similarity arrangements are one field. */
 const piled = key => !!key && key !== 'none' && !isSimilarity(key);
+
+/**
+ * The stacks' copy of the 3D menu, in a strip below them: the stacks renderer
+ * has no toolbar of its own, and without this a reader who chose Stacks could
+ * leave them only for the flat wall. The host ends above the strip, so the
+ * stacks fit above it (SpatialView refits on resize).
+ */
+function stacksMenu() {
+  if (state.stacksMenu) return state.stacksMenu;
+  const strip = document.createElement('div');
+  strip.className = 'sp-arrange'; strip.hidden = true;
+  strip.setAttribute('role', 'group'); strip.setAttribute('aria-label', '3D space');
+  const menu = arrangeMenu(MENU, name => { if (name !== STACKS) void toggleSpatial(true, 'float', { arrangement: name }); menu.set(STACKS); });
+  strip.append(menu.node); el.stage.append(strip);
+  // Set as the strip is shown, before the stacks first fit; the observer
+  // follows later changes (a rotated phone rewraps the menu).
+  const sync = () => el.stage.style.setProperty('--sp-arrange-h', `${strip.offsetHeight}px`);
+  new ResizeObserver(sync).observe(strip);
+  return state.stacksMenu = { strip, set: menu.set, sync };
+}
 
 /*
  * Arrangement icons (after PixPlot's layout icons): grouped wall, similarity
@@ -2317,15 +2347,14 @@ document.getElementById('toggle-rail').addEventListener('click', () => {
   document.getElementById('toggle-rail').setAttribute('aria-expanded', String(!el.rail.classList.contains('hidden')));
 });
 
-el.view3d.addEventListener('click', () => toggleSpatial(state.mode!=='3d'));
+el.view3d.addEventListener('click', () => toggleSpatial(!threeD(state.mode), state.last3d));
 el.viewAisle.addEventListener('click',()=>toggleSpatial(state.mode!=='aisle','aisle'));
-el.viewFloat.addEventListener('click',()=>toggleSpatial(state.mode!=='float','float'));
 window.addEventListener('keydown', (e) => {
   // '3' only when not typing — the search box owns every printable key.
   if (e.key === '3' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement || e.target.isContentEditable)
       && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
-    toggleSpatial(state.mode!=='3d');
+    toggleSpatial(!threeD(state.mode), state.last3d);
   }
 });
 

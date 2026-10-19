@@ -1,5 +1,9 @@
 # The spatial view
 
+> Since 2026-10-18 the **3D** button opens [the floating space](#the-floating-space)
+> in Axes. This renderer draws its last arrangement, **Stacks**, and still
+> answers `?view=3d` links and version-1 saved piles.
+
 The current foundation for **Survey** in the
 [survey / review / dive product model](PRODUCT.md). Search and faceting select
 the working subset for every activity. This renderer reads the same index,
@@ -182,7 +186,7 @@ editors without taking over the source store.
 
 ## The floating space
 
-The ✺ control, or `?view=float&arrange=oklab|oklch|hsl|az|axes`, floats the
+The **3D** button, or `?view=float&arrange=axes|oklab|oklch|hsl|az`, floats the
 whole corpus in 3D. The model is meodai's 32,000 colour names
 ([names.color.pizza](https://names.color.pizza/), MIT): each name sits at its
 colour, and the page switches between colour models. Apple's HotSauce (1996)
@@ -191,9 +195,46 @@ hierarchy the tree already showed. So every position here means something,
 and the arrangement that has no third dimension (A–Z) gets none.
 
 Source: `wall/float-space.mjs` (positions, pure), `wall/float-view.mjs`
-(renderer and navigation), `wall/float.css`. The view is built the way
+(renderer and navigation), `wall/arrange-menu.mjs` (the Arrange by menu it
+shares with the stacks), `wall/float.css`. The view is built the way
 `wall/aisle-view.mjs` is. `spatial-view.mjs` changed by two `export`
 keywords (`sourceFor`, `proxied`).
+
+### The 3D entry
+
+The 3D button used to open the stacks: facet groups as piles on an upright
+plane. Their positions restate group membership, which the flat wall's group
+headings already show. The button now opens the floating space in **Axes**, so
+the first 3D view carries information the wall does not.
+
+- **Default axes.** `resolveAxes` picks them, with no special case: Across
+  takes the collection's time (`captured`, then `year`, then `decade`), Up takes
+  lightness, Depth takes hue. On the demo collection, the Psychodeli example
+  with 297 frames, Across is the capture date. It runs from 2025-11-01 to
+  2026-04-11, and the empty February and March show as a gap. Lightness and
+  hue, which no grouping shows, take the other two axes.
+- **Alternatives rejected on the demo.**
+  - `year` across collapses to two slabs, 2025 and 2026.
+  - `complexity` across gives three planes that restate a facet.
+  - Hue across with capture date in depth reads hue well, but foreshortens
+    the timeline into the receding axis.
+- **The stacks are the last entry** in Arrange by: Axes, OKLab, OKLCH, HSL,
+  A–Z, Stacks. They are drawn by `spatial-view.mjs`, not by moving these
+  tiles, so choosing Stacks hands over to that renderer. A strip along the
+  stage's foot then carries the same menu, with the menu where the floating
+  space's toolbar puts it, and any other entry hands back. The stacks host
+  ends above the strip, and the stacks fit there.
+- **The 3D button and the `3` key** reopen the last 3D presentation: the
+  floating space, until a reader chooses Stacks.
+- **Links keep their meaning.**
+  - `view=3d` still opens the stacks, and saved `mountain`/`piles` state
+    restores as before.
+  - `view=float&arrange=…` opens what it names.
+  - A link that names no arrangement now opens Axes; it used to open OKLab.
+    No link the page writes omits it.
+- **The ✺ button is gone.** On a 390 px phone, where pinch replaces − and +,
+  the header's view strip held six 40 px buttons spanning 260 px of its
+  282 px. It now holds five, spanning 216 px, which frees a slot.
 
 ### What a position means
 
@@ -396,6 +437,12 @@ shares.
   and the phone layout.
 - `tests/collection-view.test.mjs` checks that the float atlas draws
   sprite-sheet cells.
+- The 3D entry test ("the 3D button opens the floating space in Axes…") opens
+  the default axes from the flat wall and checks the menu order. It then
+  checks the hand-over to the stacks and back, and that the stacks fit above
+  their strip. It also checks the button and `3` returning to the last 3D
+  view, an exact link made in the stacks, a live link after handing back, and
+  that `?view=3d&group=year` and a bare `?view=float` open what they name.
 - The Axes tests check positions against independently computed expectations:
   - capture time, linear (the fixture's dates are unevenly spaced, so rank spacing would fail);
   - lightness from Ottosson's table;
@@ -417,8 +464,8 @@ shares.
   80 tiles, frame pixel against the atlas texel it samples), the old shader
   drew the frame at 0.43× the atlas's brightness, a bias of about −40 per
   channel. The fixed one draws it at 1.01×, a bias under 1.
-- `scripts/check-mutations.mjs` has 35 float cases and 2 for the 3D view's
-  shader, all detected. The two float shader cases now mutate the vendored
+- `scripts/check-mutations.mjs` has 35 float cases, 4 for the 3D entry and 2
+  for the 3D view's shader, all detected. The two float shader cases now mutate the vendored
   upstream file, not a patch in the float view.
 - Frame times are in [PERF.md](PERF.md): 120 fps throughout at 297 items, and
   at 1,793 items apart from the fly-to arrival.
@@ -435,10 +482,11 @@ shares.
 - **Screenshots.** A screenshot's dominant colour includes its UI chrome.
 - **Touch** uses OrbitControls' defaults: one finger orbits; two fingers dolly
   and pan.
-- **Header width.** On a collection with similarity icons, ✺ makes the
-  header wrap one button sooner. It already wrapped at 1,440 px on main.
-- **Phone header.** On a phone the view and zoom buttons scroll sideways
-  rather than pushing ↗ onto a fourth row, and ▶ starts partly out of view.
+- **Phone header.** On a touch phone, pinch replaces − and +, and the rest
+  of the row fits a 375 px screen without scrolling.
+- **Stacks hand over, they do not travel.** Choosing Stacks swaps renderers,
+  so items do not move from their Axes places into piles the way they move
+  between the other arrangements.
 - **Axes depth reads least.** From Fit, Depth recedes and its ticks crowd at
   the far end; orbit to read it. This is the cost of keeping Across level and
   long.

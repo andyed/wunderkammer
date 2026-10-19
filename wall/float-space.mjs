@@ -21,6 +21,11 @@ export const RADIUS = 700;
 export const ARRANGEMENTS = Object.freeze(['oklab', 'oklch', 'hsl', 'az', 'axes']);
 export const ARRANGEMENT_LABELS = Object.freeze({ oklab: 'OKLab', oklch: 'OKLCH', hsl: 'HSL', az: 'A–Z', axes: 'Axes' });
 export const isArrangement = value => ARRANGEMENTS.includes(value);
+/** The arrangement the space opens in, from the 3D button or a link that names
+ * none. Axes puts the collection's time, lightness and hue on three axes
+ * (resolveAxes), so the first 3D view shows what the flat wall's groups do not:
+ * every item's colour, along the collection's own timeline. */
+export const DEFAULT_ARRANGEMENT = 'axes';
 
 /** The three Axes slots, in toolbar and URL order. */
 export const AXES = Object.freeze(['across', 'up', 'depth']);

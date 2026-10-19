@@ -21,7 +21,8 @@ import { sourceFor, proxied } from './spatial/spatial-view.mjs';
 import { spriteCovers } from './sprite-covers.mjs';
 import { clipKey } from './context-clusters.mjs';
 import { perf } from './instrument.mjs';
-import { ARRANGEMENTS, ARRANGEMENT_LABELS, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys } from './float-space.mjs';
+import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys } from './float-space.mjs';
+import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
@@ -96,7 +97,7 @@ const atlasBusy = a => a._inflight > 0 || a._farQueue.length > 0 || a._nearQueue
 export class FloatView {
   constructor(host, callbacks = {}) {
     this.host = host; this.callbacks = callbacks; this.visible = true; this.built = false;
-    this.arrangement = 'oklab'; this.fitted = true; this.selection = null; this.count = 0;
+    this.arrangement = DEFAULT_ARRANGEMENT; this.fitted = true; this.selection = null; this.count = 0;
     // Axes: what was asked for (a link, a select) and what the collection
     // resolves it to. The request survives a corpus change; the resolution not.
     this.requestedAxes = {}; this.axes = null; this.dimensions = [];
@@ -114,16 +115,15 @@ export class FloatView {
     this.ring.renderOrder = 10; this.ring.visible = false; this.scene.add(this.ring);
     this.status = element('p', 'float-status'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
     this.overlay = element('div', 'float-labels'); this.overlay.setAttribute('aria-hidden', 'true');
-    this.toolbar = element('div', 'float-toolbar'); this.toolbar.setAttribute('role', 'group'); this.toolbar.setAttribute('aria-label', 'Floating space');
-    this.arrangeGroup = element('fieldset', 'float-arrange');
-    this.arrangeGroup.append(element('legend', '', 'Arrange by'));
-    this.radios = new Map();
-    const group = `float-arrange-${Math.random().toString(36).slice(2, 8)}`;
-    for (const name of ARRANGEMENTS) {
-      const label = element('label'), input = element('input');
-      input.type = 'radio'; input.name = group; input.value = name;
-      label.append(input, element('span', '', ARRANGEMENT_LABELS[name])); this.arrangeGroup.append(label); this.radios.set(name, input);
-    }
+    this.toolbar = element('div', 'float-toolbar'); this.toolbar.setAttribute('role', 'group'); this.toolbar.setAttribute('aria-label', '3D space');
+    // Stacks is offered only when the page can show them (callbacks.onStacks):
+    // a different renderer draws them, so choosing it hands over rather than
+    // moving these items.
+    this.menu = arrangeMenu(callbacks.onStacks ? [...ARRANGEMENTS, STACKS] : ARRANGEMENTS, name => {
+      if (name === STACKS) { this.syncRadios(); this.callbacks.onStacks(); return; }
+      this.setArrangement(name); this.interact();
+    });
+    this.arrangeGroup = this.menu.node; this.arrangeGroup.classList.add('float-arrange'); this.radios = this.menu.radios;
     // Three dimension menus, shown while Axes is the arrangement.
     this.axesGroup = element('div', 'float-axes'); this.axesGroup.setAttribute('role', 'group'); this.axesGroup.setAttribute('aria-label', 'Axes');
     this.axisSelects = new Map();
@@ -143,7 +143,7 @@ export class FloatView {
       this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.canvas = this.renderer.domElement; this.canvas.className = 'float-canvas'; this.canvas.tabIndex = 0;
       this.canvas.setAttribute('role', 'img');
-      this.canvas.setAttribute('aria-label', 'Floating space. Drag or arrow keys to orbit, W A S D to fly, Home to fit. Tab to the item menu to fly to any item.');
+      this.canvas.setAttribute('aria-label', '3D space: every item placed by the arrangement below. Drag or arrow keys to orbit, W A S D to fly, Home to fit. Tab to the item menu to fly to any item.');
       this.host.append(this.canvas);
       this.controls = new OrbitControls(this.camera, this.canvas);
       Object.assign(this.controls, { enableDamping: false, zoomToCursor: true, screenSpacePanning: true, rotateSpeed: .6, zoomSpeed: .8, minDistance: 8 });
@@ -172,7 +172,6 @@ export class FloatView {
       this.host.dataset.graphicsState = 'ready';
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
     this.host.append(this.overlay, this.status, this.toolbar, this.help);
-    for (const input of this.radios.values()) this.listen(input, 'change', () => { if (input.checked) { this.setArrangement(input.value); this.interact(); } });
     for (const [axis, select] of this.axisSelects) this.listen(select, 'change', () => { if (this.chooseAxis(axis, select.value)) this.interact(); });
     this.listen(this.itemSelect, 'change', () => { if (this.itemSelect.value) this.choose(this.itemSelect.value); });
     this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection, { fly: true }); } });

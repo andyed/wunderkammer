@@ -769,15 +769,15 @@ body[data-view-mode=aisle] .review-tip .brush-key { font-size:16px; }
   .main-controls { padding-block:4px; }
   .main-controls .zoomctl, #copy-view, #copy-live-view { order:1; }
   /* The view and zoom buttons share a row with the two link buttons. When they
-   * outgrow it (the floating space's ✺ added one), the group scrolls sideways
-   * instead of pushing ↗ onto a fourth header row. */
+   * outgrow it, the group scrolls sideways instead of pushing ↗ onto a fourth
+   * header row. */
   .main-controls .zoomctl { flex:1 1 0; min-width:200px; overflow-x:auto; scrollbar-width:none; }
   /* Every button in this row is 44 px tall and centred, so the row reads as one
    * level band; only ▥ and ↗ used to be, which made it jagged. Ten 44 px squares
    * overflow a 375 px phone and hid + and ▶ behind the sideways scroll, so pinch,
-   * which zooms in every view, takes over − and + (⊡ Fit stays), and the other
-   * eight are 40 px wide: all of them fit at 375 px. The row was already 44 px
-   * tall, so the header does not grow. */
+   * which zooms in every view, takes over − and + (⊡ Fit stays), and the others
+   * are 40 px wide: all of them fit at 375 px. The row was already 44 px tall,
+   * so the header does not grow. */
   .main-controls .zoomctl { align-items:center; }
   #zoom-out, #zoom-in { display:none; }
   .main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:40px; min-width:40px; min-height:44px; padding-inline:0; }

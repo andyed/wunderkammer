@@ -748,14 +748,41 @@ const cases = [
     test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
   },
   {
-    name: 'phone header: every row button is a 44 px square and the row overflows', file: 'wall/wall.css',
-    from: '.main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:40px; min-width:40px; min-height:44px; padding-inline:0; }', to: '.main-controls .zoomctl .btn, #copy-view, #copy-live-view { min-width:44px; min-height:44px; }',
+    // With ✺ gone, 44 px squares fit at 375 px (measured: 236 px of buttons in a
+    // 259 px strip), so 60 px buttons stand in for a row that outgrows the header.
+    name: 'phone header: the row buttons outgrow the row', file: 'wall/wall.css',
+    from: '.main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:40px; min-width:40px; min-height:44px; padding-inline:0; }', to: '.main-controls .zoomctl .btn, .main-controls #view-aisle, #copy-view, #copy-live-view { width:60px; min-width:60px; min-height:44px; padding-inline:0; }',
     test: 'tests/flat-wall.test.mjs', pattern: 'a 375 px phone shows every header button',
   },
   {
     name: 'phone header: − and + show again beside pinch', file: 'wall/wall.css',
     from: '#zoom-out, #zoom-in { display:none; }', to: '',
     test: 'tests/flat-wall.test.mjs', pattern: 'a 375 px phone shows every header button',
+  },
+  {
+    name: '3D entry: the 3D button opens the stacks again', file: 'wall/wall.mjs',
+    from: "last3d: 'float', stacksMenu: null,", to: "last3d: '3d', stacksMenu: null,",
+    test: 'tests/float-view.test.mjs', pattern: 'the 3D button opens the floating space in Axes',
+  },
+  {
+    name: '3D entry: the floating space opens in OKLab again', file: 'wall/float-space.mjs',
+    from: "export const DEFAULT_ARRANGEMENT = 'axes';", to: "export const DEFAULT_ARRANGEMENT = 'oklab';",
+    test: 'tests/float-view.test.mjs', pattern: 'the 3D button opens the floating space in Axes',
+  },
+  {
+    name: '3D entry: the stacks run under their menu strip', file: 'wall/float.css',
+    from: '#stage > .sp-host { bottom:var(--sp-arrange-h, 0px); }', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'the 3D button opens the floating space in Axes',
+  },
+  {
+    name: '3D entry: the stacks have no way back to the floating space', file: 'wall/wall.mjs',
+    from: 'if (name !== STACKS) void toggleSpatial(true, \'float\', { arrangement: name });', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'the 3D button opens the floating space in Axes',
+  },
+  {
+    name: 'phone header: the colour-only ✺ button returns', file: 'index.html',
+    from: '<button class="btn" id="view-aisle"', to: '<button class="btn" id="view-float" type="button" aria-pressed="false" aria-label="Floating space">✺</button>\n    <button class="btn" id="view-aisle"',
+    test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
   }
 ];
 

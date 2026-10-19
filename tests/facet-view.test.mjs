@@ -334,8 +334,10 @@ test('zero-result recovery follows scope through flat and spatial presentations'
   try {
     await chip(page, 'source', 'A').click(); await membership(page, ['c0', 'c1', 'c4', 'c6']);
     await chip(page, 'genre', 'Ambient').click(); await membership(page, []);
+    // The 3D button opens the floating space; the stacks are the last entry in its menu.
     await page.locator('#view-3d').click();
-    await page.waitForFunction(() => document.querySelector('#view-3d').getAttribute('aria-pressed') === 'true');
+    await page.locator('.float-arrange label:has(input[value=stacks])').click();
+    await page.waitForFunction(() => document.body.dataset.viewMode === '3d' && document.querySelector('#view-3d').getAttribute('aria-pressed') === 'true');
     assert.equal(await page.locator('#sp-host').isVisible(), true);
     assert.equal(await page.locator('#empty').isVisible(), true, 'empty flat scope remains recoverable after switching to spatial');
     const emptySpatial = await persisted(page, spec => spec.presentation.mode === '3d');

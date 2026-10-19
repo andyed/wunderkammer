@@ -10,15 +10,15 @@
 .float-label[hidden] { display:none; }
 .float-toolbar { position:absolute; bottom:34px; left:12px; right:12px; display:flex; flex-wrap:wrap; align-items:end; gap:8px 12px; max-width:920px; margin:auto; padding:10px 12px; border:1px solid #697476; border-radius:8px; background:#050510; font:16px/1.3 system-ui,sans-serif; }
 .float-toolbar label { display:flex; flex-direction:column; gap:4px; min-width:0; color:#f3f3f7; }
-.float-arrange { display:flex; flex-wrap:wrap; gap:0; margin:0; padding:0; border:0; min-width:0; }
-.float-arrange legend { padding:0 0 4px; color:#f3f3f7; font:16px/1.3 system-ui,sans-serif; float:left; width:100%; }
-.float-arrange label { position:relative; display:block; }
-.float-arrange input { position:absolute; inset:0; margin:0; opacity:0; cursor:pointer; }
-.float-arrange span { display:block; box-sizing:border-box; min-width:44px; min-height:44px; padding:11px 12px; border:1px solid #697476; margin-left:-1px; background:#141421; color:#f3f3f7; text-align:center; white-space:nowrap; }
-.float-arrange label:first-of-type span { border-radius:5px 0 0 5px; margin-left:0; }
-.float-arrange label:last-of-type span { border-radius:0 5px 5px 0; }
-.float-arrange input:checked + span { background:#f3f3f7; color:#050510; font-weight:600; }
-.float-arrange input:focus-visible + span { outline:3px solid #aaffaa; outline-offset:2px; position:relative; z-index:1; }
+.arrange-menu { display:flex; flex-wrap:wrap; gap:0; margin:0; padding:0; border:0; min-width:0; }
+.arrange-menu legend { padding:0 0 4px; color:#f3f3f7; font:16px/1.3 system-ui,sans-serif; float:left; width:100%; }
+.arrange-menu label { position:relative; display:block; }
+.arrange-menu input { position:absolute; inset:0; margin:0; opacity:0; cursor:pointer; }
+.arrange-menu span { display:block; box-sizing:border-box; min-width:44px; min-height:44px; padding:11px 12px; border:1px solid #697476; margin-left:-1px; background:#141421; color:#f3f3f7; text-align:center; white-space:nowrap; }
+.arrange-menu label:first-of-type span { border-radius:5px 0 0 5px; margin-left:0; }
+.arrange-menu label:last-of-type span { border-radius:0 5px 5px 0; }
+.arrange-menu input:checked + span { background:#f3f3f7; color:#050510; font-weight:600; }
+.arrange-menu input:focus-visible + span { outline:3px solid #aaffaa; outline-offset:2px; position:relative; z-index:1; }
 .float-axes { display:flex; gap:8px; flex:1 1 330px; min-width:0; }
 .float-axes[hidden] { display:none; }
 .float-axes label { flex:1 1 0; }
@@ -41,12 +41,24 @@
 }
 @media (max-width:600px) {
   .float-toolbar { left:8px; right:8px; bottom:8px; gap:6px 8px; padding:8px; }
-  .float-arrange { flex:1 0 100%; }
-  .float-arrange legend { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-  .float-arrange label { flex:1 1 0; }
+  .arrange-menu { flex:1 0 100%; }
+  .arrange-menu legend { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .arrange-menu label { flex:1 1 0; }
   .float-items { flex:1 1 0; }
   .float-axes { flex:1 0 100%; gap:6px; }
   .float-axes > label > span { font-size:14px; }
   .float-items > span { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   .float-help { display:none; }
+}
+
+/* The stacks' copy of the menu (wall.mjs stacksMenu): a strip along the stage's
+   foot, with the menu where the floating space's toolbar puts it. The stacks
+   host ends above the strip, so stacks fit above it rather than under it. */
+.sp-arrange { position:absolute; left:0; right:0; bottom:0; z-index:5; box-sizing:border-box; padding:10px max(25px, calc((100% - 920px) / 2 + 13px)); border-top:1px solid #697476; background:#050510; color:#f3f3f7; font:16px/1.3 system-ui,sans-serif; }
+.sp-arrange[hidden] { display:none; }
+#stage > .sp-host { bottom:var(--sp-arrange-h, 0px); }
+@media (max-width:600px) {
+  .sp-arrange { padding:8px 17px; }
+  /* Six arrangements share one row on a 390 px phone: 44 px targets, narrower padding. */
+  .arrange-menu span { padding:11px 6px; }
 }
