@@ -251,6 +251,14 @@ function setPresentation(patch,replace=false) {
   renderPresentation();
   persist(replace);
 }
+/** The aisle was walked by sideways scroll, and the scene has already moved.
+ * Travel is written as the Walk aisle slider writes it; the camera is written
+ * only when it is not the fitted pose for that travel. */
+function walked(travel,camera) {
+  if(restoring)return;
+  state.presentation={...state.presentation,travel};state.camera=camera;
+  renderPresentation();persist(true);
+}
 async function copy(text,button) {
   try{await navigator.clipboard.writeText(text);const old=button.textContent;button.textContent='Copied';announce('Copied');setTimeout(()=>{button.textContent=old;},1500);}
   catch {notice('Clipboard access was unavailable. Open Comparison recipe to select and copy the JSON, or use Download recipe.');}
@@ -340,7 +348,7 @@ async function boot() {
   window.comparisonDebug=()=>({observations:resolvedObservations().map(({places,...o})=>o),observationsStale:observationsStale(),spec:structuredClone(state.spec),selection:{...state.selection},presentation:{...state.presentation},focus:state.focus,cohorts:model.cohorts,rows:model.rows,evidenceKeys:evidence.map(clipKey),evidencePacket:evidencePacket(),scene:scene?.getDiagnostics?.()||null});
   try {
     const {ComparisonScene}=await import('./comparison-scene.mjs');
-    scene=new ComparisonScene($('comparison-stage'),{wording,onSelect:select,onInspect:openItem,onPreview:setPreview,onCameraChange:camera=>{if(!restoring){state.camera=camera;persist(true);}}});
+    scene=new ComparisonScene($('comparison-stage'),{wording,onSelect:select,onInspect:openItem,onPreview:setPreview,onCameraChange:camera=>{if(!restoring){state.camera=camera;persist(true);}},onWalk:walked});
     scene.setModel(model);scene.setPresentation({...state.presentation,metric:state.spec.metric});scene.setSelection(state.selection);if(state.camera)scene.setCamera?.(state.camera);
     document.body.dataset.sceneReady='true';
   }catch(error){$('comparison-stage').replaceChildren(el('p',`Depth view unavailable: ${error.message}. The exact comparison and item inspection remain available below.`,'scene-loading'));}

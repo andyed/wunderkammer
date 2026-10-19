@@ -44,6 +44,15 @@ not demonstrated better comprehension or reasoning in a human study.
   Selection/hover dims nonmatching covers without reflow. `travel=0..1` records
   aisle progress; `spread` changes aisle width. Search/group controls initially
   fold to reserve screen space for artwork.
+- Sideways scroll on the album walls is a walk along the aisle, shared with the
+  wall page's aisle (`wall/aisle-wheel.mjs`; details in
+  [AISLE.md](AISLE.md#sideways-scroll)). `travel` is written as the Walk aisle
+  slider writes it, with `replaceState`, so it is kept in the URL and across
+  Back/Forward. A fitted camera takes the pose at the new travel and the URL
+  needs no `camera`. A turned or zoomed camera slides along the aisle at its
+  angle, and that `camera` is written to the URL with the new `travel`.
+  Vertical scroll and pinch stay a zoom, and each gesture keeps the axis it
+  starts on. In the chart views sideways scroll does nothing.
 - Shared 128px artwork atlases, eight concurrent loads, and instanced drawing.
   The exercised collection uses four 2048px atlas pages (64 MiB of texture
   storage), 939 decoded covers and 949 cover positions. Metric/ranking changes
@@ -135,6 +144,7 @@ whole library. Tagged release chronology is not listening/acquisition history.
 | Host state, exact matrix, controls and inspection | `wall/comparison-app.mjs` |
 | WebGL view and camera | `wall/comparison-scene.mjs` |
 | Album racks, atlas, exact picking and highlighting | `wall/album-walls.mjs` |
+| Sideways scroll as a walk along the aisle (shared with the wall page's aisle) | `wall/aisle-wheel.mjs`, `tests/aisle-side-scroll.test.mjs` |
 | Experimental route and existing-theme styling | `wall/compare.html`, `wall/comparison.css` |
 | Isolated correctness and interaction checks | `tests/comparison-{model,state,view}.test.mjs` |
 | Explicit-target rendered proof | `scripts/check-comparison.mjs`, `scripts/check-comparison-walls.mjs` |

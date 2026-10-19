@@ -27,8 +27,8 @@ test('a music library keeps the album wording word for word', () => {
   assert.equal(copy.walls, 'Album walls');
   assert.equal(copy.wallsSummary(297, 2), '297 covers · 2 racks');
   assert.equal(copy.wallLabel('2025', 206), '2025 · 206 albums');
-  assert.equal(copy.wallsHelp, 'Walk the aisle to reach deeper racks. Drag to look around; scroll or pinch to zoom. Select a cover to inspect it. Choose a category in the comparison below to highlight its albums. Arrow keys look around; Home returns to the current aisle position.');
-  assert.equal(copy.wallsAria, 'Album art walls. Drag or use arrow keys to look around, scroll to zoom. Walk aisle moves through the racks. Select a cover to inspect it; the item list below provides keyboard access.');
+  assert.equal(copy.wallsHelp, 'Walk the aisle to reach deeper racks. Drag to look around; scroll or pinch to zoom; scroll sideways to walk. Select a cover to inspect it. Choose a category in the comparison below to highlight its albums. Arrow keys look around; Home returns to the current aisle position.');
+  assert.equal(copy.wallsAria, 'Album art walls. Drag or use arrow keys to look around, scroll to zoom, scroll sideways to walk. Walk aisle moves through the racks. Select a cover to inspect it; the item list below provides keyboard access.');
   assert.equal(copy.inspect, 'Inspect album');
   assert.equal(copy.search, 'Search titles, artists, notes…');
 });

@@ -39,6 +39,7 @@ widening them. Use an exact link for unions.
   sits beside the overlay legend so pinning cannot resize the stage. It
   uses the same `valuesOf`/`matchesFacet` semantics as filtering, including months.
 - Drag/orbit, walk slider, wheel and keyboard navigation move through the aisle.
+  Vertical scroll is a zoom; sideways scroll is a walk (see below).
   The native item selector and Inspect button expose every item without requiring
   precise camera control. Cover picks open the existing detail pane.
 - Each presentation retains its camera. Scope/group/sort changes mark hidden
@@ -47,6 +48,34 @@ widening them. Use an exact link for unions.
   pile state or edit source material.
 - Graphics initialization failure retains native item inspection. Reduced motion
   does not trigger automatic travel. Phone controls wrap within the viewport.
+
+## Sideways scroll
+
+A sideways wheel or trackpad scroll (or Shift+wheel on a mouse) is a walk
+along the aisle. The comparison page's album walls behave the same way, from
+the same module, `wall/aisle-wheel.mjs`.
+
+- **It is the slider's walk.** Travel changes as the Walk aisle slider changes
+  it, so it is kept in the saved view, in fresh links and across Back/Forward.
+  Like the slider, a walk replaces the current history entry rather than
+  adding one.
+- **The camera keeps its angle.** A fitted view takes the entry pose at the new
+  travel. A view that has been turned or zoomed slides along the aisle with its
+  target, so a wall seen at an angle stays at that angle as it passes.
+- **Direction and speed.** Scrolling right (deltaX > 0) walks deeper, the
+  direction the slider increases. 64 px of deltaX walks about one cover column
+  (1 world unit; a column is 1.04). Line- and page-mode wheels are scaled as
+  OrbitControls scales its zoom (×16, ×100).
+- **One axis per gesture.** A gesture is held to the axis it starts on until the
+  wheel rests for 200 ms: a vertical swipe that jitters sideways is never a
+  walk, and a sideways swipe that jitters vertically is never a zoom. Pinch
+  (ctrl+wheel) stays a zoom.
+- **The ends.** At the entrance or the last bay a sideways swipe is still
+  consumed and does nothing, so it never becomes the browser's Back or Forward
+  swipe.
+
+The listener is registered in the capture phase on the canvas, ahead of
+OrbitControls, which reads only a wheel's deltaY.
 
 ## Source map and limits
 
@@ -75,7 +104,12 @@ the inspection path. This verifies implementation, not a human reasoning benefit
 missing-art inspection, sorting, exact restoration, hidden view history,
 canonical month values, phone recovery and existing 3D camera continuity.
 `tests/view-intent.test.mjs` and `tests/permalinks.test.mjs` cover URL precedence,
-validation and fresh-context restoration.
+validation and fresh-context restoration. `tests/aisle-side-scroll.test.mjs`
+covers sideways scroll in both hallways: travel follows deltaX and reaches the
+URL and Back, vertical scroll only zooms, a turned or zoomed view slides at its
+angle, and each gesture keeps one axis. `MUTATION_FILTER='side scroll' node
+scripts/check-mutations.mjs` removes each of those protections in turn and
+shows the tests failing.
 
 For rendered proof against an explicitly verified instance:
 

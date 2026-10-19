@@ -17,8 +17,8 @@ const MUSIC = Object.freeze({
   walls: 'Album walls',
   wallsSummary: (placed, groups) => `${number(placed)} covers · ${number(groups)} racks`,
   wallLabel: (label, count) => `${label} · ${number(count)} ${plural(count, 'album', 'albums')}`,
-  wallsHelp: 'Walk the aisle to reach deeper racks. Drag to look around; scroll or pinch to zoom. Select a cover to inspect it. Choose a category in the comparison below to highlight its albums. Arrow keys look around; Home returns to the current aisle position.',
-  wallsAria: 'Album art walls. Drag or use arrow keys to look around, scroll to zoom. Walk aisle moves through the racks. Select a cover to inspect it; the item list below provides keyboard access.',
+  wallsHelp: 'Walk the aisle to reach deeper racks. Drag to look around; scroll or pinch to zoom; scroll sideways to walk. Select a cover to inspect it. Choose a category in the comparison below to highlight its albums. Arrow keys look around; Home returns to the current aisle position.',
+  wallsAria: 'Album art walls. Drag or use arrow keys to look around, scroll to zoom, scroll sideways to walk. Walk aisle moves through the racks. Select a cover to inspect it; the item list below provides keyboard access.',
   inspect: 'Inspect album',
   search: 'Search titles, artists, notes…',
 });
@@ -30,8 +30,8 @@ function named({ item, items }, custom) {
     walls,
     wallsSummary: (placed, groups) => `${number(placed)} ${plural(placed, item, items)} · ${number(groups)} ${plural(groups, 'group', 'groups')}`,
     wallLabel: (label, count) => `${label} · ${number(count)} ${plural(count, item, items)}`,
-    wallsHelp: `Walk the aisle to reach deeper groups. Drag to look around; scroll or pinch to zoom. Select any ${item} to inspect it. Choose a category in the comparison below to highlight its ${items}. Arrow keys look around; Home returns to the current aisle position.`,
-    wallsAria: `${walls}. Drag or use arrow keys to look around, scroll to zoom. Walk aisle moves through the groups. Select any ${item} to inspect it; the item list below provides keyboard access.`,
+    wallsHelp: `Walk the aisle to reach deeper groups. Drag to look around; scroll or pinch to zoom; scroll sideways to walk. Select any ${item} to inspect it. Choose a category in the comparison below to highlight its ${items}. Arrow keys look around; Home returns to the current aisle position.`,
+    wallsAria: `${walls}. Drag or use arrow keys to look around, scroll to zoom, scroll sideways to walk. Walk aisle moves through the groups. Select any ${item} to inspect it; the item list below provides keyboard access.`,
     inspect: `Inspect ${item}`,
     search: 'Search titles, sources, notes…',
   });
