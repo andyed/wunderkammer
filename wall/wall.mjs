@@ -929,8 +929,6 @@ function renderNow() {
   const motionToken = ++layoutMotionToken;
   if (motionCount) setTimeout(() => { if (motionToken === layoutMotionToken) overview.setDomOnly(null); }, 250);
   syncOverview();
-  // A new layout means new slots: showcase cards restart from the fresh geometry.
-  if (showcase.on) { for (const card of showcase.cards.values()) card.remove(); showcase.cards.clear(); }
   perf.span('render/background', () => renderBackground(result, bounds));
   perf.span('render/brush', () => {brush.refresh();syncLensValue();});
   applyScaleStyles(viewport.scale, { force: true });
@@ -1258,92 +1256,6 @@ function selectGroup(value, add = false) {
   state.active.set(key, next);
   closeDetail(); applyFilters();
 }
-
-/* ------------------------------------------------------------- showcase --- */
-
-/**
- * Showcase: the visible slots become a stage and the rest of the collection
- * flows through them in review order, one slot at a time, crossfading. It is
- * an overlay: tiles, identities, membership, layout and camera are untouched,
- * and switching it off removes every card. Only slots large enough to read
- * (≥ 80px on screen) take part; a card click Dives into what it shows.
- */
-const flowPlane = document.getElementById('flow-plane');
-const showcaseButton = document.getElementById('showcase');
-const showcase = { on: false, timer: 0, cards: new Map(), cursor: 0, interval: Number(new URL(location.href).searchParams.get('flow')) || 1600 };
-function showcaseSlots(stageRect) {
-  const s = viewport.scale, W = stageRect.width, H = stageRect.height;
-  return [...state.positions.entries()].filter(([, p]) => {
-    const x = p.x * s + viewport.x, y = p.y * s + viewport.y, w = p.w * s, h = p.h * s;
-    return h >= 80 && x >= -w * 0.25 && y >= -h * 0.25 && x + w <= W + w * 0.25 && y + h <= H + h * 0.25;
-  });
-}
-function flowCard(key, p) {
-  let card = showcase.cards.get(key);
-  if (!card) {
-    card = document.createElement('div'); card.className = 'flow-card'; card.tabIndex = 0; card.setAttribute('role', 'button');
-    card.append(document.createElement('img'), document.createElement('img'));
-    const cap = document.createElement('div'); cap.className = 'cap'; const t = document.createElement('div'); t.className = 't'; cap.append(t); card.append(cap);
-    for (const img of card.querySelectorAll('img')) { img.alt = ''; img.draggable = false; img.decoding = 'async'; }
-    card.addEventListener('click', () => { if ((viewport.lastDragDistance || 0) > 4) return; if (card._clip) { openDetail(card._clip); for (const c of showcase.cards.values()) c.classList.toggle('selected', c === card); } });
-    card.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && card._clip) { e.preventDefault(); openDetail(card._clip); } });
-    card.addEventListener('pointerenter', e => { if (card._clip) hoverPreview(card._clip, e); });
-    card.addEventListener('pointerleave', hoverEnd);
-    showcase.cards.set(key, card); flowPlane.append(card);
-  }
-  card.style.width = `${p.w}px`; card.style.height = `${p.h}px`; card.style.transform = `translate(${p.x}px, ${p.y}px)`;
-  return card;
-}
-function flowShow(card, clip) {
-  const [a, b] = card.querySelectorAll('img');
-  const next = a.classList.contains('on') ? b : a, prev = next === a ? b : a;
-  const swap = () => { next.classList.add('on'); prev.classList.remove('on'); };
-  const show = src => { next.src = src || ''; if (next.complete && next.naturalWidth) swap(); else next.onload = swap; };
-  const file = clip.cover || clip.media?.[0]?.src;
-  if (spriteCovers.has(clip)) {
-    const token = next.dataset.token = String(Number(next.dataset.token || 0) + 1);
-    void spriteCovers.coverUrl(clip, devicePx(Math.max(card.clientWidth, card.clientHeight) || 480), file).then(url => { if (next.dataset.token === token) show(url); });
-  } else show(file);
-  card._clip = clip; card.setAttribute('aria-label', clip.title || 'clip'); card.querySelector('.cap .t').textContent = clip.title || '(untitled)';
-}
-function showcaseTick() {
-  if (!showcase.on || state.spatialOn || state.selected) return; // paused while a detail is open
-  const r = el.stage.getBoundingClientRect();
-  const slots = showcaseSlots(r);
-  const live = new Set(slots.map(([key]) => key));
-  for (const [key, card] of showcase.cards) if (!live.has(key)) { card.remove(); showcase.cards.delete(key); }
-  for (const [key, p] of slots) if (showcase.cards.has(key)) flowCard(key, p); // keep cards on their slots
-  if (!slots.length || !state.order?.length) return;
-  // Items already on screen (the slots' own tiles and the cards' current items) do not flow in.
-  const onScreen = new Set(slots.map(([, p]) => p.clip.id));
-  for (const card of showcase.cards.values()) if (card._clip) onScreen.add(card._clip.id);
-  const order = state.order;
-  let clip = null;
-  for (let i = 0; i < order.length; i++) { const c = order[(showcase.cursor + i) % order.length]; if (!onScreen.has(c.id)) { clip = c; showcase.cursor = (showcase.cursor + i + 1) % order.length; break; } }
-  if (!clip) return; // everything is already on screen: nothing to flow
-  // Round-robin over the slots: the least recently changed card takes the next item.
-  const [key, p] = slots.reduce((best, entry) => (showcase.cards.get(entry[0])?._at || 0) < (showcase.cards.get(best[0])?._at || 0) ? entry : best, slots[0]);
-  const card = flowCard(key, p); card._at = performance.now();
-  flowShow(card, clip);
-}
-function setShowcase(on) {
-  showcase.on = on;
-  showcaseButton.setAttribute('aria-pressed', String(on)); showcaseButton.classList.toggle('on', on); showcaseButton.textContent = on ? '⏸' : '▶';
-  clearInterval(showcase.timer); showcase.timer = 0;
-  if (on) {
-    flowPlane.hidden = false;
-    // From an overview no slot is readable: zoom the centre up to ~110px tiles first.
-    if (!state.spatialOn && !showcaseSlots(el.stage.getBoundingClientRect()).length && state.positions.size) {
-      const heights = [...state.positions.values()].map(p => p.h).sort((a, b) => a - b);
-      const median = heights[Math.floor(heights.length / 2)] || 240;
-      const target = 110 / median;
-      if (target > viewport.scale) zoomBy(target / viewport.scale);
-    }
-    showcaseTick(); showcase.timer = setInterval(showcaseTick, showcase.interval);
-  }
-  else { for (const card of showcase.cards.values()) card.remove(); showcase.cards.clear(); flowPlane.hidden = true; }
-}
-showcaseButton.addEventListener('click', () => setShowcase(!showcase.on));
 
 /* ----------------------------------------------------------------- tour --- */
 
@@ -2400,7 +2312,6 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '=' || e.key === '+') zoomBy(1.3);
   else if (e.key === '-') zoomBy(1 / 1.3);
   else if (e.key === ']') stepGroup(1);
-  else if (e.key === 'p') setShowcase(!showcase.on);
   else if (e.key === 't') setTour(!tour.on);
   else if (tour.on) setTour(false);
   else if (e.key === '[') stepGroup(-1);

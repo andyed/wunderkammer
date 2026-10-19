@@ -178,7 +178,7 @@ These are acceptance requirements, not claims that these journeys pass today.
 ⟳ (or `t`) flies the camera through the current layout: from Fit into each
 group at a readable scale, a sweep across it, back to Fit, and on to the next,
 looping. Any input takes control back at once, and a new layout ends it. It
-moves only the camera. Combined with Showcase it is a kiosk.
+moves only the camera.
 
 ## Stacks say what is in them
 
@@ -188,16 +188,6 @@ each with its own proportions. A pile that is mostly one thing shows that; a
 mixed pile shows the mix. Labels carry the true count even when a member
 stands in another pile, since a clip in several groups can occupy one place;
 opening a stack shows every member, shared ones included.
-
-## Showcase: the collection flows through the slots
-
-At a zoomed-in view, ▶ (or `p`) turns the visible slots into a stage: cards
-overlay the slots and crossfade through the rest of the collection in review
-order, one slot at a time, never repeating an item already on screen. The wall
-beneath is untouched, so pan and zoom keep working and ⏸ removes every card.
-A card click Dives into the item it shows; the flow pauses while a detail is
-open. This is presentation, not exploration: it shows off a set without
-panning, and it changes nothing about scope, order or place.
 
 ## Review at depth: the row title
 

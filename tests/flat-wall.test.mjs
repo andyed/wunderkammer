@@ -465,7 +465,7 @@ test('group approach preserves scope and explicit filtering or context headings 
 
 /** The phone header's button row: which buttons show, their boxes, and whether the
  * sideways-scrolling group hides any of them (scrollWidth past clientWidth). */
-const PHONE_ROW = ['tour', 'view-3d', 'view-aisle', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view'];
+const PHONE_ROW = ['tour', 'view-3d', 'view-aisle', 'zoom-out', 'zoom-fit', 'zoom-in', 'copy-view', 'copy-live-view'];
 const phoneRow = page => page.evaluate(ids => {
   const shown = ids.map(id => document.getElementById(id)).filter(b => b && b.offsetParent)
     .map(b => { const r = b.getBoundingClientRect(); return { id: b.id, w: r.width, h: r.height, left: r.left, right: r.right, mid: r.top + r.height / 2 }; });
@@ -503,6 +503,8 @@ test('on a phone the wall takes the width, the rail is an overlay that closes af
     assert.ok(stage.y < 130, `header is compact (stage starts at ${stage.y})`);
     // One 3D entry: the floating space's ✺ folded into 3D, which gave the row back a slot.
     assert.equal(await page.locator('#view-float').count(), 0, 'no second 3D button');
+    // ▶ Showcase is parked in TODO.md: it acted only on the flat wall and read as broken elsewhere.
+    assert.equal(await page.locator('#showcase').count(), 0, 'no showcase button');
     // The view, Fit and link buttons share one header row: level 44 px tall
     // targets, not a jagged mix of 32 and 44, and none scrolled out of sight.
     assertPhoneRow(await phoneRow(page));
@@ -540,33 +542,6 @@ test('on a phone the wall takes the width, the rail is an overlay that closes af
     assert.match(await page.locator('.detail-nav .pos').textContent(), /^2 of 8$/);
     await swipe(1); await settled(page);
     assert.equal(await page.locator('#detail h2').textContent(), titles[0], 'swipe right → previous item');
-    assert.deepEqual(errors, []);
-  } finally { await page.close(); }
-});
-
-test('showcase flows the rest of the collection through the visible slots and leaves the wall untouched', async () => {
-  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, reducedMotion: 'reduce' });
-  const errors = []; page.on('pageerror', e => errors.push(e.message));
-  try {
-    await contextFixture(page);
-    await page.goto(origin + '/?flow=120'); await settled(page);
-    for (let i = 0; i < 2; i++) { await page.click('#zoom-in'); await settled(page); }
-    const tilesBefore = await page.$$eval('#canvas > .tile', ts => ts.map(t => t.getAttribute('aria-label') + '@' + t.style.transform));
-    const visibleTiles = await page.$$eval('#canvas > .tile', ts => { const st = document.querySelector('#stage').getBoundingClientRect(); return ts.filter(t => { const r = t.getBoundingClientRect(); return r.height >= 80 && r.left >= st.left - r.width / 4 && r.right <= st.right + r.width / 4 && r.top >= st.top - r.height / 4 && r.bottom <= st.bottom + r.height / 4; }).map(t => t.getAttribute('aria-label')); });
-    assert.ok(visibleTiles.length > 0 && visibleTiles.length < 16, `some slots are on screen and some items are not (${visibleTiles.length})`);
-    await page.click('#showcase'); await page.waitForTimeout(700);
-    const cards = await page.$$eval('.flow-card', cs => cs.map(c => c.getAttribute('aria-label')));
-    assert.ok(cards.length >= 1 && cards.length <= visibleTiles.length, `cards sit only on visible slots (${cards.length} of ${visibleTiles.length})`);
-    for (const label of cards) assert.ok(!visibleTiles.includes(label), `a flowing item is not one already on screen (${label})`);
-    assert.equal(new Set(cards).size, cards.length, 'no item flows into two slots at once');
-    const shown = cards[0];
-    await page.locator('.flow-card').first().click(); await settled(page);
-    assert.equal(await page.locator('#detail h2').textContent(), shown, 'a card click Dives into what it shows');
-    await page.click('#detail .close'); await settled(page);
-    await page.click('#showcase'); await settled(page);
-    assert.equal(await page.locator('.flow-card').count(), 0, 'off removes every card');
-    const tilesAfter = await page.$$eval('#canvas > .tile', ts => ts.map(t => t.getAttribute('aria-label') + '@' + t.style.transform));
-    assert.deepEqual(tilesAfter, tilesBefore, 'the wall itself is untouched');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

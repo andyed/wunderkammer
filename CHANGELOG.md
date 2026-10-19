@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **The ▶ showcase button is gone.** It acted only on the flat wall with no
+  item open: in 3D, the hallway or beside the detail pane it turned to ⏸ and
+  nothing moved. The idea, cards crossfading the rest of the collection
+  through the visible tiles, is parked in [TODO.md](TODO.md) with what it
+  would take to bring back, and the `p` key and `?flow=` interval go with it.
 - **3D opens the floating space in Axes.** The 3D button used to open the
   stacks, facet groups as piles whose positions repeat the flat wall's group
   headings. It now opens Axes with the collection's time across, lightness up
@@ -25,7 +30,7 @@
   nouns too, and the overlay and item list show that one label, its count
   grouped as on the comparison page ("1,234 albums").
 - **A level button row on phones, with every button in view.** On a touch
-  phone the header's view, Fit, showcase and link buttons are all 40×44 on
+  phone the header's view, Fit and link buttons are all 40×44 on
   one centre line; only ▥ and ↗ were 44 px tall before. Pinch zooms in every
   view, so − and + are left off the row there, and every button fits a
   375 px screen without the sideways scroll. Desktop keeps − and +.
