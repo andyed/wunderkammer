@@ -1,4 +1,4 @@
-# wunderkammer
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="wall/brand/lockup-dark.svg"><img alt="wunderkammer" src="wall/brand/lockup-light.svg" width="420"></picture></h1>
 
 [![Cats. Lots of cats.: one cat in the detail view, then racks of cats rush out of a white void and lock into a hallway in Wunderkammer's aisle view](docs/screenshots/cats-reel.webp)](docs/screenshots/cats-reel.mp4)
 

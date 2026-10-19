@@ -49,6 +49,7 @@ html, body {
   z-index: 20;
 }
 
+.brand-mark { flex: 0 0 auto; display: block; width: 15px; height: 19px; }
 .brand {
   font-weight: 700;
   letter-spacing: 0.14em;
