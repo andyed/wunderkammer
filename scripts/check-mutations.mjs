@@ -783,6 +783,11 @@ const cases = [
     name: 'phone header: the colour-only ✺ button returns', file: 'index.html',
     from: '<button class="btn" id="view-aisle"', to: '<button class="btn" id="view-float" type="button" aria-pressed="false" aria-label="Floating space">✺</button>\n    <button class="btn" id="view-aisle"',
     test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
+  },
+  {
+    name: 'phone header: the parked ▶ showcase button returns', file: 'index.html',
+    from: 'aria-label="Zoom in">+</button>', to: 'aria-label="Zoom in">+</button>\n    <button class="btn" id="showcase" type="button" aria-pressed="false" aria-label="Showcase">▶</button>',
+    test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
   }
 ];
 

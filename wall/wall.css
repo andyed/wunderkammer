@@ -386,20 +386,7 @@ html, body {
 .tile.bg .cap { display: none; }
 .bg-plane .block { border-style: dashed; }
 
-/* ---------- showcase ----------
- * An overlay of cards over the visible slots. Each card crossfades through the
- * rest of the collection in review order; the tiles beneath, their identities,
- * the layout and the camera are untouched. Turning it off removes the overlay. */
-.flow-plane { position: absolute; top: 0; left: 0; z-index: 3; }
-.flow-plane[hidden] { display: none; }
-.flow-card { position: absolute; top: 0; left: 0; overflow: hidden; border-radius: 5px; background: var(--panel-2); border: 1px solid rgba(255, 255, 255, 0.09); cursor: pointer; }
-.flow-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.7s ease; }
-.flow-card img.on { opacity: 1; }
-.flow-card .cap { z-index: 2; }
-.flow-card:hover { border-color: rgb(var(--accent-rgb)); }
-.flow-card.selected { border-color: rgb(var(--accent-rgb)); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.35); }
-#showcase.on, #tour.on { background: rgb(var(--accent-rgb)); color: var(--accent-on); border-color: rgb(var(--accent-rgb)); }
-@media (prefers-reduced-motion: reduce) { .flow-card img { transition: none; } }
+#tour.on { background: rgb(var(--accent-rgb)); color: var(--accent-on); border-color: rgb(var(--accent-rgb)); }
 
 /* ---------- group blocks ---------- */
 
