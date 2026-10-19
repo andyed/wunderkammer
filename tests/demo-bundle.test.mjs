@@ -83,3 +83,18 @@ test('the demo bundle leaves the comparison workbench out', async () => {
     assert.ok(!names.includes(workbench), `${workbench} is in the demo`);
   }
 });
+
+test('analytics ship with the demo page, stamped, and nowhere in the engine', async () => {
+  const script = await readFile(path.join(out, 'analytics.js'), 'utf8');
+  assert.ok(!script.includes('__WUNDERKAMMER_DEMO_VERSION__'), 'the build did not stamp a version');
+  assert.match(script, /const APP_VERSION = "[^"]+";/);
+  const page = await readFile(path.join(out, 'index.html'), 'utf8');
+  assert.equal(page.match(/<script type="module" src="analytics\.js"><\/script>/g)?.length, 1);
+  // Ahead of the wall, so it reads the URL before the wall writes its view into the hash.
+  assert.ok(page.indexOf('src="analytics.js"') < page.indexOf('src="wall/wall.mjs"'), 'analytics.js loads after the wall');
+  // A page that embeds wunderkammer from the package or a CDN must report to nobody.
+  const engine = (await files(path.join(out, 'wall'))).filter(file => /\.(m?js|html)$/.test(file));
+  for (const file of [...engine, path.join(root, 'index.html')]) {
+    assert.ok(!/posthog|phc_/i.test(await readFile(file, 'utf8')), `${path.relative(out, file)} carries analytics`);
+  }
+});

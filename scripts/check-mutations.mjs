@@ -9,6 +9,22 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cases = [
   {
+    name: 'demo analytics sends the search text', file: 'scripts/demo-analytics.js',
+    from: "['searched', { query_length: next.query.length, results }]",
+    to: "['searched', { query_length: next.query.length, query: next.query, results }]",
+    test: 'tests/demo-analytics.test.mjs', pattern: 'search events send the query length, never its text',
+  },
+  {
+    name: 'demo analytics sends a custom collection\'s item keys', file: 'scripts/demo-analytics.js',
+    from: "{ item: bundled ? next.focus : null, results }", to: "{ item: next.focus, results }",
+    test: 'tests/demo-analytics.test.mjs', pattern: 'a custom collection\'s item keys and attribute names never leave the page',
+  },
+  {
+    name: 'demo analytics reports from any host', file: 'scripts/demo-analytics.js',
+    from: "if (env !== 'production') return off('not the demo host');", to: '',
+    test: 'tests/demo-analytics.test.mjs', pattern: 'the gate reports only from the demo host',
+  },
+  {
     name: 'facet availability incorrectly keeps its own restriction', file: 'wall/facet-model.mjs',
     from: 'failed.length === 0 || failed.length === 1 && failed[0] === key',
     to: 'failed.length === 0',
