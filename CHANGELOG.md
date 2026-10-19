@@ -64,6 +64,14 @@
   one centre line; only ▥ and ↗ were 44 px tall before. Pinch zooms in every
   view, so − and + are left off the row there, and every button fits a
   375 px screen without the sideways scroll. Desktop keeps − and +.
+- **A reused demo build keeps its sprite-sheet pages.** `scripts/build-demo.mjs
+  --reuse-corpus` copied the published `media/` but not `sheets/`, the pages
+  the covers come from, and still reported success; a sync with `--delete`
+  would have removed them from the live demo. It now copies `sheets/` too, and
+  the build fails, writing no `collection.json`, when the collection names a
+  file on the demo's site (`--site`) that the output lacks, or names none.
+  `collectionImages()` in `wall/collection.mjs` lists the files it checks,
+  and `scripts/validate-collection.mjs` now reads the same list.
 
 ## 0.2.0 — 2026-10-18
 

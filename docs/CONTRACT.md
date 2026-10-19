@@ -58,7 +58,10 @@ are refused with the list of supported ones, and every problem is reported
 with its path in one error, up to 25. Server-only keys (`vault`, `adapters`,
 `generated`) are refused by name. `toCollection()` converts a server payload
 and reports each field it leaves out, including a server's `sheetSlots`, which
-index its private `/media/sheets` pages.
+index its private `/media/sheets` pages. `collectionImages()` lists every image
+source a document names (covers, variants, media and sheet pages) with its
+path; `scripts/validate-collection.mjs` and `scripts/build-demo.mjs` check that
+files exist through it.
 
 - **Required:** `format`, `version`, `corpus.id` and `clips` (1 to 50,000).
   50,000 is the validator's limit, not a size the pages handle well: the

@@ -322,6 +322,26 @@ export function validateCollection(input, { baseUrl = null } = {}) {
   return { collection: out, warnings };
 }
 
+/**
+ * Every image source a collection names, as [path, src] pairs: each clip's
+ * cover, detailCover, coverVariants and media, then the sheet pages. A check
+ * that a document's files exist walks this list, so a new image field is
+ * added here once rather than in each checker.
+ */
+export function collectionImages(collection) {
+  const found = [];
+  const add = (where, src) => { if (typeof src === 'string') found.push([where, src]); };
+  for (const [i, clip] of (collection.clips || []).entries()) {
+    const at = `clips[${i}]`;
+    add(`${at}.cover`, clip?.cover);
+    add(`${at}.detailCover`, clip?.detailCover);
+    for (const [j, v] of (clip?.coverVariants || []).entries()) add(`${at}.coverVariants[${j}].src`, v?.src);
+    for (const [j, m] of (clip?.media || []).entries()) add(`${at}.media[${j}].src`, m?.src);
+  }
+  for (const [i, sheet] of (collection.sheets || []).entries()) add(`sheets[${i}].src`, sheet?.src);
+  return found;
+}
+
 function sameCounts(a, b) {
   if (!plain(a)) return false;
   const norm = f => JSON.stringify(Object.keys(f).sort().map(k => [k, Object.entries(f[k] || {}).sort()]));
