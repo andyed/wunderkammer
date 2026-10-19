@@ -195,6 +195,17 @@ collection. The trade-offs, limits and measured numbers are in
 [docs/SPATIAL.md](docs/SPATIAL.md#why-a-hybrid-renderer) and
 [docs/PERF.md](docs/PERF.md).
 
+**How big a collection.** Wunderkammer is at its best under about 2,000
+items. There, filtering and regrouping the flat wall take under 50 ms and
+zooming out about a quarter of a second, and the floating space's median
+frame at 1,793 items is 8.3 ms (120 fps). The 3D stacks and the floating
+space draw from a far atlas of 4,096 tiles, so past 4,096 items the rest get
+no tile. The flat wall still pans smoothly at 10,000, but zooming out takes
+about a second and a filter about a fifth of one. Above about 10,000, split
+the collection into several documents. The validator accepts up to 50,000
+items; that is a format limit, not a recommendation. The measurements are in
+[docs/PERF.md](docs/PERF.md#scale-sweep-synthetic-corpora-from-the-psychodeli-index-headless).
+
 ## Design
 
 - [Philosophy](docs/PHILOSOPHY.md): useful motion, trustworthy context.

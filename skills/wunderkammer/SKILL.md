@@ -1,6 +1,6 @@
 ---
 name: wunderkammer
-description: Show a person a visual collection (dozens to tens of thousands of images with attributes) as a wall they can pan, filter, group and walk through, make claims about it that cite the exact items, and read back what they selected. Use when a set of images is too large to paste and the person needs to browse, filter or compare it; when a claim about a collection should be checkable; or when you need the exact items a person picked. You write one JSON collection document and validate it before handing over a link. If the muriel skill is installed, start from muriel's collections reference instead; it routes here for the engine's details.
+description: Show a person a visual collection (dozens to a few thousand images with attributes) as a wall they can pan, filter, group and walk through, make claims about it that cite the exact items, and read back what they selected. Use when a set of images is too large to paste and the person needs to browse, filter or compare it; when a claim about a collection should be checkable; or when you need the exact items a person picked. You write one JSON collection document and validate it before handing over a link. If the muriel skill is installed, start from muriel's collections reference instead; it routes here for the engine's details.
 ---
 
 # Wunderkammer
@@ -20,9 +20,12 @@ steps and traps.
 
 ## When to use it
 
-- **Use it** for roughly 30 to 50,000 images that carry attributes worth
+- **Use it** for roughly 30 to 2,000 images that carry attributes worth
   filtering on (date, style, category, colour), for a comparison between 2–6
   groups, or for a claim the person should be able to check against the items.
+  It is at its best in that range. The 3D stacks and the floating space take
+  up to 4,096 items and the flat wall about 10,000; split anything larger into
+  several collections.
 - **Skip it** for a handful of images (show them inline), for data without
   images (a table or chart), or for editing items: the wall never edits.
 

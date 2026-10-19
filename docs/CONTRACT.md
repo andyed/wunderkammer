@@ -61,7 +61,10 @@ and reports each field it leaves out, including a server's `sheetSlots`, which
 index its private `/media/sheets` pages.
 
 - **Required:** `format`, `version`, `corpus.id` and `clips` (1 to 50,000).
-  Each clip needs a non-empty `id`.
+  50,000 is the validator's limit, not a size the pages handle well: the
+  README's size guidance puts the best range under about 2,000 items, the 3D
+  stacks and the floating space at most 4,096, and the flat wall to about
+  10,000. Each clip needs a non-empty `id`.
 - **Identity:** `url`, falling back to `id`, as `clipKey()` defines it.
   Repeated identities are an error. `url` is an http(s) URL or an opaque
   `urn:`.
