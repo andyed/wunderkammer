@@ -8,6 +8,10 @@
   and across Back/Forward. A view turned toward a wall keeps its angle as it
   passes. Vertical scroll is still a zoom, and each gesture keeps the axis it
   starts on. [AISLE.md](docs/AISLE.md#sideways-scroll).
+- **The aisle's rack labels use the collection's nouns.** `album-walls.mjs`
+  had kept "items" in the label it builds for each rack; it now reads the
+  nouns too, and the overlay and item list show that one label, its count
+  grouped as on the comparison page ("1,234 albums").
 
 ## 0.2.0 — 2026-10-18
 
@@ -56,10 +60,7 @@ version 1. A 0.1.0 wall refuses a document that sets it.
   (`ui.nouns`, "albums" for a music library, otherwise "items"), singular for
   one: "31 of 31 cats", "2000s · 1 cat". The wall's count used to say "clips"
   for every collection. One rule, in `wall/nouns.mjs`, serves these and the
-  comparison page. The aisle's rack labels, which `album-walls.mjs` builds,
-  had kept "items"; they now read the nouns too, and the overlay and item
-  list show that one label, its count grouped as on the comparison page
-  ("1,234 albums").
+  comparison page.
 - **The comparison page's wording follows the collection.** The "Local
   spike" badge is gone. The walls say "Walls", "items" and "groups" unless
   the collection names its items with the new `ui.nouns` field. A music
