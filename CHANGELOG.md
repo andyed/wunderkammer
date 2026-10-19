@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- **A mark and wordmark.** One wall of the aisle, a rack of tiles with one
-  lit, beside the lowercase word in Geist. The wall page shows the rack before
+- **A mark and wordmark.** One wall of the aisle, a rack of tiles each in its
+  own hue, dimmed but for one gold tile, beside the lowercase word in Geist. The wall page shows the rack before
   the collection's title, the comparison page's header shows the full
   wordmark, both pages have a favicon, and the README leads with it. Outlined
   SVGs in `wall/brand/`, rebuilt by `scripts/build-brand.py`.

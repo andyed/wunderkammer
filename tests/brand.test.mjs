@@ -17,12 +17,10 @@ const lum = hex => {
 };
 const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
 const fills = (svg, tag) => [...svg.matchAll(new RegExp(`<${tag}\\b[^>]*\\bfill="(#[0-9a-f]{6})"`, 'gi'))].map(m => m[1].toLowerCase());
-/** The rack's tiles: every fill but one is the dim colour, and that one is lit. */
+/** The rack's tiles: the one marked class="lit", and the dimmed rest, each its own hue. */
 function tiles(svg) {
-  const all = fills(svg, 'polygon'), counts = new Map();
-  for (const fill of all) counts.set(fill, (counts.get(fill) || 0) + 1);
-  const [dim] = [...counts].sort((a, b) => b[1] - a[1])[0];
-  return { count: all.length, dim, lit: all.filter(fill => fill !== dim) };
+  const all = [...svg.matchAll(/<polygon\b([^>]*)>/g)].map(m => ({ lit: /\bclass="lit"/.test(m[1]), fill: m[1].match(/\bfill="(#[0-9a-f]{6})"/i)?.[1].toLowerCase() }));
+  return { count: all.length, lit: all.filter(t => t.lit).map(t => t.fill), dim: all.filter(t => !t.lit).map(t => t.fill) };
 }
 
 test('brand files are outlined, self-contained and keep one lit tile at legible contrast', async () => {
@@ -39,11 +37,14 @@ test('brand files are outlined, self-contained and keep one lit tile at legible 
     assert.equal(rack.lit.length, 1, `${name}: exactly one lit tile`);
     const theme = name.includes('light') ? 'light' : 'dark';
     const grounds = name === 'favicon.svg' ? fills(svg, 'rect') : GROUND[theme];
+    const [lit] = rack.lit;
     for (const ground of grounds) {
-      assert.ok(ratio(rack.lit[0], ground) >= 3, `${name}: lit tile ${rack.lit[0]} on ${ground}`);
-      // Dark grounds keep dim tiles visible; on white they stay pale so the lit tile leads.
-      if (theme === 'dark') assert.ok(ratio(rack.dim, ground) >= 3, `${name}: dim tiles ${rack.dim} on ${ground}`);
+      assert.ok(ratio(lit, ground) >= 3, `${name}: lit tile ${lit} on ${ground}`);
+      // Dark grounds keep every dim tile visible; on white they stay pale so the lit tile leads.
+      if (theme === 'dark') for (const dim of rack.dim) assert.ok(ratio(dim, ground) >= 3, `${name}: dim tile ${dim} on ${ground}`);
     }
+    // The lit tile leads every dimmed one, whatever their hues.
+    for (const dim of rack.dim) assert.ok(ratio(lit, dim) >= 3, `${name}: lit tile ${lit} against dim tile ${dim}`);
     if (name.startsWith('lockup')) {
       const [word] = fills(svg, 'path');
       for (const ground of GROUND[theme]) assert.ok(ratio(word, ground) >= 8, `${name}: word ${word} on ${ground} is readable text`);

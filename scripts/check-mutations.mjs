@@ -754,12 +754,17 @@ const cases = [
   },
   {
     name: 'brand: a second tile is lit', file: 'wall/brand/mark.svg',
-    from: 'fill="#5c5c80"', to: 'fill="#aaffaa"',
+    from: '<polygon fill=', to: '<polygon class="lit" fill=',
     test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
   },
   {
-    name: 'brand: the dim tiles fade into the dark ground', file: 'wall/brand/mark.svg',
-    change: source => source.replaceAll('#5c5c80', '#3d3d55'),
+    name: 'brand: a dim tile fades into the dark ground', file: 'wall/brand/mark.svg',
+    change: source => source.replace(/<polygon fill="#[0-9a-f]{6}"/, '<polygon fill="#262636"'),
+    test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
+  },
+  {
+    name: 'brand: the lit tile stops leading the dim ones', file: 'wall/brand/mark.svg',
+    change: source => source.replace(/class="lit" fill="#[0-9a-f]{6}"/, 'class="lit" fill="#8a8aa0"'),
     test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
   },
   {
