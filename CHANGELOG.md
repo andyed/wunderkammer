@@ -72,6 +72,13 @@
   file on the demo's site (`--site`) that the output lacks, or names none.
   `collectionImages()` in `wall/collection.mjs` lists the files it checks,
   and `scripts/validate-collection.mjs` now reads the same list.
+- **A facet value that slides under a still pointer no longer replaces the
+  pinned lens.** Typing in a facet's search box re-renders its values, and
+  Chrome sends `pointerenter` to whichever one lands under a parked mouse.
+  The brush took that as a hover and showed the new value until the pointer
+  moved away. Previews from the pointer now start on its first move or press
+  inside a value. The facet-view test that checks this read the lens before
+  Chrome's hover update and failed about 1 run in 30.
 
 ## 0.2.0 — 2026-10-18
 

@@ -402,6 +402,13 @@ test('changing a facet-local query removes stale value preview and restores the 
     assert.equal(await search.evaluate(el => el === document.activeElement), true);
     await page.waitForTimeout(350);
     assert.deepEqual(await geometry(page), before); assert.equal(page.url(), url);
+    // The parked pointer now sits over a re-rendered Core chip. Chrome sends
+    // that chip pointerenter after layout; it must not replace the pin.
+    assert.equal(await chip(page, 'artist', 'Core 0').evaluate(el => el.matches(':hover')), true, 'a new chip sits under the parked pointer');
+    assert.equal(await page.locator('#canvas').getAttribute('data-brush-key'), 'genre', 'the pin survives a chip sliding under a parked pointer');
+    await chip(page, 'artist', 'Core 0').hover();
+    assert.equal(await page.locator('#canvas').getAttribute('data-brush-key'), 'artist', 'moving the pointer previews the chip under it');
+    assert.equal(await page.locator('#canvas').getAttribute('data-brush-mode'), 'value');
   } finally { await close(page); }
 });
 

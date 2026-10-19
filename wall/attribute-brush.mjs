@@ -266,13 +266,15 @@ export function createAttributeBrush({
 
   const updatePressed = (button, key) => button.setAttribute('aria-pressed', String(state.pinned === cleanKey(key)));
 
+  const unlisten = item => {
+    for (const [type, handler] of Object.entries(item.handlers)) item.binding.button.removeEventListener(type, handler);
+  };
+
   const pruneBindings = () => {
     for (let index = bindings.length - 1; index >= 0; index -= 1) {
       const item = bindings[index];
       if (item.binding.button.isConnected !== false) continue;
-      const { button } = item.binding;
-      button.removeEventListener('pointerenter', item.handlers.enter); button.removeEventListener('pointerleave', item.handlers.leave);
-      button.removeEventListener('focus', item.handlers.focus); button.removeEventListener('blur', item.handlers.blur); button.removeEventListener('click', item.handlers.click);
+      unlisten(item);
       bindings.splice(index, 1);
     }
   };
@@ -280,31 +282,48 @@ export function createAttributeBrush({
   const bind = (button, key, value, isHeading) => {
     if (!button || typeof button.addEventListener !== 'function') return () => {};
     if (bindings.some(item => item.binding.button === button && item.binding.key === cleanKey(key) && item.binding.isHeading === isHeading)) return () => {};
-    const binding = { button, key: cleanKey(key), value, isHeading, pointerOwned: false, focusOwned: false };
-    const enter = event => {
+    const binding = { button, key: cleanKey(key), value, isHeading, pointerOwned: false, awaitingMove: false, focusOwned: false };
+    const previewSelf = () => {
+      if (isHeading) preview(binding.key);
+      else preview(binding.key, binding.value);
+    };
+    // The pointer owns a preview only once it is inside and has moved there.
+    const previewing = () => binding.pointerOwned && !binding.awaitingMove;
+    const enter = () => {
       // Pointerenter is the ownership marker. A later focus event caused by
       // click must not make a mouse preview sticky; keyboard focus has no
       // pointerenter and therefore remains focus-owned.
       binding.pointerOwned = true;
-      if (isHeading) preview(binding.key);
-      else preview(binding.key, binding.value);
+      // Chrome also sends pointerenter when a re-render slides a new control
+      // under a parked pointer (a facet search, a "Show more"). That is not
+      // intent: the preview waits for the pointer itself to move or press.
+      // A real entry is followed by pointermove in the same dispatch.
+      binding.awaitingMove = true;
+    };
+    const intent = () => {
+      if (!binding.awaitingMove) return;
+      binding.awaitingMove = false;
+      previewSelf();
     };
     const leave = () => {
+      const owned = previewing();
       binding.pointerOwned = false;
-      if (!binding.focusOwned) restorePinned();
+      binding.awaitingMove = false;
+      if (owned && !binding.focusOwned) restorePinned();
     };
     const focus = () => {
       // A pointer click focuses a button in most browsers. Keep that focus from
-      // turning an ordinary mouse hover into a sticky preview.
-      if (!binding.pointerOwned) {
+      // turning an ordinary mouse hover into a sticky preview. Pointerdown ends
+      // awaitingMove before a click's focus, so only keyboard focus under a
+      // parked pointer gets past it.
+      if (!previewing()) {
         binding.focusOwned = true;
-        if (isHeading) preview(binding.key);
-        else preview(binding.key, binding.value);
+        previewSelf();
       }
     };
     const blur = () => {
       binding.focusOwned = false;
-      if (!binding.pointerOwned) restorePinned();
+      if (!previewing()) restorePinned();
     };
     const click = event => {
       if (isHeading) {
@@ -315,22 +334,19 @@ export function createAttributeBrush({
         updateAllPressed();
       }
     };
-    button.addEventListener('pointerenter', enter);
-    button.addEventListener('pointerleave', leave);
-    button.addEventListener('focus', focus);
-    button.addEventListener('blur', blur);
-    button.addEventListener('click', click);
+    const handlers = { pointerenter: enter, pointermove: intent, pointerdown: intent, pointerleave: leave, focus, blur, click };
+    for (const [type, handler] of Object.entries(handlers)) button.addEventListener(type, handler);
     if (isHeading) {
       button.setAttribute('aria-pressed', String(state.pinned === binding.key));
       button.classList.add('facet-heading');
     } else button.classList.add('brush-value');
-    bindings.push({ binding, handlers: { enter, leave, focus, blur, click } });
+    const item = { binding, handlers };
+    bindings.push(item);
     return () => {
-      button.removeEventListener('pointerenter', enter); button.removeEventListener('pointerleave', leave);
-      button.removeEventListener('focus', focus); button.removeEventListener('blur', blur); button.removeEventListener('click', click);
-      const index = bindings.findIndex(item => item.binding === binding);
+      unlisten(item);
+      const index = bindings.indexOf(item);
       if (index !== -1) bindings.splice(index, 1);
-      if (binding.pointerOwned || binding.focusOwned) restorePinned();
+      if (previewing() || binding.focusOwned) restorePinned();
     };
   };
 
@@ -371,11 +387,7 @@ export function createAttributeBrush({
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      for (const item of bindings) {
-        const { button } = item.binding;
-        button.removeEventListener('pointerenter', item.handlers.enter); button.removeEventListener('pointerleave', item.handlers.leave);
-        button.removeEventListener('focus', item.handlers.focus); button.removeEventListener('blur', item.handlers.blur); button.removeEventListener('click', item.handlers.click);
-      }
+      for (const item of bindings) unlisten(item);
       window.removeEventListener('keydown', keydown, true); window.removeEventListener('blur', windowBlur);
       delete canvas.dataset.brushKey;
       delete canvas.dataset.brushMode;
