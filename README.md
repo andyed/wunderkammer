@@ -1,5 +1,11 @@
 # wunderkammer
 
+[![Cats. Lots of cats.: one cat in the detail view, then racks of cats rush out of a white void and lock into a hallway in Wunderkammer's aisle view](docs/screenshots/cats-reel.webp)](docs/screenshots/cats-reel.mp4)
+
+**Cats. Lots of cats.** 489 cats in one collection document, shown in the wall,
+the hallway, a facet, the colour space and a comparison. The cats were generated
+with Adobe Firefly. [Watch the full reel (28 s, MP4)](docs/screenshots/cats-reel.mp4).
+
 A collection explorer for people and language models. A model writes a
 collection of images as one JSON document. A person pans, zooms, filters by
 facets, groups, compares groups side by side, and opens any item. The model can
