@@ -36,7 +36,13 @@ test('aisle exact picking and keyboard item inspection share the existing detail
  const s=await debug(p),hit=s.scene.pickTargets[0],r=await p.locator('.aisle-canvas').boundingBox();
  await p.mouse.click(r.x+(hit.x+1)*r.width/2,r.y+(1-hit.y)*r.height/2);await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,hit.key);
  await p.keyboard.press('Escape');await p.waitForSelector('#detail.open',{state:'hidden'});
- await p.selectOption('.aisle-items select','urn:album:79');await p.locator('.aisle-toolbar button').focus();await p.keyboard.press('Enter');await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,'urn:album:79');
+ // No item dropdown: the scene is the keyboard path. ] steps to the next item in aisle order, a live
+ // readout names it, and Enter opens it.
+ assert.equal(await p.getByText(/Choose an item/).count(),0,'no item dropdown');assert.equal(await p.getByRole('button',{name:'Inspect',exact:true}).count(),0,'no Inspect button');
+ await p.locator('.aisle-canvas').focus();await p.keyboard.press(']');const stepped=(await debug(p)).scene.selection;assert.ok(stepped&&stepped!==hit.key,'] steps to another item');
+ const readout=p.locator('.aisle-readout');assert.equal(await readout.getAttribute('aria-live'),'polite');assert.ok((await readout.boundingBox()).width<=1,'the readout is a live region nobody sees');
+ assert.match(await readout.textContent(),/ · \d+ of \d+ · Enter opens$/);
+ await p.keyboard.press('Enter');await p.waitForSelector('#detail.open');assert.equal((await debug(p)).view.ui.focus,stepped,'Enter opens the stepped-to item');
  }finally{await p.close();}});
 
 test('aisle sort, travel, camera and pin survive fresh exact links and flat round trips',async()=>{const p=await open('?view=aisle&group=decade&highlight.genre=Jazz&rail=0');let fresh;try{
@@ -65,14 +71,14 @@ test('captured value pins use canonical months and leave membership unchanged',a
  }finally{await p.close();}});
 
 test('restoring flat history retains a hidden aisle snapshot until its scope is installed',async()=>{const p=await open();try{
- await p.selectOption('.aisle-items select','urn:album:10');await p.locator('#view-aisle').click();await settled(p);
+ await p.locator('.aisle-canvas').focus();await p.keyboard.press(']');const chosen=(await debug(p)).scene.selection;assert.ok(chosen);await p.locator('#view-aisle').click();await settled(p);
  const savedURL=p.url(),saved=(await debug(p)).view.aisle;
  await p.fill('#search','Album 70');await p.waitForFunction(()=>window.wunderkammerAisleDebug().scopeKeys.length===1);await p.locator('#view-aisle').click();
  assert.equal((await debug(p)).scene.itemCount,1);
  await p.evaluate(url=>{history.pushState({},'',url);dispatchEvent(new PopStateEvent('popstate'));},savedURL);
  await p.waitForFunction(()=>window.wunderkammerAisleDebug().mode==='flat'&&!document.body.dataset.restoring);
  assert.deepEqual((await debug(p)).view.aisle,saved);
- await p.locator('#view-aisle').click();const restored=await debug(p);assert.equal(restored.scene.itemCount,80);assert.equal(restored.view.aisle.selection,'urn:album:10');
+ await p.locator('#view-aisle').click();const restored=await debug(p);assert.equal(restored.scene.itemCount,80);assert.equal(restored.view.aisle.selection,chosen);
  }finally{await p.close();}});
 
 test('live grouped 3D intent retains piles and clean view switches retain the camera',async()=>{const p=await open('?view=3d&group=decade&rail=0');try{
@@ -89,3 +95,10 @@ test('an exact saved mountain view is authoritative even with a facet grouping',
   return location.origin+'/?view=3d&group=decade#v=1&s='+encodeView(view);
  });fresh=await open(url);assert.equal((await debug(fresh)).view.spatial.mode,'mountain');
  }finally{await fresh?.close();await p.close();}});
+
+test('without 3D graphics the aisle offers the flat wall',async()=>{const p=await open();try{
+ await p.evaluate(()=>document.querySelector('.aisle-canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext());
+ const status=p.locator('.aisle-status');await status.locator('.view-fallback').waitFor();
+ assert.match(await status.textContent(),/^3D graphics are unavailable here\. Show the flat wall$/);
+ await status.locator('.view-fallback').click();await p.waitForFunction(()=>document.body.dataset.viewMode==='flat');
+ }finally{await p.close();}});

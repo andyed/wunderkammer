@@ -7,6 +7,7 @@ import { groupBy } from './layout.mjs';
 import { clipKey, matchesFacet } from './context-clusters.mjs';
 import { sortClips, attributeMark } from './attributes.mjs';
 import { NEUTRAL_NOUNS, wallLabel } from './nouns.mjs';
+import { ItemReadout } from './item-readout.mjs';
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
@@ -27,16 +28,17 @@ export class AisleView {
     const travelLabel = element('label', 'aisle-travel', 'Walk aisle');
     this.slider = element('input'); this.slider.type = 'range'; this.slider.min = '0'; this.slider.max = '1'; this.slider.step = '.001'; this.slider.value = '0';
     this.slider.setAttribute('aria-label', 'Walk aisle'); travelLabel.append(this.slider);
-    const selectLabel = element('label', 'aisle-items', 'Item');
-    this.itemSelect = element('select'); this.itemSelect.setAttribute('aria-label', 'Choose an item in this scope'); selectLabel.append(this.itemSelect);
-    this.inspectButton = element('button', '', 'Inspect'); this.inspectButton.type = 'button'; this.inspectButton.disabled = true;
-    this.toolbar.append(travelLabel, selectLabel, this.inspectButton);
-    this.help = element('p', 'aisle-help', 'Drag to look · Scroll to zoom, sideways to walk · Arrows turn · Home: entrance');
+    // The keyboard path to items is the scene itself ([ ] step, Enter opens);
+    // the readout is a live region that names the item for a screen reader.
+    this.readout = new ItemReadout('aisle-readout');
+    this.toolbar.append(travelLabel, this.readout.node);
+    this.fallback = element('button', 'view-fallback', 'Show the flat wall'); this.fallback.type = 'button';
+    this.help = element('p', 'aisle-help', 'Drag to look · Scroll to zoom, sideways to walk · Arrows turn · [ ] step items, Enter opens · Home: entrance');
     try {
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.canvas = this.renderer.domElement; this.canvas.className = 'aisle-canvas'; this.canvas.tabIndex = 0;
-      this.canvas.setAttribute('role', 'img'); this.canvas.setAttribute('aria-label', 'Artwork aisle. Drag or use arrow keys to turn, plus and minus to zoom, scroll sideways to walk, Home for entrance. Tab to choose and inspect any item.');
+      this.canvas.setAttribute('role', 'img'); this.canvas.setAttribute('aria-label', 'Artwork aisle. Left and right square brackets step through the items and Enter opens one; drag or arrow keys turn, plus and minus zoom, scroll sideways to walk, Home for entrance.');
       this.host.append(this.canvas);
       // Sideways scroll is a walk along the aisle; vertical scroll stays OrbitControls' zoom.
       this.unlistenWheel = listenSideScroll(this.canvas, { walk: distance => this.walk(distance) });
@@ -72,9 +74,7 @@ export class AisleView {
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
     this.host.append(this.overlay, this.status, this.toolbar, this.help);
     this.listen(this.slider, 'input', () => { this.travel = Number(this.slider.value); this.fitted = true; this.applyPose(); this.cancelHover(); this.interact(); });
-    this.listen(this.itemSelect, 'change', () => this.choose(this.itemSelect.value));
-    this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection); } });
-    this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection); });
+    this.listen(this.fallback, 'click', () => this.callbacks.onFlatWall?.());
     // Debug handle, as in the floating space (window.__cwFloat): the camera,
     // spread and travel live in WebGL, so probes and seeked captures reach them here.
     window.__cwAisle = this;
@@ -97,15 +97,10 @@ export class AisleView {
     this.camera.far = Math.max(2000, (this.art?.totalDepth || 0) * 2 + 100); this.camera.updateProjectionMatrix();
     this.overlay.replaceChildren(); this.labels = [];
     for (const anchor of this.art?.labelAnchors || []) { const node = element('span', 'aisle-cohort-label'); this.overlay.append(node); this.labels.push({ anchor, node }); }
-    this.itemSelect.replaceChildren(new Option('Choose an item…', ''));
-    const used = new Set();
-    for (const group of this.cohorts) {
-      const optgroup = element('optgroup'); optgroup.label = wallLabel(group.label, group.count, this.nouns);
-      for (const key of group.keys) if (!used.has(key)) { used.add(key); optgroup.append(new Option(this.clipsByKey.get(key).title || key, key)); }
-      if (optgroup.children.length) this.itemSelect.append(optgroup);
-    }
+    // Stepping walks the racks in aisle order, each item once.
+    this.order = [...new Set(this.cohorts.flatMap(group => group.keys))];
     if (!this.clipsByKey.has(this.selection)) this.selection = null;
-    this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; this.itemSelect.disabled = !sorted.length; this.slider.disabled = !sorted.length;
+    this.updateReadout(); this.slider.disabled = !sorted.length;
     this.built = true; this.setLens(this.lens); this.updateStatus(); if (this.fitted) this.applyPose(); this.resize(); this.invalidate();
   }
 
@@ -131,20 +126,32 @@ export class AisleView {
   }
 
   updateStatus() {
-    if (this.contextLost) this.status.textContent = '3D graphics unavailable. Choose an item below to inspect it, or use the flat wall.';
+    // Without graphics the flat wall is the way to every item; the button takes the visitor there.
+    if (this.contextLost) this.status.replaceChildren('3D graphics are unavailable here. ', this.fallback);
     else if (!this.clipsByKey.size) this.status.textContent = 'No items in this scope. Change the search or filters to continue.';
     else this.status.textContent = '';
     this.status.hidden = !this.status.textContent;
   }
 
+  /** Name the selected item and its place in aisle order (item-readout.mjs). */
+  updateReadout() {
+    const order = this.order || [], at = order.indexOf(this.selection);
+    this.readout.set({ title: at < 0 ? null : String(this.clipsByKey.get(this.selection).title || this.selection), position: at + 1, total: order.length, nouns: this.nouns });
+  }
+  /** The [ ] keys: the next or previous item in aisle order, walking to its rack. */
+  step(direction) {
+    const order = this.order || []; if (!order.length) return;
+    const at = order.indexOf(this.selection);
+    this.choose(order[at < 0 ? (direction > 0 ? 0 : order.length - 1) : (at + direction + order.length) % order.length]);
+  }
   choose(key) {
     if (!this.clipsByKey.has(key)) return;
-    this.selection = key; this.itemSelect.value = key; this.inspectButton.disabled = false;
+    this.selection = key; this.updateReadout();
     const rack = this.art?.racks.find(rack => this.cohorts.find(group => group.key === rack.cohort)?.keys.includes(key));
     if (rack) { this.travel = clamp(rack.start / Math.max(1, this.art.totalDepth - 3.2), 0, 1); this.slider.value = String(this.travel); this.fitted = true; this.applyPose(); }
     this.interact();
   }
-  open(key) { const clip = this.clipsByKey.get(key); if (!clip) return; this.selection = key; this.itemSelect.value = key; this.inspectButton.disabled = false; this.cancelHover(); this.callbacks.onOpen?.(clip); }
+  open(key) { const clip = this.clipsByKey.get(key); if (!clip) return; this.selection = key; this.updateReadout(); this.cancelHover(); this.callbacks.onOpen?.(clip); }
   pick(event) {
     if (!this.art || this.contextLost) return null;
     const rect = this.canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return null;
@@ -188,6 +195,8 @@ export class AisleView {
   keydown(event) {
     if (event.altKey || event.ctrlKey || event.metaKey || !this.controls) return;
     if (event.key === 'Home') { event.preventDefault(); this.fitView(); return; }
+    if (event.key === ']' || event.key === '[') { event.preventDefault(); this.step(event.key === ']' ? 1 : -1); return; }
+    if (event.key === 'Enter' && this.selection) { event.preventDefault(); this.open(this.selection); return; }
     if (['+', '=', '-'].includes(event.key)) { event.preventDefault(); this.zoomBy(event.key === '-' ? 1 / 1.15 : 1.15); return; }
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
     event.preventDefault(); const sphere = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
@@ -206,7 +215,7 @@ export class AisleView {
     const distance = new THREE.Vector3().fromArray(state.position).distanceTo(new THREE.Vector3().fromArray(state.target));
     if (distance < .1 || distance > 1000) return false;
     this.travel = clamp(state.travel, 0, 1); this.spread = clamp(state.spread, 0, 1); this.slider.value = String(this.travel); this.fitted = state.fitted === true;
-    this.selection = this.clipsByKey.has(state.selection) ? state.selection : null; this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection;
+    this.selection = this.clipsByKey.has(state.selection) ? state.selection : null; this.updateReadout();
     this.art?.setPresentation({ spread: this.spread, slice: null });
     if (this.fitted) this.applyPose(); else this.setCamera(state.position, state.target);
     return true;
@@ -214,7 +223,7 @@ export class AisleView {
   // Aliases keep the adapter easy to use alongside the existing spatial view.
   captureView() { return this.capture(); }
   restoreView(state) { return this.restore(state); }
-  setFocused(key) { this.selection = this.clipsByKey.has(key) ? key : null; this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; }
+  setFocused(key) { this.selection = this.clipsByKey.has(key) ? key : null; this.updateReadout(); }
   captureState() { return this.capture(); }
   restoreState(state) { return this.restore(state); }
   resize() {

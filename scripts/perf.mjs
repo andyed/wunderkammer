@@ -449,9 +449,10 @@ async function runOnce(browser, runIndex) {
       await page.locator('.float-arrange input[value=az]').check(); await waitFloat(page);
     }, { settle: 200 });
     await page.locator('.float-arrange input[value=oklab]').check(); await waitFloat(page);
-    const option = await page.locator('.float-items select option').nth(Math.max(1, Math.floor(await page.locator('.float-items select option').count() / 2))).getAttribute('value');
-    await floatRow('float fly-to (item menu)', async () => {
-      await page.selectOption('.float-items select', option); await waitFloat(page);
+    // The arrow keys are the keyboard way to an item; one move is one fly-to.
+    await page.locator('.float-canvas').focus();
+    await floatRow('float fly-to (arrow move)', async () => {
+      await page.keyboard.press('ArrowRight'); await waitFloat(page);
     }, { settle: 200 });
     await page.keyboard.press('Home'); await waitFloat(page);
     const chip = page.locator('#rail .chip[data-facet]').first();

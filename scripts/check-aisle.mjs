@@ -42,7 +42,9 @@ try{
  await page.screenshot({path:path.join(out,'highlight.png')});
  const phone=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});listen(phone);await phone.goto(live);await ready(phone);await loaded(phone);
  const phoneData=await debug(phone);assert.deepEqual(phoneData.scopeKeys,saved.scopeKeys);assert.equal(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- await phone.selectOption('.aisle-items select',phoneData.scopeKeys[0]);await phone.getByRole('button',{name:'Inspect',exact:true}).tap();await phone.waitForSelector('#detail.open');assert.equal((await debug(phone)).view.ui.focus,phoneData.scopeKeys[0]);
+ // A tap on a cover is the phone's way in; there is no item dropdown.
+ const tapHit=phoneData.scene.pickTargets.find(h=>h.y<.5&&h.y>-.4)||phoneData.scene.pickTargets[0],phoneBox=await phone.locator('.aisle-canvas').boundingBox();
+ await phone.touchscreen.tap(phoneBox.x+(tapHit.x+1)*phoneBox.width/2,phoneBox.y+(1-tapHit.y)*phoneBox.height/2);await phone.waitForSelector('#detail.open');assert.equal((await debug(phone)).view.ui.focus,tapHit.key);
  // Clearing a lens is one Escape layer, then the owning detail pane closes.
  await phone.keyboard.press('Escape');if(await phone.locator('#detail.open').count())await phone.keyboard.press('Escape');
  await phone.screenshot({path:path.join(out,'phone.png')});report.phone=true;

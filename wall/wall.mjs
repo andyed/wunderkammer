@@ -702,7 +702,7 @@ async function toggleSpatial(on, kind='3d', { arrangement=null }={}) {
   if (on && !(kind==='aisle'?state.aisle:kind==='float'?state.float:state.spatial)) {
     state.spatialLoading = true;
     try {
-      const hooks={onOpen:openDetail,onHover:(clip,event)=>hoverPreview(clip,event),onInteraction:invalidatePreview,onHoverEnd:hoverEnd,hoverEnabled:()=>!!state.selected};
+      const hooks={onOpen:openDetail,onHover:(clip,event)=>hoverPreview(clip,event),onInteraction:invalidatePreview,onHoverEnd:hoverEnd,hoverEnabled:()=>!!state.selected,onFlatWall:()=>toggleSpatial(false)};
       if(kind==='aisle'){
         const {AisleView}=await import('./aisle-view.mjs');
         state.aisle=new AisleView(el.aisleHost,hooks);

@@ -40,13 +40,15 @@ widening them. Use an exact link for unions.
   uses the same `valuesOf`/`matchesFacet` semantics as filtering, including months.
 - Drag/orbit, walk slider, wheel and keyboard navigation move through the aisle.
   Vertical scroll is a zoom; sideways scroll is a walk (see below).
-  The native item selector and Inspect button expose every item without requiring
-  precise camera control. Cover picks open the existing detail pane.
+  `[` and `]` step through every item in aisle order, walking to its rack, and
+  Enter opens it, so no item needs precise camera control. While the scene has
+  keyboard focus a live readout names the item and its place; a pointer visitor
+  never sees it. Cover picks open the existing detail pane.
 - Each presentation retains its camera. Scope/group/sort changes mark hidden
   presentations dirty. A hidden restored aisle pose remains pending until the
   corresponding scope has been installed. Aisle interactions never save mutable
   pile state or edit source material.
-- Graphics initialization failure retains native item inspection. Reduced motion
+- When graphics fail, the status offers the flat wall, which holds every item. Reduced motion
   does not trigger automatic travel. Phone controls wrap within the viewport.
 
 ## Sideways scroll

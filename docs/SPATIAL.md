@@ -347,26 +347,42 @@ the three axes always differ and no axis restates another. Every axis is
 The field is built once per corpus. Search and facets only change each item's
 brightness: out of scope drops to 25%, with most of its saturation removed, so
 that in a space arranged by colour a dimmed item does not compete on colour.
-Dimmed items are not picked, not listed in the item menu and not stepped to,
+Dimmed items are not picked, not reached by arrow keys and not matched by jump,
 so a click passes through them. A placed camera stays where it is. A fitted
 camera refits only when the stage resizes, as when the scope bar appears.
 
 ### Reaching an item
 
-PHILOSOPHY.md requires that reaching an item never takes camera skill. Fly-to
-and the menus are the ways in; free flight is for looking around.
+PHILOSOPHY.md requires that reaching an item never takes camera skill. Fly-to,
+the arrow keys and jump are the ways in; free flight is for looking around.
 
 - **Click** flies to the item and opens the detail pane. The camera travels
   along the line from where it is, so it does not turn. The item lands at 38%
   of the stage height, in the middle of the stage left of the detail pane.
-- **Item menu** lists the scope by title and flies to the chosen item.
-  Inspect, or Enter, opens it.
-- **[ and ]** step through the scope in the arrangement's own order: around
-  the hue wheel with greys first, or by title in A–Z.
+- **Arrow keys** move the selection through the space along its own axes.
+  Each arrow maps to the arrangement axis that points that way on screen from
+  the current camera (across, up, then depth for Page Up and Page Down), and
+  moves to the next in-scope item that way, preferring one that stays close on
+  the other two axes (`nearestAlong`: distance along the axis plus twice the
+  distance off it). The first press takes the item nearest the point the camera
+  looks at. Each move flies to the item without opening it; Enter opens it.
+  Isolated items can have no arrow path in (3 of the demo's 297); jump and click
+  reach them.
+- **Callout.** Beside a keyboard-chosen item, on whichever side has room (below
+  or above it on a narrow stage), a callout in the selection ring's green gives
+  its title and where it sits in the arrangement's terms (`describeItem`): the
+  Axes dimensions, or lightness, hue and chroma, or the A–Z shelf. A hidden
+  live region says the same to a screen reader. Neither takes room in the
+  toolbar, so no control moves when focus comes and goes.
+- **Jump.** `/` opens a box at the top of the stage; type part of a title,
+  ignoring case and punctuation, and Enter flies to the first match (titles
+  that start with it, then titles that contain it). Focus returns to the space,
+  so the arrows carry on from there.
+- **Without 3D graphics** the status offers the flat wall, which holds every item.
 - **Fit** (Home, 0 or ⊡) shows the whole space above the toolbar, from the
   front, above and to the right. A–Z is seen square on.
 - **Free flight.** Drag orbits. The wheel dollies toward the pointer
-  (OrbitControls `zoomToCursor`). Arrow keys orbit, W A S D fly, Q and E move
+  (OrbitControls `zoomToCursor`). Shift+arrow keys orbit, W A S D fly, Q and E move
   down and up, and + and − dolly.
 - **Reduced motion.** Flights and arrangement changes jump instead of animating.
 

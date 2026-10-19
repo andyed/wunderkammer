@@ -592,3 +592,69 @@ function boundsOf(positions, sizes, n) {
   const radius = Math.max(1, Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2);
   return { min, max, centre, radius };
 }
+
+/* ------------------------------------------------- keyboard navigation --- */
+
+/**
+ * The next item from `from` along world axis `k` (0 across, 1 up, 2 depth) in
+ * direction `sign`, among `candidates` (indices). An item further along the
+ * axis is preferred when it stays close on the other two: the score is the
+ * distance along the axis plus twice the distance off it, so → walks a row
+ * rather than leaping to whatever is nearest in a straight line. −1 when
+ * nothing lies that way.
+ */
+export const OFF_AXIS_WEIGHT = 2;
+export function nearestAlong(positions, candidates, from, k, sign) {
+  const p = [positions[from * 3], positions[from * 3 + 1], positions[from * 3 + 2]];
+  let best = -1, bestScore = Infinity;
+  for (const j of candidates) {
+    if (j === from) continue;
+    const d = [positions[j * 3] - p[0], positions[j * 3 + 1] - p[1], positions[j * 3 + 2] - p[2]];
+    const along = sign * d[k]; if (!(along > 1e-6)) continue;
+    const score = along + OFF_AXIS_WEIGHT * Math.hypot(d[(k + 1) % 3], d[(k + 2) % 3]);
+    if (score < bestScore || score === bestScore && j < best) { best = j; bestScore = score; }
+  }
+  return best;
+}
+
+/** The named OKLCH hue nearest `degrees`, as the hue axis labels its ticks. */
+export function hueName(degrees) {
+  let best = OKLCH_HUES[0][0], gap = Infinity;
+  for (const [name, at] of OKLCH_HUES) { const d = Math.abs(((degrees - at + 540) % 360) - 180); if (d < gap) { gap = d; best = name; } }
+  return best;
+}
+
+/**
+ * Where an item sits, in the arrangement's own terms: one short reading per
+ * axis, for the keyboard callout (`short`) and its spoken twin (`spoken`).
+ * Axes reads the three chosen dimensions; the colour arrangements read
+ * lightness, hue and chroma; A–Z reads the title's shelf. `modelFor(id)`
+ * returns the collection's attribute model for an attribute axis (attributeAxis).
+ */
+export function describeItem(clip, arrangement, { axes = null, modelFor = () => null, labelFor } = {}) {
+  const rgb = dominantColor(clip), lch = rgb ? oklch(oklab(rgb)) : null;
+  const colour = id => {
+    if (!lch) return { short: 'no palette', spoken: 'no palette' };
+    if (id === 'lightness') return { short: `L ${lch[0].toFixed(2)}`, spoken: `lightness ${lch[0].toFixed(2)}` };
+    if (id === 'chroma') return { short: `C ${lch[1].toFixed(2)}`, spoken: `chroma ${lch[1].toFixed(2)}` };
+    const name = lch[1] < GREY_CHROMA ? 'grey' : hueName(lch[2]);
+    return { short: name, spoken: name === 'grey' ? 'grey, no hue' : `hue ${name}` };
+  };
+  const attribute = id => {
+    const model = modelFor(id), label = axisLabel(labelFor, id);
+    if (!model) return { short: '', spoken: '' };
+    const mark = attributeMark(clip, model);
+    if (mark.missing) return { short: `no ${label}`, spoken: `no ${label}` };
+    const value = TIME_KEYS.includes(id) && /^\d{4}-\d{2}-\d{2}/.test(mark.valueLabel) ? mark.valueLabel.slice(0, 10) : mark.valueLabel;
+    return { short: value, spoken: `${label} ${value}` };
+  };
+  let parts;
+  if (arrangement === 'axes' && axes) parts = AXES.map(axis => COLOUR_DIMENSIONS.includes(axes[axis]) ? colour(axes[axis]) : attribute(axes[axis]));
+  else if (arrangement === 'az') { const shelf = shelfOf(String(clip.title || '')); parts = [{ short: `shelf ${shelf}`, spoken: `shelf ${shelf}` }]; }
+  else parts = ['lightness', 'hue', 'chroma'].map(colour);
+  // A reading the title already starts with (a capture date, for timestamped titles) is said once.
+  const title = String(clip.title || '');
+  // Repeats collapse too: an item with no palette has one reading for its three colour coordinates.
+  parts = parts.filter((p, i, all) => p.short && !title.startsWith(p.short) && all.findIndex(q => q.short === p.short) === i);
+  return { short: parts.map(p => p.short), spoken: parts.map(p => p.spoken).join(', ') };
+}

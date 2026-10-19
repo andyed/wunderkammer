@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **No item dropdown in the 3D views.** The floating space and the aisle each
+  carried an Item dropdown ("Choose an item…") and an Inspect button that every
+  visitor saw and almost none needed. Both are gone. When 3D graphics fail, the
+  status offers a button to the flat wall, which holds every item.
+- **Arrow keys move through the floating space along its axes.** → and ← move
+  the selection to the next item along the axis that points that way on
+  screen, ↑ and ↓ along the next, Page Up and Page Down in depth; each move
+  flies to the item without opening it, and Enter opens it. A callout beside
+  the item, in the selection ring's green, gives its title and where it sits
+  in the arrangement's terms ("L 0.34 · magenta", or the Axes dimensions), and
+  a hidden live region says the same to a screen reader. `/` opens a jump box:
+  type part of a title, Enter flies to the first match. Shift+arrows orbit, as
+  plain arrows did. On the 297-item demo, best-path arrow presses reach an item
+  in a median of 9 (the old `[ ]` stepping: 75); 3 isolated items have no arrow
+  path in yet and are reached by jump or click. The aisle keeps `[ ]` for now,
+  with the same hidden live region.
 - **The ▶ showcase button is gone.** It acted only on the flat wall with no
   item open: in 3D, the hallway or beside the detail pane it turned to ⏸ and
   nothing moved. The idea, cards crossfading the rest of the collection
