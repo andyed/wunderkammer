@@ -583,6 +583,26 @@ export function declump(positions, indices, minDist, cap, iterations = 4, free =
 }
 
 /**
+ * A cloud's order key (`front=`): a dimension id, highest first, or with a
+ * leading `-`, lowest first ("-captured": the earliest capture first).
+ */
+export const parseFront = front => front.startsWith('-') ? { id: front.slice(1), descending: false } : { id: front, descending: true };
+export const isFront = front => typeof front === 'string' && isAxisName(front) && isAxisName(parseFront(front).id);
+/**
+ * Values to order a cloud by, one per clip: the item's place along that
+ * dimension's axis, 0 to 1, so dates, numbers, ranks and the colour
+ * coordinates all compare the way Axes would place them; null where the item
+ * has no value (no date, a grey's hue). Throws for a dimension the collection
+ * cannot carry.
+ */
+export function orderValues(clips, id, labelFor) {
+  const { u } = axisCoordinates(clips, id, labelFor, clips.map(dominantColor));
+  return Array.from(u, v => v < 0 ? null : v);
+}
+/** Is this dimension a time (capture date, year, decade)? Its order reads latest or earliest first. */
+export const isTimeKey = id => TIME_KEYS.includes(id);
+
+/**
  * Cloud: a picture, not a measurement. Items spiral out from the centre in
  * priority order (`priority`: indices, first is front; the rest follow in
  * collection order), each one a golden angle on from the last, so the front of

@@ -963,7 +963,7 @@ const cases = [
   },
   {
     name: 'still: cloud, the order ignores the lit set and the scope', file: 'wall/float-view.mjs',
-    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);', to: '    return [...this.keys.keys()];',
+    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || by(a, b) || a - b);', to: '    return [...this.keys.keys()].sort((a, b) => by(a, b) || a - b);',
     test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
   },
   {
@@ -971,6 +971,16 @@ const cases = [
     from: "    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });\n    if (!this.inScopeKey(this.selection)) this.selection = null;",
     to: "    if (!this.inScopeKey(this.selection)) this.selection = null;",
     test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
+  },
+  {
+    name: 'still: cloud, front= is ignored', file: 'wall/float-view.mjs',
+    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || by(a, b) || a - b);', to: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);',
+    test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
+  },
+  {
+    name: 'still: cloud, the exact link loses front=', file: 'wall/float-view.mjs',
+    from: '...(this.front ? { front: this.front } : {}), ', to: '',
+    test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   }
 ];
 

@@ -42,6 +42,9 @@
       largest.
     - The rest recede behind, smaller and dimmed.
     - The figure's note says what decided the order.
+    - `front=<dimension>` orders it within those tiers: `front=captured`
+      latest first, `front=chroma` most saturated first, `front=-captured`
+      earliest first. Exact and live links keep the order.
   - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
     brushing by identity, framing on the evidence, captions from the page's
     counts, and camera angles. Interactive embeds are deferred.

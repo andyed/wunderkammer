@@ -199,6 +199,7 @@ export async function still(argv) {
     const hash = await page.waitForFunction(() => /[#&]s=/.test(location.hash) && location.hash, null, { timeout: 5000 })
       .then(h => h.jsonValue()).catch(() => '');
     const exported = await page.evaluate(() => window.wunderkammer.export());
+    const atlas = await page.evaluate(() => { const d = window.__cwFloat?.getDiagnostics(); return d && document.body.dataset.viewMode === 'float' ? { items: d.itemCount, resident: d.farResident, failed: d.failed, loading: d.loading } : null; });
     const spec = hash ? decodeView(new URLSearchParams(hash.slice(1)).get('s')) : null;
     const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
     const sidecar = out.replace(/\.(png|jpe?g)$/i, '.json');
@@ -209,7 +210,7 @@ export async function still(argv) {
       view: { requested: opts.view, mode: settled.mode, link: hash || null, spec },
       figure: settled.figure,
       contrast,
-      render: { waitedMs: settled.waitedMs, undrawn: settled.undrawn, notice: notice || null,
+      render: { waitedMs: settled.waitedMs, undrawn: settled.undrawn, atlas, notice: notice || null,
         wunderkammer: { version: pkg.version, commit: revision() }, browser: browser.version(), created: new Date().toISOString() },
       export: exported,
     };

@@ -21,6 +21,7 @@ import { sourceFor, proxied } from './spatial/spatial-view.mjs';
 import { spriteCovers } from './sprite-covers.mjs';
 import { clipKey } from './context-clusters.mjs';
 import { perf } from './instrument.mjs';
+import { parseFront, isFront, orderValues, isTimeKey } from './float-space.mjs';
 import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys, attributeAxis, nearestAlong, describeItem } from './float-space.mjs';
 import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
@@ -106,6 +107,8 @@ export class FloatView {
     this.clips = []; this.keys = []; this.indexOf = new Map(); this.inScope = new Uint8Array(0); this.scopeCount = 0;
     // Items lit by identity (docs/SHOTS.md): null lights the whole scope.
     this.lit = null;
+    // The cloud's order within each tier (front=): a dimension id, '-' first for lowest first.
+    this.front = null; this.frontCache = null;
     this.layout = null; this.labels = []; this.listeners = []; this.frameTimes = []; this.renderCount = 0;
     this.host.classList.add('float-host'); this.host.replaceChildren();
     this.scene = new THREE.Scene(); this.scene.background = new THREE.Color('#050510');
@@ -312,10 +315,46 @@ export class FloatView {
   }
   resolveAxes() { this.axes = resolveAxes(this.dimensions, this.requestedAxes); this.fillAxisMenus(); }
   arrangeOptions() { return { axes: this.axes, labelFor: this.callbacks.labelFor, priority: this.arrangement === 'cloud' ? this.cloudPriority() : undefined }; }
-  /** Who stands in front of the cloud: lit items, then the rest of the scope, then everything outside it. */
+  /**
+   * Who stands in front of the cloud: lit items, then the rest of the scope,
+   * then everything outside it. Within each tier, `front` orders them (highest
+   * first, or lowest with '-'), items without a value last; collection order
+   * breaks ties.
+   */
   cloudPriority() {
     const tier = i => this.lit && this.lit.has(this.keys[i]) ? 0 : this.inScope[i] ? 1 : 2;
-    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);
+    const values = this.frontValues(), descending = this.front ? parseFront(this.front).descending : true;
+    const by = (a, b) => {
+      if (!values) return 0;
+      const x = values[a], y = values[b];
+      if (x === y) return 0; if (x === null) return 1; if (y === null) return -1;
+      return descending ? y - x : x - y;
+    };
+    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || by(a, b) || a - b);
+  }
+  /** The `front` values for this corpus, cached; null without a usable `front`. */
+  frontValues() {
+    if (!this.front) return null;
+    const { id } = parseFront(this.front);
+    if (!this.dimensions.some(d => d.id === id)) return null;
+    if (this.frontCache?.front !== this.front || this.frontCache.identity !== this.identity)
+      this.frontCache = { front: this.front, identity: this.identity, values: orderValues(this.clips, id, this.callbacks.labelFor) };
+    return this.frontCache.values;
+  }
+  /** Order the cloud by a dimension (front=); null for collection order. */
+  setFront(front, { animate = true } = {}) {
+    if (front !== null && !isFront(front)) return false;
+    this.front = front;
+    if (this.field && this.arrangement === 'cloud') this.relayout({ animate });
+    return true;
+  }
+  /** The order in words, for the figure: "by capture date, latest first". */
+  describeFront() {
+    if (!this.front) return null;
+    const { id, descending } = parseFront(this.front), dim = this.dimensions.find(d => d.id === id);
+    if (!dim) return null;
+    const first = isTimeKey(id) ? (descending ? 'latest' : 'earliest') : (descending ? 'highest' : 'lowest');
+    return `by ${dim.group === 'colour' ? dim.label.toLowerCase() : dim.label}, ${first} first`;
   }
   fillAxisMenus() {
     for (const [axis, select] of this.axisSelects) {
@@ -661,12 +700,13 @@ export class FloatView {
   /* ------------------------------------------------------------ state --- */
 
   capture() {
-    return { version: 1, arrangement: this.arrangement, ...(this.axes ? { axes: { ...this.axes } } : {}), position: this.camera.position.toArray(),
+    return { version: 1, arrangement: this.arrangement, ...(this.axes ? { axes: { ...this.axes } } : {}), ...(this.front ? { front: this.front } : {}), position: this.camera.position.toArray(),
       target: this.controls?.target.toArray() || [0, 0, 0], fitted: this.fitted, selection: this.selection };
   }
   restore(state) {
     if (!state || state.version !== 1 || !isArrangement(state.arrangement) || !vector(state.position) || !vector(state.target)) return false;
     if (state.axes !== undefined && !validAxes(state.axes)) return false;
+    if (state.front !== undefined && !isFront(state.front)) return false;
     const distance = new THREE.Vector3().fromArray(state.position).distanceTo(new THREE.Vector3().fromArray(state.target));
     if (distance < .1 || distance > 1e5) return false;
     // Axes first, quietly: the arrangement change below then lays out once.
@@ -675,6 +715,9 @@ export class FloatView {
       if (relaid) this.setAxes(state.axes, { animate: false });
       else { this.requestedAxes = { ...state.axes }; if (this.field) this.resolveAxes(); this.syncRadios(); }
     }
+    // The cloud's order, quietly too: a cloud staying a cloud lays out here, any other change below.
+    if (this.arrangement === 'cloud' && state.arrangement === 'cloud') this.setFront(state.front ?? null, { animate: false });
+    else this.front = state.front ?? null;
     this.setArrangement(state.arrangement, { animate: false });
     this.selection = this.indexOf.has(state.selection) ? state.selection : null;
     this.keyboardSelection = false; this.syncCallout();

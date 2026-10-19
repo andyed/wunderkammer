@@ -98,3 +98,14 @@ test('lit names items one identity per key, round-trips through exact and live l
   for (const lit of [[], [''], ['a', 'a'], 'a', [3]])
     assert.throws(() => validateView({ ...specimen(), ui: { ...specimen().ui, lit } }), /Invalid or unsupported view link/, JSON.stringify(lit));
 });
+
+test('front orders a cloud: it implies arrange=cloud, round-trips, and is refused anywhere else', () => {
+  const v = applyViewIntent(base + '&view=float&front=-captured', specimen());
+  assert.equal(v.float.arrangement, 'cloud'); assert.equal(v.float.front, '-captured');
+  assert.deepEqual(decodeView(encodeView(v)).float.front, '-captured');
+  assert.equal(targetedViewURL(v, base).searchParams.get('front'), '-captured');
+  for (const [query, message] of [['front=', /front must name a dimension/], ['front=-', /front must name a dimension/],
+    ['arrange=axes&front=captured', /front applies only to arrange=cloud/], ['across=year&front=captured', /front applies only to arrange=cloud/]])
+    assert.throws(() => applyViewIntent(`${base}&${query}`, specimen()), message, query);
+  assert.throws(() => validateView({ ...v, float: { ...v.float, front: '' } }), /Invalid or unsupported view link/);
+});

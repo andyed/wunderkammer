@@ -227,11 +227,13 @@ function captureView() {
 async function restoreView(spec, { intent = false } = {}) {
   if (spec.corpus.id !== state.corpus.id) throw new Error('This link belongs to a different corpus');
   // An axis this collection cannot carry is refused, never silently replaced by a default.
+  const offered = () => new Set(axisDimensions(state.clips, attributeKeys(), key => state.facetLabels[key]).map(d => d.id));
   if (spec.float?.arrangement === 'axes' && spec.float.axes) {
-    const offered = new Set(axisDimensions(state.clips, attributeKeys(), key => state.facetLabels[key]).map(d => d.id));
-    const bad = AXES.find(axis => spec.float.axes[axis] !== undefined && !offered.has(spec.float.axes[axis]));
+    const dims = offered(), bad = AXES.find(axis => spec.float.axes[axis] !== undefined && !dims.has(spec.float.axes[axis]));
     if (bad) throw new Error(`${bad}=${spec.float.axes[bad]} is not a dimension this collection can place on an axis`);
   }
+  if (spec.float?.front && !offered().has(spec.float.front.replace(/^-/, '')))
+    throw new Error(`front=${spec.float.front} is not a dimension this collection can order by`);
   hydrating = true; document.body.inert = true; document.body.dataset.restoring = 'true'; cancelAnimationFrame(filterFrame); viewport.resetEdge();
   const warnings = [];
   if (spec.corpus.revision !== state.corpus.revision) warnings.push('Corpus changed since this link was made');
@@ -582,7 +584,9 @@ function viewNotes() {
     } else if (arrangement === 'az') view = name = 'Shelved A–Z by title';
     else if (arrangement === 'cloud') {
       // The cloud's only claim is its order; the note says what decided it.
-      view = state.lit ? 'Cloud: the lit items in front, the rest behind' : state.filtered.length < state.clips.length ? 'Cloud: the scope in front, the rest behind' : 'Cloud';
+      const lead = state.lit ? 'the lit items in front, the rest behind' : state.filtered.length < state.clips.length ? 'the scope in front, the rest behind' : '';
+      const order = state.float.describeFront();
+      view = `Cloud${lead || order ? ': ' : ''}${[lead, order && (lead ? `each ${order}` : order)].filter(Boolean).join('; ')}`;
       name = 'Cloud';
     }
     else { view = `Placed by dominant colour in ${ARRANGEMENT_LABELS[arrangement]}`; name = ARRANGEMENT_LABELS[arrangement]; }

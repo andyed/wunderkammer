@@ -1,9 +1,9 @@
 import { validateView, MAX_LIT } from './view-schema.mjs';
-import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, AXES, isAxisName } from './float-space.mjs';
+import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, AXES, isAxisName, isFront } from './float-space.mjs';
 
 // A readable live intent projects into the same ViewSpec as an exact permalink.
 // It does not evaluate collection membership or carry frozen corpus revisions.
-const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail', 'frame', ...AXES]);
+const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail', 'frame', 'front', ...AXES]);
 /** `lit` repeats, one item identity each: an identity is a URL and may hold a comma. */
 const recognized = key => SINGLE.has(key) || key === 'lit' || key.startsWith('facet.') || key.startsWith('highlight.');
 /** Camera framings a live link may ask for; the wall applies one after restoring the view. */
@@ -84,7 +84,7 @@ export function applyViewIntent(url, defaultView) {
     for (const key of ['travel', 'spread']) if (p.has(key)) { view.aisle[key] = bounded(p.get(key)); view.aisle.fitted = true; }
   }
   const axisParams = AXES.filter(axis => p.has(axis));
-  if (view.presentation.mode === 'float' || p.has('arrange') || axisParams.length) {
+  if (view.presentation.mode === 'float' || p.has('arrange') || axisParams.length || p.has('front')) {
     // A live link names the arrangement; the camera is the receiver's Fit.
     view.float ??= { version: 1, arrangement: DEFAULT_ARRANGEMENT, position: [0, 0, 4000], target: [0, 0, 0], fitted: true, selection: null };
     if (p.has('arrange')) {
@@ -99,6 +99,12 @@ export function applyViewIntent(url, defaultView) {
       for (const axis of axisParams) { if (!isAxisName(p.get(axis))) invalid(`${axis} must name a dimension`); axes[axis] = p.get(axis); }
       if (new Set(Object.values(axes)).size !== axisParams.length) invalid('across, up and depth must name different dimensions');
       view.float.axes = axes; view.float.arrangement = 'axes'; view.float.fitted = true;
+    }
+    // front orders a cloud, so it implies arrange=cloud and no other.
+    if (p.has('front')) {
+      if (p.has('arrange') && p.get('arrange') !== 'cloud' || axisParams.length) invalid('front applies only to arrange=cloud');
+      if (!isFront(p.get('front'))) invalid('front must name a dimension, with - first for lowest first');
+      view.float.front = p.get('front'); view.float.arrangement = 'cloud'; view.float.fitted = true;
     }
   }
   if (view.presentation.mode === '3d' && !view.spatial) view.spatial = {
@@ -134,5 +140,6 @@ export function targetedViewURL(view, base) {
   }
   if (view.presentation.mode === 'float') p.set('arrange', view.float.arrangement);
   if (view.presentation.mode === 'float' && view.float.arrangement === 'axes') for (const axis of AXES) if (view.float.axes?.[axis]) p.set(axis, view.float.axes[axis]);
+  if (view.presentation.mode === 'float' && view.float.arrangement === 'cloud' && view.float.front) p.set('front', view.float.front);
   return u;
 }

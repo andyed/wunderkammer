@@ -150,7 +150,9 @@ steps and traps.
      image itself.
    - For a picture rather than a measurement, `view=float&arrange=cloud`
      puts the lit items (or the scope) front and centre, larger, with the
-     rest of the collection receding behind them.
+     rest of the collection receding behind them. `front=captured` (latest
+     first) or `front=chroma` (most saturated first) orders them; a leading
+     `-` reverses it.
    - Stills cover the flat wall and the floating space so far.
      [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.
