@@ -47,6 +47,11 @@ const cases = [
     test: 'tests/attribute-view.test.mjs', pattern: 'attribute hover previews preserve',
   },
   {
+    name: 'attribute chip under a parked pointer replaces the pin', file: 'wall/attribute-brush.mjs',
+    from: 'binding.awaitingMove = true;', to: 'previewSelf();',
+    test: 'tests/facet-view.test.mjs', pattern: 'changing a facet-local query removes stale value preview',
+  },
+  {
     name: 'responsive cover ignores transformed screen size', file: 'wall/wall.mjs',
     from: 'img.sizes = sizes;', to: 'img.sizes = \"100vw\";',
     test: 'tests/flat-wall.test.mjs', pattern: 'responsive cover images use screen size',
