@@ -9,6 +9,19 @@
   upload repaired it (mrdoob/three.js#33153, fixed in r184). `index.html` and
   `wall/compare.html` now load three 0.186.1. The vendored muriel lib is
   unchanged: r170–r186 needed no code changes in it or in the 3D views.
+- **Stills.** `node scripts/still.mjs --collection <doc> --view '<link keys>'
+  --size 1600x900 --out view.png` takes a still of a view, for a slide, a
+  post or a document. It also writes a sidecar JSON with the exact link, the
+  camera, the items in scope and lit, and the versions that drew it. It
+  refuses, writing nothing, when the collection or the link is refused or
+  the view never settles.
+  - `?chrome=none` shows the stage alone.
+  - `window.wunderkammer.whenStill()` resolves when the picture is final:
+    every cover landed, nothing moving, every flat-wall tile in view drawn.
+    "View ready" only meant the link was restored.
+  - It covers the flat wall and the floating space so far.
+  - [STILLS.md](docs/STILLS.md) has the roadmap: punchline framing and
+    captions, camera angles, and 3D carousel embeds.
 - **No item dropdown in the 3D views.** The floating space and the aisle each
   carried an Item dropdown ("Choose an item…") and an Inspect button that every
   visitor saw and almost none needed. Both are gone. When 3D graphics fail, the

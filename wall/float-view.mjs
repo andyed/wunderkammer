@@ -615,6 +615,23 @@ export class FloatView {
     return true;
   }
   captureView() { return this.capture(); }
+  /**
+   * What would still change the picture, for stills (wall.mjs whenStill):
+   * empty once every tile has landed in the atlas, nothing travels or flies,
+   * and no frame is waiting to be drawn.
+   */
+  stillPending() {
+    if (this.contextLost) return ['3D graphics are unavailable'];
+    const out = [];
+    if (!this.built || !this.field) out.push('the floating space is building');
+    else {
+      if (atlasBusy(this.field.atlases)) out.push('covers are loading');
+      if (this.field.moving) out.push('items are moving');
+    }
+    if (this.tween) out.push('the camera is flying');
+    if (this.dirty || this.frame) out.push('a frame is waiting to be drawn');
+    return out;
+  }
   restoreView(state) { return this.restore(state); }
   setFocused(key) {
     this.selection = this.indexOf.has(key) ? key : null;

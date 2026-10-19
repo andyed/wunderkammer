@@ -36,6 +36,10 @@ import { AXES, axisDimensions } from './float-space.mjs';
 import { arrangeMenu, MENU, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
+/** `?chrome=none` shows the stage alone, for stills (docs/STILLS.md). Set
+ * before the first layout, so the stage is measured at its full size. */
+if (new URL(location.href).searchParams.get('chrome') === 'none') document.documentElement.dataset.chrome = 'none';
+
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
 /** Initial page of values; local facet search reaches the complete vocabulary. */
@@ -380,6 +384,70 @@ function exportView() {
     evidence: state.filtered.map(entry),
   };
 }
+/* --------------------------------------------------------------- stills --- */
+
+/** Views a still can wait for: their renderers say when their pixels are final. */
+const STILL_MODES = ['flat', 'float'];
+/** What would still change the picture on screen. Empty means final. */
+function stillPending({ allowUndrawn = false } = {}) {
+  const out = [];
+  if (document.body.dataset.viewReady !== 'true') return ['the view is still loading'];
+  if (document.fonts && document.fonts.status !== 'loaded') out.push('fonts are loading');
+  if (state.spatialLoading) out.push('the 3D renderer is loading');
+  if (state.mode === 'float') out.push(...(state.float ? state.float.stillPending() : ['the floating space has not started']));
+  else if (state.mode === 'flat') {
+    if (viewport.zooming || performance.now() < viewport.settlesAt) out.push('the camera is moving');
+    if (movingNodes().size) out.push('tiles are moving to a new layout');
+    if (imageWork.pending || imageWork.running) out.push(`${imageWork.pending + imageWork.running} images are loading`);
+    if (overview.busy) out.push('the overview is painting');
+    // The queues only know the tiles already asked for: right after a layout,
+    // a tile in view may not have been asked for yet. Its pixels decide.
+    const undrawn = allowUndrawn ? 0 : undrawnTiles();
+    if (undrawn) out.push(`${undrawn} tiles in view are not drawn yet`);
+  }
+  return out;
+}
+/** Flat wall: tiles in view that show neither their own image nor the overview's
+ * pixels. revealTiles keeps `shown` current, so most tiles cost no measurement. */
+function undrawnTiles() {
+  const stage = el.stage.getBoundingClientRect();
+  let undrawn = 0;
+  for (const [id, node] of state.tileEls) {
+    if (!state.positions.get(id)?.shown) continue;
+    const r = node.getBoundingClientRect();
+    if (!r.width || r.right <= stage.left || r.left >= stage.right || r.bottom <= stage.top || r.top >= stage.bottom) continue;
+    if (node.classList.contains('no-media') || node.classList.contains('broken') || node.classList.contains('overview-painted')) continue;
+    const img = node.querySelector(':scope > img');
+    if (img?.complete && img.naturalWidth > 0) continue;
+    undrawn++;
+  }
+  return undrawn;
+}
+/**
+ * Resolves once the picture on screen is final, for a still: "view ready"
+ * means the link is restored, not that every image has landed. It waits for
+ * `quietFrames` frames in a row with nothing pending, and rejects after
+ * `timeout` ms naming what is still pending, or at once for a view it cannot
+ * judge. On the flat wall every tile in view must show its image or the
+ * overview's pixels; `allowUndrawn` settles without that, and `undrawn` in the
+ * result counts the tiles still showing only their tint.
+ */
+async function whenStill({ timeout = 30000, quietFrames = 3, allowUndrawn = false } = {}) {
+  const start = performance.now();
+  let quiet = 0, pending = [];
+  for (;;) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    pending = stillPending({ allowUndrawn });
+    if (document.body.dataset.viewReady === 'true' && !STILL_MODES.includes(state.mode))
+      throw new Error(`Stills support the flat wall and the floating space so far, not view=${state.mode}`);
+    if (pending.includes('3D graphics are unavailable')) throw new Error('3D graphics are unavailable in this browser');
+    quiet = pending.length ? 0 : quiet + 1;
+    if (quiet >= quietFrames) break;
+    if (performance.now() - start > timeout) throw new Error(`The view did not settle within ${timeout} ms: ${pending.join('; ')}`);
+  }
+  return { mode: state.mode, waitedMs: Math.round(performance.now() - start), undrawn: state.mode === 'flat' ? undrawnTiles() : 0 };
+}
+
 function scopeSnapshot() {
   return { query: state.query, active: new Map([...state.active].map(([k, v]) => [k, new Set(v)])),
     branches: state.branches?.map(b => ({ label: b.label, keys: [...b.keys] })) ?? null,
@@ -2344,7 +2412,7 @@ links = createPermalinks({ capture: captureView, restore: restoreView, notice: l
 document.getElementById('copy-view').addEventListener('click', () => links.copy().catch(err => linkNotice(err.message)));
 document.getElementById('copy-live-view').addEventListener('click',async()=>{try{const spec=captureView();if(!spec)throw new Error('The view is not ready');await navigator.clipboard.writeText(targetedViewURL(spec,location.href).href);linkNotice('Live view link copied · opens the current collection');}catch(error){linkNotice(error.message);}});
 // Read-only diagnostics for the explicit-target rendering proof.
-window.wunderkammer = Object.freeze({ export: exportView });
+window.wunderkammer = Object.freeze({ export: exportView, whenStill });
 window.wunderkammerAisleDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.aisle?.getDiagnostics()||null});
 window.wunderkammerFloatDebug=()=>({mode:state.mode,scopeKeys:state.filtered.map(clipKey),view:captureView(),scene:state.float?.getDiagnostics()||null});
 document.getElementById('new-view').addEventListener('click', () => { links.newView(); linkNotice(''); });

@@ -889,6 +889,26 @@ const cases = [
     name: 'aisle keys: the live region stays silent', file: 'wall/aisle-view.mjs',
     from: 'const text = this.syncMark(); if (text) this.announcer.textContent = text;', to: 'this.syncMark();',
     test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'still: whenStill does not ask the floating space', file: 'wall/wall.mjs',
+    from: "  if (state.mode === 'float') out.push(...(state.float ? state.float.stillPending() : ['the floating space has not started']));", to: "  if (state.mode === 'float') { /* nothing */ }",
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits for every cover in the floating space',
+  },
+  {
+    name: 'still: whenStill takes the wall before every tile in view is drawn', file: 'wall/wall.mjs',
+    from: '    if (undrawn) out.push(`${undrawn} tiles in view are not drawn yet`);', to: '',
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits until every flat-wall tile in view is drawn',
+  },
+  {
+    name: 'still: chrome=none leaves the header', file: 'wall/wall.css',
+    from: ':root[data-chrome="none"] :is(.bar, .rail,', to: ':root[data-chrome="none"] :is(.rail,',
+    test: 'tests/still.test.mjs', pattern: 'whenStill waits for every cover in the floating space',
+  },
+  {
+    name: 'still: the tool takes a still of a refused link', file: 'scripts/still.mjs',
+    from: '    if (/^Could not/.test(notice)) fail(`The view was refused: ${notice}`);', to: '',
+    test: 'tests/still.test.mjs', pattern: 'scripts/still.mjs refuses',
   }
 ];
 

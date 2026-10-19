@@ -112,6 +112,16 @@ Then open:
   for a comparison with two observations. Select one to see the items behind
   it.
 
+To take a still of a view for a slide or a document, after `npm install`:
+
+```bash
+node scripts/still.mjs --collection examples/psychodeli/collection.json --view 'view=float&arrange=axes' --out axes.png
+```
+
+It writes `axes.png` and `axes.json`, which records the exact link, the
+camera and the items shown. [STILLS.md](docs/STILLS.md) has the details and
+the roadmap.
+
 The example's 297 images are low-resolution screenshots from the Psychodeli
 visualizer, served from the public demo site with CORS. The collection
 document names 16 sprite-sheet pages there, of which the overview needs

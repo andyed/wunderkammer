@@ -129,6 +129,19 @@ steps and traps.
    and titles. On the comparison page it returns the evidence for the selected
    cell or observation.
 
+8. **Make a still for a slide, a post or a document.**
+   `node scripts/still.mjs --collection cats/collection.json --view 'view=float&arrange=axes&facet.coat=ginger' --size 1600x900 --scale 2 --out ginger.png`
+   - `--view` takes the same keys as a live link.
+   - It writes the image and `ginger.json`. That sidecar names the exact
+     link, the items in scope and lit, and the camera; quote its counts, not
+     your own.
+   - It refuses, writing nothing, when the link or the collection is refused,
+     and says why.
+   - Stills cover the flat wall and the floating space so far. Frame the
+     claim with a facet or a highlight, so the evidence is what is lit.
+     [STILLS.md](https://github.com/andyed/wunderkammer/blob/main/docs/STILLS.md)
+     has the roadmap.
+
 ## Traps
 
 - A `props` key that names a clip field is refused: `title`, `source`,
