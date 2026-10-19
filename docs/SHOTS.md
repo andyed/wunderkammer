@@ -23,17 +23,15 @@ are the record of each phase.
 2. then `dim=`;
 3. then the sidecar's `lit` source.
 
-See [the build order](#build-order-for-the-rest-of-shots). The merges below
-do not block it.
+See [the build order](#build-order-for-the-rest-of-shots).
 
-**Waiting on Andy.** Nothing is merged or pushed. The merge order is:
-1. muriel `build/three-r186` at 9c4d5c2: three 0.186.1, with the regression
-   test `tests/spatial-tile-pixels.test.mjs`;
-2. wunderkammer `build/three-r186` at 217d825: the three pins, on main
-   6f63fa0;
-3. `feat/stills`, which is already rebased onto 217d825.
+**Merged.** All three are on main, in this order:
+1. muriel `build/three-r186` at 9c4d5c2 (merge 340addc): three 0.186.1, with
+   the regression test `tests/spatial-tile-pixels.test.mjs`;
+2. wunderkammer `build/three-r186` at 217d825 (merge e7d836f): the three pins;
+3. `feat/stills` (merge bc7b75f).
 
-**The branch.** These commits sit on 217d825:
+**The branch.** `feat/stills` carried these commits on 217d825:
 
 | Commit | What |
 |---|---|
@@ -54,9 +52,9 @@ e2a3d27.
 - `scripts/check-public.mjs` passed, exit 0.
 - `tests/still.test.mjs` passed five more runs of five.
 - An earlier full run failed one facet test ("changing a facet-local query
-  removes stale value preview…" in `tests/facet-view.test.mjs`). It fails
-  about 1 run in 30 on main as well. Its fix is on its own branch,
-  `fix/facet-preview-stale-pointer` at b361cfe, and is not in this one.
+  removes stale value preview…" in `tests/facet-view.test.mjs`). It failed
+  about 1 run in 30 on main as well. Its fix,
+  `fix/facet-preview-stale-pointer` at b361cfe, is merged (27705e1).
 
 **The three.js finding.**
 - **The bug.** Floating-space shots sometimes drew a far tile's placeholder
