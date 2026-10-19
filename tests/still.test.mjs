@@ -95,6 +95,79 @@ test('whenStill refuses a view it cannot judge yet', async () => {
   } finally { await page.close(); }
 });
 
+/* ------------------------------------------------------------- lit sets --- */
+
+// Three cool items, lit by identity; the other thirteen recede.
+const LIT = ['2a9d8f', '264653', '355070'].map(hex => `urn:still:${hex}`);
+const litQuery = LIT.map(key => `lit=${encodeURIComponent(key)}`).join('&');
+const cameraDistance = f => Math.hypot(...f.position.map((n, i) => n - f.target[i]));
+
+test('lit lights exactly the named items in the floating space, frame=evidence frames them, and the exact link keeps both', async () => {
+  const fitted = await open('view=float&arrange=axes&chrome=none');
+  let fitDistance; try {
+    await fitted.page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    fitDistance = cameraDistance((await fitted.page.evaluate(() => window.wunderkammerFloatDebug())).view.float);
+  } finally { await fitted.page.close(); }
+  const { page, errors } = await open(`view=float&arrange=axes&${litQuery}&frame=evidence&chrome=none`); try {
+    await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    const { scene, view } = await page.evaluate(() => window.wunderkammerFloatDebug());
+    for (const [key, opacity] of Object.entries(scene.opacity)) assert.equal(opacity, LIT.includes(key) ? 1 : 0.25, `${key} brightness`);
+    assert.deepEqual(view.ui.lit, LIT, 'the exact link names the lit items');
+    assert.equal(view.float.fitted, false, 'a framed camera is not Fit');
+    assert.ok(cameraDistance(view.float) < fitDistance * 0.9, `the camera comes in on the evidence (${cameraDistance(view.float).toFixed(0)} vs Fit ${fitDistance.toFixed(0)})`);
+    for (const key of LIT) { const [x, y] = scene.screen[key]; assert.ok(Math.abs(x) <= 1 && Math.abs(y) <= 1, `${key} is on screen`); }
+    const exported = await page.evaluate(() => window.wunderkammer.export());
+    assert.deepEqual({ count: exported.lit.count, keys: [...exported.lit.keys].sort(), unresolved: exported.lit.unresolved }, { count: 3, keys: [...LIT].sort(), unresolved: 0 });
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('a framed wall shot opens no detail pane of its own', async () => {
+  const { page, errors } = await open(`${litQuery}&frame=evidence&chrome=none`); try {
+    await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    await page.waitForTimeout(600); // the zoom preview waits for the camera to rest
+    assert.equal(await page.locator('#detail.open').count(), 0, 'no pane covers the shot');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('on the wall, unlit tiles recede, frame=evidence zooms to the lit tiles, and Esc puts the lit set out', async () => {
+  const { page, errors } = await open(`${litQuery}&frame=evidence&rail=0`); try {
+    await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    const tiles = await page.evaluate(() => [...document.querySelectorAll('#canvas > .tile')].map(n => {
+      const r = n.getBoundingClientRect(), img = n.querySelector(':scope > img');
+      return { label: n.getAttribute('aria-label'), unlit: n.classList.contains('unlit'), opacity: img ? Number(getComputedStyle(img).opacity) : null, box: [r.left, r.top, r.right, r.bottom] };
+    }));
+    const litLabels = LIT.map(key => `Item ${String(hexes.indexOf(key.slice(10))).padStart(2, '0')}`);
+    for (const t of tiles) {
+      const lit = litLabels.some(label => t.label?.startsWith(label));
+      assert.equal(t.unlit, !lit, `${t.label} ${lit ? 'is lit' : 'recedes'}`);
+      if (!lit && t.opacity !== null) assert.ok(t.opacity <= 0.3, `${t.label} image dims to ${t.opacity}`);
+    }
+    // Framed: the lit tiles span the stage, inside it.
+    const stage = await page.locator('#stage').boundingBox(), lit = tiles.filter(t => !t.unlit);
+    const box = [Math.min(...lit.map(t => t.box[0])), Math.min(...lit.map(t => t.box[1])), Math.max(...lit.map(t => t.box[2])), Math.max(...lit.map(t => t.box[3]))];
+    assert.ok(box[0] >= stage.x - 1 && box[1] >= stage.y - 1 && box[2] <= stage.x + stage.width + 1 && box[3] <= stage.y + stage.height + 1, `the lit tiles are on the stage: ${box}`);
+    assert.ok(box[2] - box[0] >= stage.width * 0.8 || box[3] - box[1] >= stage.height * 0.8, `and fill it: ${box} in ${JSON.stringify(stage)}`);
+    let { view } = await page.evaluate(() => window.wunderkammerFloatDebug());
+    assert.equal(view.flat.view.fitted, false); assert.deepEqual(view.ui.lit, LIT);
+    assert.match(await page.locator('#count').textContent(), /· 3 lit/);
+    // Framed this close, the live wall previews the centred item in the detail
+    // pane. Esc closes that first, then puts out the lit set.
+    await page.locator('#count').click();
+    if (await page.locator('#detail.open').count()) {
+      await page.keyboard.press('Escape'); await page.waitForSelector('#detail.open', { state: 'detached' });
+      assert.equal(await page.locator('#canvas > .tile.unlit').count(), 13, 'closing the pane leaves the lit set lit');
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('#canvas > .tile.unlit'));
+    ({ view } = await page.evaluate(() => window.wunderkammerFloatDebug()));
+    assert.equal(view.ui.lit, undefined, 'Esc puts the lit set out, and the link forgets it');
+    assert.doesNotMatch(await page.locator('#count').textContent(), /lit/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 /* ------------------------------------------------------------ the tool --- */
 
 const run = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'scripts/still.mjs'), ...args], { encoding: 'utf8', timeout: 120000 });
@@ -137,12 +210,25 @@ test('scripts/still.mjs writes a still and a sidecar that says what it shows, th
   assert.equal(flat.render.undrawn, 0, 'every tile in view was drawn');
 });
 
+test('scripts/still.mjs frames lit items, and the sidecar\'s exact link reproduces the framed shot', async t => {
+  const dir = await fixtureDir(t), collection = path.join(dir, 'collection.json');
+  const first = run('--collection', collection, '--view', `view=float&arrange=axes&${litQuery}&frame=evidence`, '--size', '640x400', '--scale', '1', '--out', path.join(dir, 'lit.png'));
+  assert.equal(first.status, 0, first.stderr);
+  const sidecar = JSON.parse(await readFile(path.join(dir, 'lit.json'), 'utf8'));
+  assert.equal(sidecar.export.lit.count, 3); assert.deepEqual(sidecar.view.spec.ui.lit, LIT);
+  assert.equal(sidecar.view.spec.float.fitted, false, 'the framing is a camera in the link, not a Fit');
+  const again = run('--collection', collection, '--view', sidecar.view.link, '--size', '640x400', '--scale', '1', '--out', path.join(dir, 'lit2.png'));
+  assert.equal(again.status, 0, again.stderr);
+  assert.ok((await readFile(path.join(dir, 'lit2.png'))).equals(await readFile(path.join(dir, 'lit.png'))), 'the same pixels from the exact link');
+});
+
 test('scripts/still.mjs refuses, and writes nothing, when the link or the collection is refused', async t => {
   const dir = await fixtureDir(t), collection = path.join(dir, 'collection.json');
   for (const [args, message] of [
     [['--view', 'view=float&arrange=rgb'], /The view was refused: .*arrange must be one of/],
     [['--view', 'chrome=full'], /--view may not set chrome/],
     [['--size', 'big'], /--size must be WIDTHxHEIGHT/],
+    [['--view', 'view=float&arrange=axes&frame=evidence'], /frame=evidence has nothing to frame/],
   ]) {
     const result = run('--collection', collection, ...args, '--out', path.join(dir, 'x.png'));
     assert.equal(result.status, 1, `${args.join(' ')} fails`);

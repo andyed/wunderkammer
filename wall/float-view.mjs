@@ -104,6 +104,8 @@ export class FloatView {
     // resolves it to. The request survives a corpus change; the resolution not.
     this.requestedAxes = {}; this.axes = null; this.dimensions = [];
     this.clips = []; this.keys = []; this.indexOf = new Map(); this.inScope = new Uint8Array(0); this.scopeCount = 0;
+    // Items lit by identity (docs/SHOTS.md): null lights the whole scope.
+    this.lit = null;
     this.layout = null; this.labels = []; this.listeners = []; this.frameTimes = []; this.renderCount = 0;
     this.host.classList.add('float-host'); this.host.replaceChildren();
     this.scene = new THREE.Scene(); this.scene.background = new THREE.Color('#050510');
@@ -244,18 +246,34 @@ export class FloatView {
     const wanted = new Set(scope.map(clipKey));
     this.scopeCount = 0;
     for (let i = 0; i < this.count; i++) { const on = wanted.has(this.keys[i]) ? 1 : 0; this.inScope[i] = on; this.scopeCount += on; }
-    if (this.field) {
-      const opacity = this.field.aOpacity.array, dim = this.dimMode === 'brightness' ? FLOAT_DIM : 0;
-      for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] ? 1 : dim;
-      this.field.aOpacity.needsUpdate = true;
-    }
+    this.applyOpacity();
     if (!this.inScopeKey(this.selection)) this.selection = null;
     this.syncCallout();
-    this.scopeNote.textContent = this.scopeCount === this.count ? `All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}` : `${this.scopeCount} of ${this.count} in scope · the rest are dimmed`;
+    this.updateScopeNote();
     if (this.hoverKey && !this.inScopeKey(this.hoverKey)) this.cancelHover();
     this.updateStatus(); this.invalidate();
   }
   inScopeKey(key) { const i = this.indexOf.get(key); return i !== undefined && this.inScope[i] === 1; }
+  /** Full brightness for what is in scope and lit; the rest dims in place. */
+  applyOpacity() {
+    if (!this.field) return;
+    const opacity = this.field.aOpacity.array, dim = this.dimMode === 'brightness' ? FLOAT_DIM : 0;
+    for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] && (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;
+    this.field.aOpacity.needsUpdate = true;
+  }
+  updateScopeNote() {
+    const lit = this.lit ? this.keys.filter((key, i) => this.inScope[i] && this.lit.has(key)).length : null;
+    this.scopeNote.textContent = (this.scopeCount === this.count ? `All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}` : `${this.scopeCount} of ${this.count} in scope · the rest are dimmed`)
+      + (lit === null ? '' : ` · ${lit} lit`);
+  }
+  /**
+   * Light only these items, by key; the rest of the scope dims as items outside
+   * it do. Nothing moves. Null or an empty set lights the whole scope again.
+   */
+  setLit(keys) {
+    this.lit = keys && keys.size ? new Set(keys) : null;
+    this.applyOpacity(); this.updateScopeNote(); this.invalidate();
+  }
 
   /** Move every item to its place in another arrangement, animated by the field's own motion. */
   setArrangement(name, { animate = true } = {}) {
@@ -457,13 +475,52 @@ export class FloatView {
   fitView({ animate = true, quiet = false } = {}) {
     this.fitted = true;
     if (!this.layout || !this.width) { if (!quiet) this.interact(); return; }
-    const c = new THREE.Vector3().fromArray(this.layout.bounds.centre), probe = this.camera.clone(), direction = fitDirection(this.arrangement);
+    const { position, target } = this.fitPose();
+    this.moveCamera(position, target, { animate });
+    if (!quiet) this.interact();
+  }
+  /**
+   * Frame a set of items, by key, from the arrangement's Fit direction: the
+   * evidence fills the stage and the rest of the space stays around it. One
+   * item gets fly-to's framing. Not "fitted", so a resize keeps this camera,
+   * and an exact link carries it. False when no key names an item.
+   */
+  frameItems(keys, { animate = false } = {}) {
+    const indices = [...new Set(keys)].map(key => this.indexOf.get(key)).filter(i => i !== undefined);
+    if (!indices.length || !this.layout || !this.width) return false;
+    let pose;
+    if (indices.length === 1) {
+      const i = indices[0], centre = new THREE.Vector3().fromArray(this.layout.positions, i * 3);
+      const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)), tanH = tanV * this.camera.aspect;
+      const distance = Math.max(this.layout.sizes[i * 2 + 1] / (2 * tanV * 0.38), this.layout.sizes[i * 2] / (2 * tanH * 0.5), 30);
+      pose = { position: centre.clone().addScaledVector(fitDirection(this.arrangement), distance), target: centre };
+    } else pose = this.fitPose({ only: indices, labels: false });
+    this.fitted = false; this.tween = null;
+    this.moveCamera(pose.position, pose.target, { animate });
+    return true;
+  }
+  /**
+   * The camera that frames `only` (item indices; default every item) from the
+   * arrangement's Fit direction, and the guide labels too when `labels`.
+   */
+  fitPose({ only = null, labels = true } = {}) {
+    const probe = this.camera.clone(), direction = fitDirection(this.arrangement);
     // Frame what is drawn: every tile at its destination, and the guide labels
     // as the boxes placeLabels will draw, beside their anchors, in pixels.
     const points = [], sizes = this.layout.sizes, p = this.layout.positions;
-    for (let i = 0; i < this.count; i++) points.push([p[i * 3], p[i * 3 + 1], p[i * 3 + 2], sizes[i * 2] / 2, sizes[i * 2 + 1] / 2]);
+    for (const i of only || this.keys.keys()) points.push([p[i * 3], p[i * 3 + 1], p[i * 3 + 2], sizes[i * 2] / 2, sizes[i * 2 + 1] / 2]);
+    let c = new THREE.Vector3().fromArray(this.layout.bounds.centre), radius = this.layout.bounds.radius;
+    if (only) {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (const [x, y, z, hw, hh] of points) {
+        lo[0] = Math.min(lo[0], x - hw); hi[0] = Math.max(hi[0], x + hw); lo[1] = Math.min(lo[1], y - hh); hi[1] = Math.max(hi[1], y + hh);
+        lo[2] = Math.min(lo[2], z); hi[2] = Math.max(hi[2], z);
+      }
+      c = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+      radius = Math.max(1, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
+    }
     const free = this.freeBand(), half = (free.top - free.bottom) / 2, focal = 1 / Math.tan(THREE.MathUtils.degToRad(probe.fov / 2));
-    const ndc = this.labels.map(label => {
+    const ndc = !labels ? [] : this.labels.map(label => {
       const w = label.width || 8 * label.node.textContent.length + 16, h = label.height || 26, [ox, oy] = labelOffset({ ...label, width: w, height: h });
       return [label.point, 2 * ox / this.width, -2 * oy / this.height, w / this.width, h / this.height];
     });
@@ -481,13 +538,12 @@ export class FloatView {
         return Math.abs(nx) <= 0.98 && Math.abs(ny + oy) + hh <= half;
       });
     };
-    let lo = 1, hi = this.layout.bounds.radius * 20; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    let lo = 1, hi = radius * 20; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
     // Raise the content into the band above the toolbar.
     const shift = (free.top + free.bottom) / 2 * hi / focal;
     const up = new THREE.Vector3().copy(probe.up).applyQuaternion(probe.quaternion);
     const target = c.clone().addScaledVector(up, -shift), position = target.clone().addScaledVector(direction, hi);
-    this.moveCamera(position, target, { animate });
-    if (!quiet) this.interact();
+    return { position, target };
   }
   /** NDC rows not covered by the toolbar and help line. */
   freeBand() {
@@ -821,7 +877,7 @@ export class FloatView {
       moving: f?.moving || 0, flying: !!this.tween, edge: this.layout?.edge || 0, declumped: this.layout?.declumped || null,
       unplaced: this.layout?.unplaced || 0, labels: this.labels.map(l => l.node.textContent),
       axes: this.axes, axisInfo: this.layout?.axisInfo || null,
-      callout: this.callout.text, announcement: this.announcer.textContent, dimensions: this.dimensions.map(d => d.id),
+      callout: this.callout.text, announcement: this.announcer.textContent, dimensions: this.dimensions.map(d => d.id), lit: this.lit ? [...this.lit] : null,
       state: this.capture(), selection: this.selection, renderCount: this.renderCount, farResident,
       failed: f?.atlases._failed?.size ?? 0, loading: f ? (f.atlases._inflight || 0) + f.atlases._farQueue.length + f.atlases._nearQueue.length + (f.atlases.far._dirty || f.atlases.near._dirty ? 1 : 0) : 0,
       pickTargets, frameTimes: this.frameTimes.slice() };

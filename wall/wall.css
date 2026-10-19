@@ -805,3 +805,10 @@ body[data-view-mode=aisle] .review-tip .brush-key { font-size:16px; }
   .edge-undo, .tray-return, .tray-filter, .float-toolbar, .float-help, .aisle-toolbar, .aisle-help, .sp-arrange, .sp-back, #lens-value) { display: none !important; }
 :root[data-chrome="none"] .stage { top: 0; left: 0; right: 0; bottom: 0; }
 :root[data-chrome="none"] #stage > .sp-host { bottom: 0; }
+
+/* ---------- lit items (lit=, docs/SHOTS.md) ----------
+ * The rest of the scope recedes in place: dim, nearly grey, and without its
+ * caption, because dimmed text would fall under the 8:1 floor. */
+.tile.unlit img { opacity: .2; filter: saturate(.25); }
+.tile.unlit { border-color: transparent; background: var(--bg); }
+.tile.unlit .cap { visibility: hidden; }

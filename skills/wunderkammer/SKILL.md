@@ -137,8 +137,11 @@ steps and traps.
      your own.
    - It refuses, writing nothing, when the link or the collection is refused,
      and says why.
-   - Stills cover the flat wall and the floating space so far. Frame the
-     claim with a facet or a highlight, so the evidence is what is lit.
+   - Point at the evidence. Add `lit=<key>` once per cited item (the item's
+     `url`, else `id:<id>`), so exactly those items stay bright and the rest
+     recede. Add `frame=evidence` to bring the camera in on them. With no lit
+     items, a facet or a highlight is the evidence instead.
+   - Stills cover the flat wall and the floating space so far.
      [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.
 

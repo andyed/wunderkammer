@@ -20,8 +20,8 @@ A shot is a view link plus what an image needs. Brushing decides what is lit.
 | Part | What decides it | Status |
 |---|---|---|
 | **View** | The keys an agent already writes for a live link: `view`, `arrange`, `across`, `up`, `depth`, `q`, `facet.<key>`, `group`, `lens`, `highlight.<key>`, `focus`. | Built |
-| **Brushing** | In the floating space, the scope (`q`, `facet.*`) lights its items and dims the rest in place. On the wall, a pinned lens value highlights its items. Brushing by identity, `items=` or `observation=`, is planned. | Partly built |
-| **Frame** | What the camera fits. Today that is the view's own Fit: the whole collection. Framing on the evidence, `frame=evidence`, is planned. | Partly built |
+| **Brushing** | `lit=<key>`, repeated, lights exactly the named items, and the rest of the scope recedes in place. In the floating space the scope (`q`, `facet.*`) also lights its items; on the wall a pinned lens value highlights its items. `observation=` and `dim=` are planned. | Mostly built |
+| **Frame** | What the camera fits: the view's own Fit (the whole collection), or `frame=evidence` (the lit items, a narrowed scope, or a pinned lens value). It is built for the wall and the floating space. | Mostly built |
 | **Camera** | The direction Fit looks from. Today each arrangement has a fixed direction. Named angles are planned. | Partly built |
 | **Caption** | The page's own counts, a legend for the lit set, and an optional title marked as the model's. | Planned |
 | **Image** | Size, scale and format: `--size`, `--scale`, PNG or JPEG. | Built |
@@ -155,38 +155,94 @@ node scripts/still.mjs --collection cats/collection.json \
 - At overview zoom the wall shows no group names. The pinned row title is a
   control and is hidden.
 - A pinned lens shows its legend, including the words "Esc to clear".
-- On the wall, a highlight tints its items, but the rest do not recede far
-  enough to read as context at a glance.
-- There is no caption, no framing on evidence, and no camera choice beyond the
-  view's own Fit.
+- On the wall, a lens highlight tints its items, but the rest do not recede
+  far enough to read as context at a glance. A lit set (phase 2a) does
+  recede.
+- There is no caption and no camera choice beyond the view's own Fit. Phase
+  2a added framing on the evidence.
 - The output is PNG or JPEG; there is no WebP.
+
+## Brushing by identity and framing on the evidence (phase 2a)
+
+**`lit=<key>`** names one item to light, repeated once per item. A key is
+the item's identity (its URL, else `id:<id>`) and may hold a comma, so the key
+repeats rather than splitting a list.
+- **Storage.** The set becomes `ui.lit` in the ViewSpec: optional, at most
+  10,000 keys, no duplicates, validated in `wall/view-schema.mjs`. Links
+  without it mean what they always did, so the version stays 1. A live link
+  holds at most 1,000 keys in all, so a larger set travels in an exact link.
+- **The floating space.** Unlit items dim in place, as items outside the
+  scope do: a quarter of their brightness, mostly desaturated. Nothing moves,
+  and the scope note adds "· N lit".
+- **The wall.** Unlit tiles drop to a fifth of their opacity, at a quarter of
+  their saturation, and lose their captions, since dimmed text would fall
+  under the 8:1 floor. The overview canvas stands aside while a set is lit, as
+  it does for a lens, because its pixels ignore a tile's own dimming. The
+  count adds "· N lit".
+- **Clearing.** Esc puts the set out, after closing a detail pane.
+- **Reading it back.** `window.wunderkammer.export().lit` gives `{ count,
+  keys, unresolved }`: the lit items in scope, by key, and the keys that name
+  no item. The shot sidecar carries it under `export`.
+
+**`frame=evidence`** points the camera at the evidence. The evidence is the
+lit items; failing those, in the floating space, a narrowed scope; failing
+that, a pinned lens value.
+- **The floating space.** Fit runs over just those items, from the
+  arrangement's own direction. The axis labels are not framed, so their titles
+  may fall outside the shot. A single item gets fly-to's framing, 0.38 of the
+  stage height.
+- **The wall.** The camera zooms to the bounding box of those tiles.
+- **Once, at restore.** The framing is applied once when the link is
+  restored, and the exact link keeps the camera it made (`fitted: false`),
+  not the request. A link with nothing to frame is refused with the reason.
+- **No pane over the shot.** Under `chrome=none` the wall no longer opens its
+  zoom preview: framed close, the live wall previews the centred item in the
+  detail pane, and that pane would cover the shot.
+
+**Measured.**
+- On the demo collection:
+  - 46 lit frames (kaleidoscopic and green, a set no single facet gives) in
+    Axes and on the wall;
+  - the April 2026 scope (35 frames) framed in its corner of the space;
+  - one lit frame framed alone.
+- On the fixture, a framed floating-space shot rebuilt from its exact link is
+  byte-identical.
+- **Tests.**
+  - `tests/still.test.mjs` adds four tests:
+    - lit and framing in the floating space;
+    - the wall's recede, framing and Esc;
+    - no pane over a framed wall shot;
+    - the command reproducing a framed shot from its exact link.
+  - It also adds a refusal of a link with nothing to frame.
+  - `tests/view-intent.test.mjs` adds one test: `lit=` parsing, both size
+    limits, and round trips through exact and live links.
+- Six mutation cases (`MUTATION_FILTER=still:`) each remove one protection,
+  and each is detected. With phase 1's four, all ten still cases are detected.
+
+**Limits.**
+- A single item framed this close shows the near atlas's 256 px tile, which is
+  soft at 1600 px.
+- That the overview stands aside is seen on the demo, not proven by a test:
+  the 16-item fixture's tiles are large enough that the overview never paints
+  them.
+- `observation=`, `dim=` and framing in the stacks and the hallway are not
+  built.
 
 ## Build order for the rest of shots
 
 This is the recommended order. Each step ships with tests in
 `tests/still.test.mjs` and a mutation case per protection, as phase 1 did.
 
-1. **Brushing by identity.** `items=<key,key>` lights exactly the named items,
-   and `observation=<id>` with `observations=<url>` lights an observation's
-   cited items. Both go through the observations contract
-   (`wall/observations.mjs`). `dim=<0..1>` sets how far the rest recede.
-   - Recommendation: make the lit set part of the ViewSpec, as an optional
-     field validated in `wall/view-schema.mjs`, so the sidecar's exact link
-     reproduces it. The version stays 1, because links without it mean what
-     they always did.
-   - The floating space can dim with `FLOAT_DIM` and its shader patch. The
-     wall needs a real recede for the unlit items, not only the lens tint.
-   - The sidecar gains `lit`: the keys lit, and the source (`items`,
-     `observation`, `facet`, `highlight`).
-2. **Frame on the evidence.** `frame=evidence` fits the camera to the lit
-   items, with the rest dimmed but in view.
-   - Floating space: generalise `fitView()` to a subset of the items. Today
-     Fit frames everything and fly-to frames one item.
-   - Wall: zoom to the bounding box of the lit tiles.
-   - Make it a shot parameter applied after the link is restored. The
-     resulting camera then lands in the exact link as an unfitted camera, so
-     the link reproduces the frame without a new schema field.
-   - Refuse an empty lit set. Give a single item fly-to's framing.
+1. **Brushing by identity: the rest.** `lit=` is built (phase 2a).
+   - **`observation=<id>` with `observations=<url>`** lights an observation's
+     cited items, through the observations contract
+     (`wall/observations.mjs`), and stores them as `ui.lit`.
+   - **`dim=<0..1>`** sets how far the rest recede.
+   - The sidecar's `lit` gains its source: `lit`, `observation`, `facet` or
+     `highlight`.
+2. **Frame on the evidence: the rest.** It is built for the wall and the
+   floating space (phase 2a). The stacks and the hallway come with step 5.
+   Single-item shots need a decision (below).
 3. **The figure layer.** This is a DOM overlay drawn only under `chrome=none`:
    - a caption from the page's counts ("89 of 297 frames · kaleidoscopic");
    - a legend for the lit set, replacing the lens legend and its "Esc to
@@ -218,8 +274,9 @@ This is the recommended order. Each step ships with tests in
 
 ## Open questions
 
-- **Where the lit set lives.** A ViewSpec field (recommended: the exact link
-  reproduces the shot), or a shot-only parameter recorded in the sidecar?
+- **Single-item shots.** Frame one item no closer than the near atlas can fill
+  sharply, or let a single-item shot open the detail pane, which shows the
+  full image?
 - **Model-written titles.** Allowed on a shot when marked as the model's, or
   never?
 - **The flat wall in perspective.** Tilt the wall plane as a perspective wall

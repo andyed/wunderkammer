@@ -38,7 +38,8 @@ import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
 /** `?chrome=none` shows the stage alone, for stills (docs/SHOTS.md). Set
  * before the first layout, so the stage is measured at its full size. */
-if (new URL(location.href).searchParams.get('chrome') === 'none') document.documentElement.dataset.chrome = 'none';
+const CHROMELESS = new URL(location.href).searchParams.get('chrome') === 'none';
+if (CHROMELESS) document.documentElement.dataset.chrome = 'none';
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
@@ -72,6 +73,7 @@ const state = {
   groupKey: 'none',
   sort: { key: 'none', direction: 'asc' },
   selected: null,
+  lit: null,           // item keys lit by identity (lit=); the rest of the scope recedes (docs/SHOTS.md)
   spatial: null,       // lazily constructed SpatialView
   mode: 'flat',
   get spatialOn() { return this.mode !== 'flat'; },
@@ -136,7 +138,8 @@ let stageSize = null;
 function syncOverview() { perf.span('overview/sync', syncOverviewNow); }
 function syncOverviewNow() {
   cancelAnimationFrame(overviewFrame); overviewFrame = 0;
-  const enabled = !state.spatialOn && !el.canvas.hasAttribute('data-brush-key');
+  // The overview paints covers on a canvas, which a tile's own dimming cannot reach: a lens or a lit set needs the DOM images.
+  const enabled = !state.spatialOn && !el.canvas.hasAttribute('data-brush-key') && !state.lit;
   // Leaving for the 3D view hides the flat stage, so its images can return at
   // once; a lens keeps the desk on screen and hands tiles back gradually.
   overview.setEnabled(enabled, { gradual: !state.spatialOn });
@@ -205,7 +208,8 @@ function captureView() {
     ...((state.floatSnapshot || state.float?.captureView()) ? {float:state.floatSnapshot || state.float?.captureView()} : {}),
     ui: { lens: brush.getPinned(), ...(brush.getPinnedValue()!==null?{highlight:{key:brush.getPinned(),value:brush.getPinnedValue()}}:{}), mediaSource: state.detailMedia, rail: !el.rail.classList.contains('hidden'), context: state.contextVisible, scopeBar: !document.getElementById('scope-bar').hidden,
       focus: state.clips.find(c => c.id === state.selected) ? clipKey(state.clips.find(c => c.id === state.selected)) : state.unresolvedFocus,
-      detailWidth: Number.isFinite(preferred) ? Math.min(1, preferred / window.innerWidth) : null },
+      detailWidth: Number.isFinite(preferred) ? Math.min(1, preferred / window.innerWidth) : null,
+      ...(state.lit ? { lit: [...state.lit] } : {}) },
   };
 }
 async function restoreView(spec, { intent = false } = {}) {
@@ -229,6 +233,7 @@ async function restoreView(spec, { intent = false } = {}) {
     state.branches = structuredClone(spec.scope.branches);
     state.sort = spec.presentation.sort || { key: 'none', direction: 'asc' };
     brush.clear(); brush.setPinned(spec.ui.lens || null, spec.ui.highlight?.value ?? null);
+    state.lit = spec.ui.lit?.length ? new Set(spec.ui.lit) : null;
     state.aisleSnapshot=spec.aisle || null;
     state.floatSnapshot=spec.float || null;
     buildReviewControls();
@@ -282,6 +287,9 @@ async function restoreView(spec, { intent = false } = {}) {
       const scale = view.scale * ratio;
       viewport.restore({ ...view, scale, x: r.width / 2 - (old.w / 2 - view.x) * ratio, y: r.height / 2 - (old.h / 2 - view.y) * ratio });
     }
+    applyLit();
+    // A live link may ask for a framing; the camera it makes is what the exact link keeps.
+    if (intent && new URL(location.href).searchParams.get('frame') === 'evidence') await frameEvidence();
     setBackgroundRevealed(!!spec.ui.context);
     await frames();
     linkNotice(warnings.join(' · '));
@@ -380,10 +388,67 @@ function exportView() {
     view: { mode: state.mode, group: state.groupKey },
     focus: focus ? entry(focus) : null,
     highlight: highlighted ? { key, value: String(value), count: highlighted.length, keys: highlighted.map(clipKey) } : null,
+    lit: state.lit ? litSummary() : null,
     count: state.filtered.length, total: state.clips.length,
     evidence: state.filtered.map(entry),
   };
 }
+/* ------------------------------------------------------------------ lit --- */
+
+/**
+ * Items lit by identity (`lit=` in a live link, `ui.lit` in a view): the rest
+ * of the scope recedes in place, so a shot can point at exactly the items a
+ * claim cites (docs/SHOTS.md). Unlike a filter, nothing leaves the view; unlike
+ * a lens value, the set is named item by item.
+ */
+function litSummary() {
+  const keys = state.filtered.map(clipKey).filter(key => state.lit.has(key));
+  const known = new Set(state.clips.map(clipKey));
+  return { count: keys.length, keys, unresolved: [...state.lit].filter(key => !known.has(key)).length };
+}
+function markUnlit() {
+  for (const [id, node] of state.tileEls) {
+    const clip = state.positions.get(id)?.clip;
+    node.classList.toggle('unlit', !!state.lit && !!clip && !state.lit.has(clipKey(clip)));
+  }
+  if (state.lit) el.canvas.dataset.lit = 'true'; else delete el.canvas.dataset.lit;
+}
+function applyLit() {
+  markUnlit(); syncOverview(); state.float?.setLit(state.lit); renderCount();
+}
+function setLit(keys) {
+  state.lit = keys && keys.size ? new Set(keys) : null;
+  applyLit(); invalidatePreview();
+}
+/**
+ * frame=evidence: point the camera at the evidence. That is the lit items, else
+ * in the floating space a narrowed scope, else a pinned lens value. In the
+ * floating space Fit frames those items; on the wall the camera zooms to their
+ * tiles. Throws when there is nothing to frame, so a link asking for it fails
+ * with a reason instead of showing the whole collection.
+ */
+async function frameEvidence() {
+  const inScope = state.filtered;
+  let keys = [];
+  if (state.lit) keys = inScope.map(clipKey).filter(key => state.lit.has(key));
+  else if (state.mode === 'float' && inScope.length < state.clips.length) keys = inScope.map(clipKey);
+  else if (brush.getPinned() && brush.getPinnedValue() !== null) {
+    const values = new Set([String(brush.getPinnedValue())]);
+    keys = inScope.filter(clip => matchesFacet(clip, brush.getPinned(), values)).map(clipKey);
+  }
+  if (!keys.length) throw new Error('frame=evidence has nothing to frame: light items with lit=, narrow the scope, or pin a highlight');
+  if (state.mode === 'float') state.float.frameItems(keys, { animate: false });
+  else if (state.mode === 'flat') {
+    const want = new Set(keys), boxes = [...state.positions.values()].filter(p => want.has(clipKey(p.clip)));
+    if (!boxes.length) throw new Error('frame=evidence: none of the items to frame are on the wall');
+    const x = Math.min(...boxes.map(p => p.x)), y = Math.min(...boxes.map(p => p.y));
+    const w = Math.max(...boxes.map(p => p.x + p.w)) - x, h = Math.max(...boxes.map(p => p.y + p.h)) - y;
+    const r = el.stage.getBoundingClientRect(), pad = viewport.fitPadding(r) * 2;
+    viewport.focus({ x, y, w, h }, Math.min((r.width - pad * 2) / w, (r.height - pad * 2) / h));
+  } else throw new Error(`frame=evidence works on the flat wall and in the floating space so far, not view=${state.mode}`);
+  await frames();
+}
+
 /* --------------------------------------------------------------- stills --- */
 
 /** Views a still can wait for: their renderers say when their pixels are final. */
@@ -880,6 +945,7 @@ function refreshSpatial() {
     // The whole corpus floats; scope only dims, so positions keep their meaning.
     state.floatDirty=false;
     state.float.setClips(state.clips,state.filtered,{nouns:state.nouns});
+    state.float.setLit(state.lit);
     state.float.setFocused?.(state.clips.find(c=>c.id===state.selected)?clipKey(state.clips.find(c=>c.id===state.selected)):null);
     renderScopeEmpty();syncArrangement();return;
   }
@@ -999,6 +1065,7 @@ function renderNow() {
   syncOverview();
   perf.span('render/background', () => renderBackground(result, bounds));
   perf.span('render/brush', () => {brush.refresh();syncLensValue();});
+  markUnlit();
   applyScaleStyles(viewport.scale, { force: true });
 
   renderCount();
@@ -1033,6 +1100,7 @@ function renderCount() {
   const strong = document.createElement('b');
   strong.textContent = String(state.filtered.length);
   el.count.append(strong, document.createTextNode(` of ${counted(state.clips.length, state.nouns)}`));
+  if (state.lit) el.count.append(document.createTextNode(` · ${litSummary().count} lit`));
   if (state.viewStateError) el.count.append(document.createTextNode(` · ${state.viewStateError}`));
 }
 
@@ -1846,10 +1914,11 @@ function applyZoomDetail() {
   zoomDetailTimer = 0;
   if (state.preview && !previewByZoom) return;              // a hover preview is the user's more recent intent
   const stage = el.stage.getBoundingClientRect();
-  // 3D, the full-window mobile reader and hydration never preview by zoom.
+  // 3D, the full-window mobile reader and hydration never preview by zoom, and
+  // nor does a still: a pane opened by the zoom would cover the shot.
   // Zoomed all the way out is never zoomed in, however few items fill the view.
   const floor = viewport.scaleFloor?.(), atFloor = viewport.fitted || (floor > 0 && viewport.scale <= floor * 1.01);
-  const pick = state.spatialOn || hydrating || atFloor || window.innerWidth <= 800 ? null
+  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor || window.innerWidth <= 800 ? null
     : zoomDetailCandidate({
       tiles: state.positions.values(), pose: viewport.snapshot(), stage,
       // The pane's width whether or not it is open, so opening it moves nothing.
@@ -2355,6 +2424,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!state.spatialOn && viewport.undoEdge()) { e.preventDefault(); return; }
     if (!state.spatialOn && returnFromTray()) { e.preventDefault(); return; }
+    // Esc closes the detail pane first (the capture handler above), then puts out a lit set.
+    if (state.lit && !el.detail.classList.contains('open')) { e.preventDefault(); setLit(null); return; }
     closeDetail(); el.search.blur(); return;
   }
   if (typing) return;

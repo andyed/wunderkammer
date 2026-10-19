@@ -528,7 +528,7 @@ const cases = [
   },
   {
     name: 'float scope never dims', file: 'wall/float-view.mjs',
-    from: 'opacity[i] = this.inScope[i] ? 1 : dim;', to: 'opacity[i] = 1;',
+    from: 'opacity[i] = this.inScope[i] && (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;', to: 'opacity[i] = (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
@@ -909,6 +909,37 @@ const cases = [
     name: 'still: the tool takes a still of a refused link', file: 'scripts/still.mjs',
     from: '    if (/^Could not/.test(notice)) fail(`The view was refused: ${notice}`);', to: '',
     test: 'tests/still.test.mjs', pattern: 'scripts/still.mjs refuses',
+  },
+  {
+    name: 'still: lit, the floating space lights everything in scope', file: 'wall/float-view.mjs',
+    from: '    for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] && (!this.lit || this.lit.has(this.keys[i])) ? 1 : dim;',
+    to: '    for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] ? 1 : dim;',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: lit, unlit wall tiles keep their brightness', file: 'wall/wall.css',
+    from: '.tile.unlit img { opacity: .2; filter: saturate(.25); }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'on the wall, unlit tiles recede',
+  },
+  {
+    name: 'still: lit, the exact link loses the lit set', file: 'wall/wall.mjs',
+    from: '      ...(state.lit ? { lit: [...state.lit] } : {}) },', to: '      },',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: lit, Esc leaves the lit set lit', file: 'wall/wall.mjs',
+    from: '    if (state.lit && !el.detail.classList.contains(\'open\')) { e.preventDefault(); setLit(null); return; }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'on the wall, unlit tiles recede',
+  },
+  {
+    name: 'still: frame=evidence is ignored', file: 'wall/wall.mjs',
+    from: "    if (intent && new URL(location.href).searchParams.get('frame') === 'evidence') await frameEvidence();", to: '',
+    test: 'tests/still.test.mjs', pattern: 'lit lights exactly the named items in the floating space',
+  },
+  {
+    name: 'still: a zoom preview opens over the shot', file: 'wall/wall.mjs',
+    from: '  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor', to: '  const pick = state.spatialOn || hydrating || atFloor',
+    test: 'tests/still.test.mjs', pattern: 'a framed wall shot opens no detail pane',
   }
 ];
 

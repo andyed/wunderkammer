@@ -1,6 +1,8 @@
 /** Portable view contract, shared by the browser and immutable snapshot endpoint. */
 import { ARRANGEMENTS, validAxes } from './float-space.mjs';
 export const MAX_VIEW_BYTES = 4 * 1024 * 1024;
+/** Most items one view may light by identity (`ui.lit`, `lit=` in a live link). */
+export const MAX_LIT = 10000;
 export function canonical(value) {
   return JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v)
     ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]])) : v);
@@ -26,6 +28,9 @@ export function validateView(v) {
       || !(v.ui.highlight === undefined || v.ui.highlight === null || obj(v.ui.highlight) && str(v.ui.highlight.key) && v.ui.highlight.key.length > 0 && str(v.ui.highlight.value) && v.ui.highlight.key === v.ui.lens)
       || !(v.ui.mediaSource === undefined || v.ui.mediaSource === null || str(v.ui.mediaSource))
       || !(v.ui.scopeBar === undefined || typeof v.ui.scopeBar === 'boolean')
+      // Items lit by identity: the rest of the scope recedes (docs/SHOTS.md). Optional, so older links mean what they did.
+      || !(v.ui.lit === undefined || Array.isArray(v.ui.lit) && v.ui.lit.length >= 1 && v.ui.lit.length <= MAX_LIT
+        && v.ui.lit.every(k => str(k) && k.length > 0) && new Set(v.ui.lit).size === v.ui.lit.length)
       || !(v.ui.focus === null || str(v.ui.focus)) || !(v.ui.detailWidth === null || num(v.ui.detailWidth) && v.ui.detailWidth > 0 && v.ui.detailWidth <= 1)) fail();
   if (v.spatial !== null) {
     const s = v.spatial;

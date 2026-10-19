@@ -1,10 +1,13 @@
-import { validateView } from './view-schema.mjs';
+import { validateView, MAX_LIT } from './view-schema.mjs';
 import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, AXES, isAxisName } from './float-space.mjs';
 
 // A readable live intent projects into the same ViewSpec as an exact permalink.
 // It does not evaluate collection membership or carry frozen corpus revisions.
-const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail', ...AXES]);
-const recognized = key => SINGLE.has(key) || key.startsWith('facet.') || key.startsWith('highlight.');
+const SINGLE = new Set(['view', 'q', 'group', 'sort', 'direction', 'lens', 'travel', 'spread', 'arrange', 'focus', 'rail', 'frame', ...AXES]);
+/** `lit` repeats, one item identity each: an identity is a URL and may hold a comma. */
+const recognized = key => SINGLE.has(key) || key === 'lit' || key.startsWith('facet.') || key.startsWith('highlight.');
+/** Camera framings a live link may ask for; the wall applies one after restoring the view. */
+export const FRAMES = Object.freeze(['evidence']);
 const invalid = message => { throw new Error(`Invalid targeted view: ${message}`); };
 const field = value => {
   if (!value || value.length > 128 || ['__proto__', 'prototype', 'constructor'].includes(value)) invalid('invalid attribute name');
@@ -65,6 +68,13 @@ export function applyViewIntent(url, defaultView) {
     view.ui.lens = name; view.ui.highlight = { key: name, value };
   }
   if (p.has('focus')) view.ui.focus = p.get('focus') || null;
+  if (p.has('lit')) {
+    const lit = [...new Set(p.getAll('lit'))];
+    if (lit.some(key => !key)) invalid('lit must name an item');
+    if (lit.length > MAX_LIT) invalid(`lit may name at most ${MAX_LIT} items`);
+    view.ui.lit = lit;
+  }
+  if (p.has('frame') && !FRAMES.includes(p.get('frame'))) invalid(`frame must be one of ${FRAMES.join(', ')}`);
   if (p.has('rail')) {
     if (!['0', '1'].includes(p.get('rail'))) invalid('rail must be 0 or 1');
     view.ui.rail = p.get('rail') === '1';
@@ -117,6 +127,7 @@ export function targetedViewURL(view, base) {
   if (view.ui.lens) p.set('lens', view.ui.lens);
   if (view.ui.highlight) p.set(`highlight.${view.ui.highlight.key}`, view.ui.highlight.value);
   if (view.ui.focus) p.set('focus', view.ui.focus);
+  for (const key of view.ui.lit || []) p.append('lit', key);
   if (!view.ui.rail) p.set('rail', '0');
   if (view.presentation.mode === 'aisle') {
     p.set('travel', String(view.aisle.travel)); p.set('spread', String(view.aisle.spread));

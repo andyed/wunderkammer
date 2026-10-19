@@ -20,6 +20,13 @@
     every cover landed, nothing moving, every flat-wall tile in view drawn.
     "View ready" only meant the link was restored.
   - It covers the flat wall and the floating space so far.
+  - `lit=<key>`, repeated once per item, lights exactly those items. The rest
+    of the scope recedes in place, in the floating space and on the wall, and
+    Esc puts the set out. The set is kept in the view (`ui.lit`), so exact and
+    live links carry it.
+  - `frame=evidence` brings the camera in on the lit items, a narrowed scope
+    or a pinned highlight. The exact link keeps the camera it made, and a link
+    with nothing to frame is refused.
   - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
     brushing by identity, framing on the evidence, captions from the page's
     counts, and camera angles. Interactive embeds are deferred.
