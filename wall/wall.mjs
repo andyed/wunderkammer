@@ -32,7 +32,8 @@ import { ViewStateStore, mergePileState } from './view-state.mjs';
 import { perf } from './instrument.mjs';
 import { collectionSource, loadCollection, collectionViewState, notifyEmbedder, FROM_PARENT } from './collection-source.mjs';
 import { setProxyAvailable } from './media-policy.mjs';
-import { AXES, axisDimensions } from './float-space.mjs';
+import { AXES, axisDimensions, ARRANGEMENT_LABELS } from './float-space.mjs';
+import { figureOverrides, renderBand, renderGroups } from './figure.mjs';
 import { arrangeMenu, MENU, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 
@@ -40,6 +41,14 @@ import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
  * before the first layout, so the stage is measured at its full size. */
 const CHROMELESS = new URL(location.href).searchParams.get('chrome') === 'none';
 if (CHROMELESS) document.documentElement.dataset.chrome = 'none';
+/** A still's figure layer (wall/figure.mjs): a caption band under the stage, on by
+ * default with chrome=none; figure=none leaves the stage alone. The band's
+ * height is reserved now, so every Fit and framing already sees the shorter stage. */
+const FIGURE = CHROMELESS && new URL(location.href).searchParams.get('figure') !== 'none';
+if (FIGURE) document.documentElement.dataset.figure = 'band';
+// Word overrides for the figure (title=, label.*=). A bad one fails the still, not the page.
+let figureLabels = { title: null, lit: null, rest: null, groups: new Map(), axes: {} }, figureLabelError = null;
+if (FIGURE) try { figureLabels = figureOverrides(new URL(location.href).searchParams); } catch (err) { figureLabelError = err.message; }
 
 /** Facets hidden from browsing controls, including instance-specific additions. */
 const FACET_BLOCKLIST = new Set(['dims', 'media', 'cover']);
@@ -110,6 +119,9 @@ const el = {
   detail: document.getElementById('detail'),
   empty: document.getElementById('empty')
 };
+// The figure's two layers: the caption band below the stage, and group names over it.
+const figureBand = FIGURE ? document.body.appendChild(Object.assign(document.createElement('div'), { className: 'figure-band' })) : null;
+const figureGroups = FIGURE ? el.stage.appendChild(Object.assign(document.createElement('div'), { className: 'figure-groups' })) : null;
 
 const detailPane = createDetailPane(el.detail, el.stage);
 const viewport = new Viewport(el.stage, el.canvas, onViewportChange);
@@ -498,6 +510,7 @@ function undrawnTiles() {
  * result counts the tiles still showing only their tint.
  */
 async function whenStill({ timeout = 30000, quietFrames = 3, allowUndrawn = false } = {}) {
+  if (figureLabelError) throw new Error(figureLabelError);
   const start = performance.now();
   let quiet = 0, pending = [];
   for (;;) {
@@ -510,7 +523,85 @@ async function whenStill({ timeout = 30000, quietFrames = 3, allowUndrawn = fals
     if (quiet >= quietFrames) break;
     if (performance.now() - start > timeout) throw new Error(`The view did not settle within ${timeout} ms: ${pending.join('; ')}`);
   }
-  return { mode: state.mode, waitedMs: Math.round(performance.now() - start), undrawn: state.mode === 'flat' ? undrawnTiles() : 0 };
+  const undrawn = state.mode === 'flat' ? undrawnTiles() : 0;
+  // The figure is drawn last, over a picture that no longer changes.
+  const figure = FIGURE ? renderFigure() : null;
+  if (figure) await frames();
+  return { mode: state.mode, waitedMs: Math.round(performance.now() - start), undrawn, figure };
+}
+
+/* -------------------------------------------------------------- figure --- */
+
+/**
+ * What the figure says, from the page's own state: the count line, a legend
+ * with counts, and a note naming the collection and the view. Overrides change
+ * words, never numbers, and every text records whether it is the page's or an
+ * override.
+ */
+function figureData() {
+  const labels = figureLabels, nouns = state.nouns, total = state.clips.length, inScope = state.filtered.length;
+  const narrowed = inScope < total, scope = narrowed ? ` · ${scopeLabel()}` : '';
+  const source = text => text === null ? 'page' : 'override';
+  const entry = (role, fallback, count) => ({ role, label: labels[role] ?? fallback, count, source: source(labels[role]) });
+  let counts, legend = [];
+  const pinned = brush.getPinned(), value = brush.getPinnedValue();
+  if (state.lit) {
+    const lit = litSummary().count;
+    counts = `${lit} of ${counted(inScope, nouns)} lit${scope}`;
+    // In the floating space the items outside the scope recede too.
+    legend = [entry('lit', 'Lit', lit), entry('rest', 'Receded', (state.mode === 'float' ? total : inScope) - lit)];
+  } else if (narrowed && state.mode === 'float') {
+    counts = `${inScope} of ${counted(total, nouns)}${scope}`;
+    legend = [entry('lit', 'In scope', inScope), entry('rest', 'Outside the scope', total - inScope)];
+  } else if (pinned && value !== null) {
+    const matches = state.filtered.filter(clip => matchesFacet(clip, pinned, new Set([String(value)]))).length;
+    const name = `${state.facetLabels[pinned] || pinned}: ${value}`;
+    counts = `${matches} of ${counted(inScope, nouns)} · ${name}${scope}`;
+    legend = [entry('lit', name, matches), entry('rest', 'Other values', inScope - matches)];
+  } else counts = narrowed ? `${inScope} of ${counted(total, nouns)}${scope}` : counted(total, nouns);
+  return { headline: labels.title ?? counts, headlineSource: source(labels.title), counts, legend, notes: viewNotes(),
+    groups: state.mode === 'flat' ? groupLabels() : [],
+    axes: state.mode === 'float' ? Object.fromEntries(AXES.map(axis => [axis, labels.axes[axis] ? 'override' : 'page'])) : null };
+}
+/**
+ * The collection's title and what the view does, in the page's words (axis
+ * titles may be overridden), longest first: without the title, then with the
+ * axis titles' detail dropped, then the arrangement's name alone. The band
+ * shows the longest that fits.
+ */
+function viewNotes() {
+  let view = '', brief = '', name = '';
+  if (state.mode === 'float' && state.float) {
+    const info = state.float.layout?.axisInfo, arrangement = state.float.arrangement;
+    if (arrangement === 'axes' && info) {
+      const title = axis => figureLabels.axes[axis] ?? info[axis].title;
+      view = `Axes: ${AXES.map(axis => `${axis} ${title(axis)}`).join(' · ')}`;
+      // "lightness (OKLab L)" → "lightness", "hue (OKLCH) from 220°" → "hue"; an override is kept whole.
+      brief = `Axes: ${AXES.map(axis => `${axis} ${figureLabels.axes[axis] ?? title(axis).replace(/\s*\(.*?\)|\s+from\s+\d+°/g, '')}`).join(' · ')}`;
+      name = 'Axes';
+    } else if (arrangement === 'az') view = name = 'Shelved A–Z by title';
+    else { view = `Placed by dominant colour in ${ARRANGEMENT_LABELS[arrangement]}`; name = ARRANGEMENT_LABELS[arrangement]; }
+  } else if (state.mode === 'flat') {
+    const key = state.groupKey;
+    view = name = key === SIMILARITY ? 'Similarity map' : key === SIMILARITY_GRID ? 'Similarity grid' : !key || key === 'none' ? 'Ungrouped' : `Grouped by ${state.facetLabels[key] || key}`;
+  }
+  const notes = [[document.title, view].filter(Boolean).join(' · '), view, brief, name].filter(Boolean);
+  return [...new Set(notes)];
+}
+/** Group names for the wall's blocks in view, at their top-left corners on the stage. */
+function groupLabels() {
+  const r = el.stage.getBoundingClientRect(), s = viewport.scale;
+  return (state.blocks || []).filter(b => b.label && b.label !== '—').map(b => {
+    const left = b.x * s + viewport.x, top = b.y * s + viewport.y, width = b.w * s;
+    return { label: b.label, text: figureLabels.groups.get(b.label) ?? b.label, count: b.count, source: figureLabels.groups.has(b.label) ? 'override' : 'page',
+      left: Math.max(0, left) + 6, top: Math.max(0, top) + 6, width: Math.min(width, r.width - Math.max(0, left)) - 12, onStage: left < r.width && top < r.height && left + width > 0 && top + b.h * s > 0 };
+  }).filter(g => g.onStage && g.width >= 60).map(({ onStage, ...g }) => g);
+}
+/** Draw the figure and say what it says; `clipped` lists any text that did not fit. */
+function renderFigure() {
+  const { notes, ...figure } = figureData();
+  const band = renderBand(figureBand, { ...figure, notes }), groups = renderGroups(figureGroups, figure.groups);
+  return { ...figure, note: band.note, noteFull: notes[0], groups: figure.groups.map(({ left, top, width, ...g }) => g), clipped: [...band.clipped, ...groups] };
 }
 
 function scopeSnapshot() {
@@ -843,7 +934,7 @@ async function toggleSpatial(on, kind='3d', { arrangement=null }={}) {
         const {FloatView}=await import('./float-view.mjs');
         // The detail pane overlays the stage's right edge; fly-to lands beside it.
         // Stacks in its menu hands over to the stacks renderer.
-        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0,onStacks:()=>toggleSpatial(true,'3d')});
+        state.float=new FloatView(el.floatHost,{...hooks,axisKeys:attributeKeys,labelFor:key=>state.facetLabels[key]||key,obscuredRight:()=>el.detail.classList.contains('open')&&window.innerWidth>800?el.detail.getBoundingClientRect().width:0,onStacks:()=>toggleSpatial(true,'3d'),axisTitles:figureLabels.axes});
       }else{
         const {SpatialView,keyOfClip}=await import('./spatial/spatial-view.mjs');
         state.clipKey=keyOfClip;state.spatial=new SpatialView(el.spHost,hooks);

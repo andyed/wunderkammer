@@ -23,7 +23,7 @@ A shot is a view link plus what an image needs. Brushing decides what is lit.
 | **Brushing** | `lit=<key>`, repeated, lights exactly the named items, and the rest of the scope recedes in place. In the floating space the scope (`q`, `facet.*`) also lights its items; on the wall a pinned lens value highlights its items. `observation=` and `dim=` are planned. | Mostly built |
 | **Frame** | What the camera fits: the view's own Fit (the whole collection), or `frame=evidence` (the lit items, a narrowed scope, or a pinned lens value). It is built for the wall and the floating space. | Mostly built |
 | **Camera** | The direction Fit looks from. Today each arrangement has a fixed direction. Named angles are planned. | Partly built |
-| **Caption** | The page's own counts, a legend for the lit set, and an optional title marked as the model's. | Planned |
+| **Caption** | The figure: a band under the stage with a headline, the page's own counts, a legend with counts, and a note on the view. On the wall, group names sit over their blocks. Words can be overridden (`title=`, `label.*=`) but numbers cannot, and the sidecar says whose words are whose. | Built |
 | **Image** | Size, scale and format: `--size`, `--scale`, PNG or JPEG. | Built |
 
 **Principles.**
@@ -154,7 +154,8 @@ node scripts/still.mjs --collection cats/collection.json \
 - Shots cover the flat wall and the floating space only.
 - At overview zoom the wall shows no group names. The pinned row title is a
   control and is hidden.
-- A pinned lens shows its legend, including the words "Esc to clear".
+- A pinned lens shows its legend, including the words "Esc to clear". Phase
+  2b hides it under the figure band, whose legend replaces it.
 - On the wall, a lens highlight tints its items, but the rest do not recede
   far enough to read as context at a glance. A lit set (phase 2a) does
   recede.
@@ -228,6 +229,71 @@ that, a pinned lens value.
 - `observation=`, `dim=` and framing in the stacks and the hallway are not
   built.
 
+## The figure layer and overriding its words (phase 2b)
+
+Under `chrome=none` a shot gets a figure (`wall/figure.mjs`), drawn by
+`whenStill()` once the picture is final. `figure=none` leaves it out.
+- **The caption band** sits below the stage. The stage ends above it from the
+  first layout, so every Fit and framing already sees the shorter stage, and
+  nothing in the band covers the picture. It holds:
+  - **the headline:** the page's count line, for example "3 of 16 items lit",
+    "35 of 297 items · capture month: 2026-04" or "158 of 297 items · color
+    family: green";
+  - **the legend:** a swatch and a count each for what is lit and what
+    recedes (in scope and outside it, or a lens value and the other values);
+  - **a note** naming the collection and what the view does, such as "Psychodeli
+    Atlas · Axes: across capture date · up lightness (OKLab L) · depth hue
+    (OKLCH) from 220°".
+- **Group names on the wall** sit over their blocks in place of the native
+  headings, at any zoom, with their counts.
+- **Overrides** change the words, never the numbers. They are page parameters,
+  or `--title` and `--label` on the command:
+
+  | Parameter | `--title` / `--label` | Changes |
+  |---|---|---|
+  | `title=` | `--title 'Ginger cats of the 1970s'` | the headline |
+  | `label.lit=` | `--label lit='Ginger cats'` | the legend's lit entry |
+  | `label.rest=` | `--label rest='Every other cat'` | the legend's other entry |
+  | `label.group.<name>=` | `--label group.1970s='The seventies'` | a group's name on the wall |
+  | `label.across=`, `label.up=`, `label.depth=` | `--label across='When'` | an axis title in the floating space |
+
+  - Under an overridden headline the page's count line stays on the shot.
+  - A renamed legend entry or group keeps its computed count.
+  - The figure records every text's source (`page` or `override`), and the
+    sidecar carries it under `figure`.
+  - An unknown, repeated, empty or over-long (200 characters) key fails the
+    shot and names the keys it takes.
+  - An override is untrusted text like any item title, and reaches the DOM as
+    plain text.
+- **Nothing is clipped silently.** The note on the view may shorten to fit: it
+  drops the collection title first, then the axis titles' detail, then
+  everything but the arrangement's name. The sidecar keeps the full note as
+  `noteFull`. Any other text that does not fit (the headline, the count line,
+  a legend entry, a group name) fails the shot with the text named.
+- **Contrast measured on the shot.** After the picture is final, the command
+  screenshots it. For every readable text box (the figure, the floating
+  space's axis labels, tile captions) it reads the colour that fills most of
+  the box from those pixels, and measures the text's computed colour against
+  it, faded by any opacity on the way.
+  - The ratios go into the sidecar as `contrast: { floor: 8, min, below,
+    items }`.
+  - A shot with any text under 8:1 fails, naming the texts, unless
+    `--allow-low-contrast` records it instead.
+  - On the demo collection every text box measured at least 12.19:1.
+
+**Measured.**
+- **Tests.** `tests/still.test.mjs` adds five tests:
+  - what the band says, and the stage ending above it;
+  - overrides changing words and not numbers, and the bad keys refused;
+  - group names on the wall, renamed, and `figure=none`;
+  - the contrast measurement itself, on synthetic pixels, including a text
+    whose own CSS ground is transparent over a light parent;
+  - the command's sidecar, the shortened note, and the refusals of an
+    over-long title and an unknown label.
+- **Mutation cases.** Four cases each remove one protection, and each is
+  detected: the count line under an overridden headline, the reserved band,
+  the clip check, and the contrast floor.
+
 ## Build order for the rest of shots
 
 This is the recommended order. Each step ships with tests in
@@ -243,15 +309,10 @@ This is the recommended order. Each step ships with tests in
 2. **Frame on the evidence: the rest.** It is built for the wall and the
    floating space (phase 2a). The stacks and the hallway come with step 5.
    Single-item shots need a decision (below).
-3. **The figure layer.** This is a DOM overlay drawn only under `chrome=none`:
-   - a caption from the page's counts ("89 of 297 frames · kaleidoscopic");
-   - a legend for the lit set, replacing the lens legend and its "Esc to
-     clear";
-   - group names on wall shots at overview zoom;
-   - an optional `title=`, marked as the model's (an open decision, below).
-
-   Measure contrast on the rendered pixels: sample the screenshot behind each
-   text box, record it in the sidecar, and refuse a shot under 8:1.
+3. **The figure layer.** Built (phase 2b). Still to come:
+   - legend swatches that show the items' own colours;
+   - a shot-level choice of band position (above, below or none) for layouts
+     that need the full height.
 4. **Camera angles.** `camera=front|three-quarter|top|iso`, plus `yaw` and
    `pitch` in degrees, set the floating space's Fit direction
    (`FIT_DIRECTION`, `AXES_DIRECTION` and `fitDirection()` in
@@ -277,16 +338,19 @@ This is the recommended order. Each step ships with tests in
 - **Single-item shots.** Frame one item no closer than the near atlas can fill
   sharply, or let a single-item shot open the detail pane, which shows the
   full image?
-- **Model-written titles.** Allowed on a shot when marked as the model's, or
-  never?
 - **The flat wall in perspective.** Tilt the wall plane as a perspective wall
   (Mackinlay, Robertson and Card, 1991) for shots, or keep perspective to the
   3D views? This is new rendering; muriel's `render_assets/perspective-wall`
   is the reference.
 - **WebP.** An encoder dependency, or leave conversion to the caller?
   Playwright writes PNG and JPEG.
-- **Caption placement.** Where the caption sits when it would cover an axis
-  label or the lit items, and whether a shot may reserve a band for it.
+- **Decided 2026-10-19.**
+  - **Overrides.** Words on a shot may be overridden by whoever makes it, a
+    person or a model. Andy: "users are going to want to be able to override
+    labeling". The numbers stay the page's, and the sidecar records whose
+    words are whose.
+  - **Caption placement.** A band below the stage, reserved before the first
+    layout, so it never covers the picture.
 
 ## Deferred: small interactive pieces
 

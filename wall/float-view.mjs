@@ -342,8 +342,11 @@ export class FloatView {
     this.guides.geometry.dispose(); this.guides.geometry = new THREE.BufferGeometry();
     this.guides.geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
     this.overlay.replaceChildren(); this.labels = [];
+    // A shot may rename an axis (callbacks.axisTitles, docs/SHOTS.md): the words change, the axis does not.
+    const titles = this.callbacks.axisTitles || {};
     for (const label of this.layout?.labels || []) {
-      const node = element('span', `float-label float-label-${label.kind}`, label.text); this.overlay.append(node);
+      const text = label.axis && titles[label.axis] ? `${AXIS_LABELS[label.axis]} · ${titles[label.axis]}` : label.text;
+      const node = element('span', `float-label float-label-${label.kind}`, text); this.overlay.append(node);
       this.labels.push({ point: new THREE.Vector3().fromArray(label.point), node, kind: label.kind, side: label.side, gap: label.gap || 0 });
     }
     // Measured once, now, so Fit can frame each label's own box.

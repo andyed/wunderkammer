@@ -27,6 +27,16 @@
   - `frame=evidence` brings the camera in on the lit items, a narrowed scope
     or a pinned highlight. The exact link keeps the camera it made, and a link
     with nothing to frame is refused.
+  - The figure: a band under the stage with the page's counts as the
+    headline, a legend with counts and a note on the view, and group names
+    on the wall.
+    - `--title` and `--label` (`title=`, `label.lit=`, `label.rest=`,
+      `label.group.<name>=`, `label.across=`…) override its words, never its
+      numbers, and the sidecar records whose words are whose.
+    - Text that does not fit fails the shot, except the note on the view,
+      which shortens.
+  - Every readable text box is measured against the shot's own pixels; under
+    8:1 the shot is refused (`--allow-low-contrast` records it instead).
   - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
     brushing by identity, framing on the evidence, captions from the page's
     counts, and camera angles. Interactive embeds are deferred.

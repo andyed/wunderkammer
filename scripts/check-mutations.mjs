@@ -940,6 +940,26 @@ const cases = [
     name: 'still: a zoom preview opens over the shot', file: 'wall/wall.mjs',
     from: '  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor', to: '  const pick = state.spatialOn || hydrating || atFloor',
     test: 'tests/still.test.mjs', pattern: 'a framed wall shot opens no detail pane',
+  },
+  {
+    name: 'still: figure, an overridden headline drops the page\'s counts', file: 'wall/figure.mjs',
+    from: "  if (figure.headline !== figure.counts) { const counts = element('span', 'figure-counts', figure.counts); counts.dataset.figure = 'counts'; detail.append(counts); }", to: '',
+    test: 'tests/still.test.mjs', pattern: 'overrides change the figure',
+  },
+  {
+    name: 'still: figure, the band covers the stage', file: 'wall/wall.css',
+    from: ':root[data-figure="band"] .stage { bottom: var(--figure-h); }', to: '',
+    test: 'tests/still.test.mjs', pattern: 'the figure band says what the page counts',
+  },
+  {
+    name: 'still: figure, text that does not fit passes', file: 'wall/figure.mjs',
+    from: 'const clipped = nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.textContent);', to: 'const clipped = nodes => [];',
+    test: 'tests/still.test.mjs', pattern: 'scripts/still.mjs records the figure',
+  },
+  {
+    name: 'still: contrast under the floor passes', file: 'scripts/still.mjs',
+    from: '  const below = items.filter(item => item.ratio < floor);', to: '  const below = [];',
+    test: 'tests/still.test.mjs', pattern: 'contrast is read from the shot',
   }
 ];
 

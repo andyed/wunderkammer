@@ -141,6 +141,13 @@ steps and traps.
      `url`, else `id:<id>`), so exactly those items stay bright and the rest
      recede. Add `frame=evidence` to bring the camera in on them. With no lit
      items, a facet or a highlight is the evidence instead.
+   - Under the picture goes the figure: the page's counts, a legend and a
+     note on the view. `--title 'Your headline'` and `--label lit='Ginger
+     cats'` (also `rest`, `group.<name>`, `across`, `up`, `depth`) change its
+     words. The counts stay the page's, and the sidecar records which words
+     were yours.
+   - It refuses a shot whose text does not fit or measures under 8:1 on the
+     image itself.
    - Stills cover the flat wall and the floating space so far.
      [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.

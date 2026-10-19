@@ -475,7 +475,7 @@ function arrangeAxes(clips, positions, sizes, edge, requested, labelFor) {
   coords.forEach((c, k) => {
     guides.push([along(k, 0), along(k, 1)]);
     const [u, at, gap] = titleAt[k];
-    labels.push({ text: `${AXIS_LABELS[AXES[k]]} · ${c.title}`, kind: 'axis', point: along(k, u), side: at, gap });
+    labels.push({ text: `${AXIS_LABELS[AXES[k]]} · ${c.title}`, kind: 'axis', axis: AXES[k], point: along(k, u), side: at, gap });
   });
   coords.forEach((c, k) => {
     for (const s of c.slots) {

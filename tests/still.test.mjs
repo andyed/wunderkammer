@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { decodeView } from '../wall/permalink.mjs';
+import { measureText, contrastVerdict } from '../scripts/still.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 // Sixteen flat-colour covers with capture dates, so the floating space can
@@ -64,7 +65,9 @@ test('whenStill waits for every cover in the floating space, and chrome=none sho
     assert.ok(scene.loading === 0 && scene.farResident === scene.itemCount, `every cover is in the atlas (${scene.farResident} of ${scene.itemCount}, ${scene.loading} loading)`);
     assert.ok(!scene.moving && !scene.flying, 'nothing travels and the camera rests');
     for (const selector of ['.bar', '#rail', '.float-toolbar', '.float-help']) assert.equal(await page.locator(selector).isVisible(), false, `${selector} is hidden`);
-    assert.deepEqual(await page.locator('#stage').boundingBox(), { x: 0, y: 0, width: 1000, height: 700 }, 'the stage fills the page');
+    // The stage fills the page down to the figure band (its own test is below).
+    const stage = await page.locator('#stage').boundingBox(), band = await page.locator('.figure-band').boundingBox();
+    assert.deepEqual([stage.x, stage.y, stage.width, stage.y + stage.height], [0, 0, 1000, band.y], 'the stage fills the page above the band');
     assert.ok(await page.locator('.float-label:not([hidden])').count() > 0, 'axis labels stay: they belong to the figure');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
@@ -168,6 +171,82 @@ test('on the wall, unlit tiles recede, frame=evidence zooms to the lit tiles, an
   } finally { await page.close(); }
 });
 
+/* -------------------------------------------------------------- figure --- */
+
+test('the figure band says what the page counts, under a stage that ends above it', async () => {
+  const { page, errors } = await open(`view=float&arrange=axes&${litQuery}&chrome=none`); try {
+    const { figure } = await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    assert.equal(figure.headline, '3 of 16 items lit'); assert.equal(figure.headlineSource, 'page');
+    assert.deepEqual(figure.legend, [{ role: 'lit', label: 'Lit', count: 3, source: 'page' }, { role: 'rest', label: 'Receded', count: 13, source: 'page' }]);
+    assert.match(figure.note, /^Still fixture · Axes: across capture date · up lightness/);
+    assert.equal(figure.note, figure.noteFull, 'at 1000 px the whole note fits');
+    assert.deepEqual(figure.clipped, []);
+    const stage = await page.locator('#stage').boundingBox(), band = await page.locator('.figure-band').boundingBox();
+    assert.ok(Math.abs(stage.y + stage.height - band.y) <= 1 && band.y + band.height <= 700 + 1, `the stage ends where the band starts (${JSON.stringify({ stage, band })})`);
+    assert.equal(await page.locator('.figure-headline').textContent(), '3 of 16 items lit');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('overrides change the figure\'s words, never its numbers, and say which words are whose', async () => {
+  const words = 'title=Three+cool+ones&label.lit=Cool+picks&label.rest=Everything+else&label.across=When';
+  const { page, errors } = await open(`view=float&arrange=axes&${litQuery}&${words}&chrome=none`); try {
+    const { figure } = await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    assert.equal(figure.headline, 'Three cool ones'); assert.equal(figure.headlineSource, 'override');
+    assert.equal(figure.counts, '3 of 16 items lit', 'the count line is the page\'s');
+    assert.deepEqual(await page.locator('.figure-counts').allTextContents(), ['3 of 16 items lit'], 'and it stays on the shot under an overridden headline');
+    assert.deepEqual(figure.legend, [{ role: 'lit', label: 'Cool picks', count: 3, source: 'override' }, { role: 'rest', label: 'Everything else', count: 13, source: 'override' }]);
+    assert.deepEqual(figure.axes, { across: 'override', up: 'page', depth: 'page' });
+    assert.equal(await page.locator('.float-label', { hasText: 'Across · When' }).count(), 1, 'the axis is renamed on the shot');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+  for (const [query, message] of [['label.bogus=x', /label.bogus is not a label a shot can override/], ['title=a&title=b', /title may appear only once/], ['label.lit=', /label.lit must not be empty/]]) {
+    const bad = await open(`view=float&arrange=axes&${query}&chrome=none`); try {
+      assert.match(await bad.page.evaluate(() => window.wunderkammer.whenStill({ timeout: 5000 }).then(() => 'resolved', e => e.message)), message, query);
+    } finally { await bad.page.close(); }
+  }
+});
+
+test('wall shots name their groups over the blocks, renamed when asked, and figure=none leaves the stage alone', async () => {
+  const { page, errors } = await open('label.group.warm=Warm+colours&chrome=none'); try {
+    const { figure } = await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    const byLabel = Object.fromEntries(figure.groups.map(g => [g.label, g]));
+    assert.deepEqual(byLabel.warm, { label: 'warm', text: 'Warm colours', count: 7, source: 'override' });
+    assert.deepEqual(byLabel.cool, { label: 'cool', text: 'cool', count: 9, source: 'page' });
+    assert.equal(await page.locator('.figure-group', { hasText: 'Warm colours · 7' }).isVisible(), true);
+    assert.equal(await page.locator('.block h2').first().isVisible(), false, 'the native headings give way, so a name is not drawn twice');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+  const bare = await open('figure=none&chrome=none'); try {
+    const { figure } = await bare.page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    assert.equal(figure, null); assert.equal(await bare.page.locator('.figure-band').count(), 0);
+    const stage = await bare.page.locator('#stage').boundingBox();
+    assert.equal(stage.y + stage.height, 700, 'without a figure the stage takes the whole page');
+  } finally { await bare.page.close(); }
+});
+
+test('contrast is read from the shot\'s pixels: the ground behind a text box is what was drawn there', async () => {
+  const page = await browser.newPage({ viewport: { width: 400, height: 200 } }); try {
+    await page.setContent(`<style>body{margin:0;background:#050510;font:600 20px system-ui} p{margin:0;padding:10px 12px;width:max-content}</style>
+      <div class="figure-band">
+        <p data-figure="good" style="color:#f0f0f0">Readable on the band</p>
+        <p data-figure="bad" style="color:#777777;background:#666666">Grey on grey</p>
+        <div style="background:#f0f0f0"><p data-figure="hidden-ground" style="color:#eeeeee">Its own ground is transparent</p></div>
+      </div>`);
+    const png = (await page.screenshot({ type: 'png' })).toString('base64');
+    const items = await page.evaluate(measureText, { png, scale: 1 });
+    const by = Object.fromEntries(items.map(i => [i.text, i]));
+    assert.ok(by['Readable on the band'].ratio >= 17, JSON.stringify(by['Readable on the band']));
+    assert.deepEqual(by['Readable on the band'].ground, [5, 5, 16]);
+    assert.ok(by['Grey on grey'].ratio < 1.5, JSON.stringify(by['Grey on grey']));
+    // A transparent element over a light parent: CSS says nothing about its ground, the pixels do.
+    assert.ok(by['Its own ground is transparent'].ratio < 1.1, JSON.stringify(by['Its own ground is transparent']));
+    const verdict = contrastVerdict(items);
+    assert.deepEqual(verdict.below.map(i => i.text).sort(), ['Grey on grey', 'Its own ground is transparent']);
+    assert.equal(verdict.min, Math.min(...items.map(i => i.ratio)));
+  } finally { await page.close(); }
+});
+
 /* ------------------------------------------------------------ the tool --- */
 
 const run = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'scripts/still.mjs'), ...args], { encoding: 'utf8', timeout: 120000 });
@@ -194,6 +273,9 @@ test('scripts/still.mjs writes a still and a sidecar that says what it shows, th
   assert.deepEqual(sidecar.view.spec.scope.facets, [['family', ['warm']]]);
   assert.equal(sidecar.render.undrawn, 0);
   assert.deepEqual(sidecar.collection.corpus, { id: 'fixture:still', revision: 'r1' });
+  // At 640 px the note on the view shortens to fit; the sidecar keeps it whole.
+  assert.ok(sidecar.figure.noteFull.startsWith('Still fixture · Axes:') && sidecar.figure.note.length < sidecar.figure.noteFull.length, JSON.stringify(sidecar.figure));
+  assert.deepEqual(sidecar.figure.clipped, []);
   // The evidence is the exact set in scope, by identity.
   assert.deepEqual(sidecar.export.evidence.map(e => e.key).sort(), hexes.filter(warm).map(h => `urn:still:${h}`).sort());
   // The link reopens the same view.
@@ -220,6 +302,24 @@ test('scripts/still.mjs frames lit items, and the sidecar\'s exact link reproduc
   const again = run('--collection', collection, '--view', sidecar.view.link, '--size', '640x400', '--scale', '1', '--out', path.join(dir, 'lit2.png'));
   assert.equal(again.status, 0, again.stderr);
   assert.ok((await readFile(path.join(dir, 'lit2.png'))).equals(await readFile(path.join(dir, 'lit.png'))), 'the same pixels from the exact link');
+});
+
+test('scripts/still.mjs records the figure and the contrast it measured, and refuses text that does not fit', async t => {
+  const dir = await fixtureDir(t), collection = path.join(dir, 'collection.json');
+  const ok = run('--collection', collection, '--view', `view=float&arrange=axes&${litQuery}&frame=evidence`, '--title', 'Three cool ones', '--label', 'lit=Cool picks',
+    '--size', '800x500', '--scale', '1', '--out', path.join(dir, 'fig.png'));
+  assert.equal(ok.status, 0, ok.stderr);
+  const sidecar = JSON.parse(await readFile(path.join(dir, 'fig.json'), 'utf8'));
+  assert.equal(sidecar.figure.headline, 'Three cool ones'); assert.equal(sidecar.figure.counts, '3 of 16 items lit');
+  assert.equal(sidecar.figure.legend[0].label, 'Cool picks'); assert.equal(sidecar.figure.legend[0].source, 'override');
+  assert.equal(sidecar.contrast.floor, 8); assert.deepEqual(sidecar.contrast.below, []);
+  assert.ok(sidecar.contrast.min >= 8 && sidecar.contrast.items.some(i => i.kind === 'figure' && i.text === 'Three cool ones'), JSON.stringify(sidecar.contrast).slice(0, 300));
+  const long = run('--collection', collection, '--view', 'view=float&arrange=axes', '--title', 'A headline far too long for the band '.repeat(5).trim(),
+    '--size', '640x400', '--scale', '1', '--out', path.join(dir, 'long.png'));
+  assert.equal(long.status, 1); assert.match(long.stderr, /Figure text does not fit/);
+  assert.equal(await stat(path.join(dir, 'long.png')).then(() => true, () => false), false);
+  const label = run('--collection', collection, '--label', 'bogus=x', '--out', path.join(dir, 'bogus.png'));
+  assert.equal(label.status, 1); assert.match(label.stderr, /label.bogus is not a label a shot can override/);
 });
 
 test('scripts/still.mjs refuses, and writes nothing, when the link or the collection is refused', async t => {
