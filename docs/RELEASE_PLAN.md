@@ -75,7 +75,7 @@ against a guessed remote or use a neighboring project's deployment credentials.
 ## Dependency and offline decisions
 
 The Node lock pins Playwright 1.60.0; actual execution also needs its browser
-binary. Three.js 0.169.0 and addons are loaded through a jsDelivr import map in
+binary. Three.js 0.186.1 and addons are loaded through a jsDelivr import map in
 `index.html`, so “cached corpus works offline” does not yet guarantee a
 cold offline 3D launch. Choose pinned local assets with notices or declare and
 test the network dependency. Test failure to load that dependency explicitly.

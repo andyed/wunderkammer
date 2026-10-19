@@ -77,7 +77,7 @@ Other standing rules, from `wunderkammer/docs/SPATIAL.md` § Invariants and
   before starting one: `lsof -iTCP:4174 -sTCP:LISTEN`. Start with
   `node serve.mjs --config .local/psychodeli-atlas/wunderkammer.config.json`.
 - Three.js is loaded from a CDN importmap in `wunderkammer/index.html`
-  (`three@0.169.0`). Muriel demo pages use their own importmap.
+  (`three@0.186.1`). Muriel demo pages use their own importmap.
 - Muriel lib tests: `node --test tests/spatial-hybrid.test.mjs` and
   `node --test tests/spatial-piles.test.mjs`, run from the muriel root. They
   stub `three` and test policy, not pixels.
