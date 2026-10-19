@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Drawable cards draw again in Chrome Canary.** With the experimental
+  `CanvasDrawElement` flag on, the near tiles are meant to be drawn from live
+  cards, so their titles stay findable. Canary 158 renamed the canvas opt-in
+  from `layoutsubtree` to `content="drawable"`, and under the old name no card
+  ever drew: the tiles fell back to cover images after about two seconds. The
+  card host now sets both, which works on builds from either side of the
+  rename. [HTML_IN_CANVAS_RESULTS.md](docs/HTML_IN_CANVAS_RESULTS.md).
 - **The ▶ showcase button is gone.** It acted only on the flat wall with no
   item open: in 3D, the hallway or beside the detail pane it turned to ⏸ and
   nothing moved. The idea, cards crossfading the rest of the collection

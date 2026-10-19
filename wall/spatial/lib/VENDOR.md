@@ -7,9 +7,9 @@ library that other consumers are still tracking.
 | | |
 |---|---|
 | upstream | [muriel](https://github.com/andyed/muriel) `render_assets/_lib/`, from a checkout beside this repository (or `MURIEL_ROOT`) |
-| commit | `99ea62be11066374e6f9f851f0af81fbd2cbb452` |
-| verified | 2026-10-18 |
-| branch | fix/tilefield-shader (one commit on main d691564; not yet merged or pushed) |
+| commit | `99ea62be11066374e6f9f851f0af81fbd2cbb452` for `instanced.js`; `1e991634139522708df98faa50077e6fd1f7fe39` for `cards.js`; the other seven files are byte-identical at both |
+| verified | 2026-10-19 |
+| branch | fix/tilefield-shader (one commit on main d691564) and fix/cards-content-drawable (one commit on main 59bfebe); neither is merged or pushed |
 
 Every vendored byte matches that commit exactly — checked file by file against
 `git show 6cc2bc9:render_assets/_lib/…`, not against the upstream working tree.
@@ -34,3 +34,4 @@ node wall/spatial/lib/sync.mjs --pull   # re-copy and update this file
 2026-09-11: pulled the membership mask (`TileField.setActive/isActive/activeCount`, honoured by `HybridField.update`, `pickAt` and `FieldNavigator`), complete far residency (near residents also hold a far tile), and `HybridField._demote` clearing the element. Upstream tests: 20 passing. Still uncommitted upstream.
 2026-09-20: upstream recorded those changes in `6cc2bc9`. All nine vendored JS/CSS files were compared byte-for-byte with that immutable commit; all match, so no re-copy was needed. The read-only sync check and all 20 upstream spatial tests pass. The earlier working-tree-only notes above are historical.
 2026-10-18: pulled the TileField fragment-shader fixes (upstream `99ea62b` on `fix/tilefield-shader`): both outputs are encoded with `linearToOutputTexel`, so tiles no longer draw about 2.2 gamma dark, and the slot index is rounded before the row and column are derived, so a slot at a multiple of the column count no longer samples its neighbour. Only `instanced.js` changed; the other eight files were already byte-identical to upstream main. Upstream test: `tests/spatial-tile-pixels.test.mjs` (new) plus the existing spatial tests, 23 passing. Until that branch merges, the commit above is reachable only on it.
+2026-10-19: pulled the card-host opt-in fix (upstream `1e99163` on `fix/cards-content-drawable`). Chrome Canary 158 renamed `<canvas layoutsubtree>` to `<canvas content="drawable">`, so under the old name alone no card ever drew and A2 in `tests/spatial-drawable.test.mjs` failed on every run. `CardHost` now sets both attributes. Only `cards.js` changed. It was copied from that commit with `git show`, not with `--pull`: `--pull` copies muriel's main working tree, which would put `instanced.js` back to its pre-shader-fix bytes until `fix/tilefield-shader` merges. Until both branches merge, `sync.mjs` reports `cards.js` and `instanced.js` as drift against muriel main, which is expected. Upstream test: the 20 spatial tests pass on that branch.
