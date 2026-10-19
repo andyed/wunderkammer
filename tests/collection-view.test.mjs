@@ -51,6 +51,8 @@ const nounsDoc = () => {
   d.clips.push({ id: 'c30', title: 'Cover 30', cover: 'media/0.svg', props: { decade: '2000s', genre: 'pop' } });
   return d;
 };
+// A music library: every clip an album, as adapters/music.mjs marks them, and no ui.nouns.
+const albumsDoc = () => { const d = doc(); d.clips.forEach(clip => { clip.kind = 'album'; }); return d; };
 // Sprite sheets: each cover is a solid colour of its own, so a crop from the
 // wrong cell, or one that bleeds into a neighbour, shows as the wrong colour.
 const spriteColor = i => [40 + (i * 53) % 200, 40 + (i * 97) % 200, 40 + (i * 151) % 200];
@@ -133,6 +135,7 @@ before(async () => {
     if (p === '/data/frames-nouns.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(framesDoc({ item: 'frame', items: 'frames' }))); return; }
     if (p === '/data/bad.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(bad())); return; }
     if (p === '/data/nouns.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(nounsDoc())); return; }
+    if (p === '/data/albums.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(albumsDoc())); return; }
     if (p === '/data/sprite.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteDoc())); return; }
     if (p === '/data/sprite-files.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles())); return; }
     if (p === '/data/sprite-missing.json') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(spriteWithFiles({ missing: true }))); return; }
@@ -608,4 +611,27 @@ test('the wall, the aisle and the floating space count in the collection\'s own 
     await page.waitForFunction(() => document.querySelector('.float-scope')?.textContent, null, { timeout: 15000 });
     assert.equal(await page.locator('.float-scope').textContent(), 'All 31 cats');
   } finally { await page.close(); }
+});
+
+test('the aisle builds its rack labels in the collection\'s own nouns, as its list counts them', async () => {
+  // The rack labels come from album-walls.mjs, built after setClips hands the
+  // aisle its nouns; the overlay draws them and the item list counts the same.
+  for (const [collection, want] of [['nouns', ['1970s · 10 cats', '2000s · 1 cat']], ['albums', ['1970s · 10 albums', '1990s · 10 albums']]]) {
+    const page = await newPage();
+    try {
+      await page.goto(`${origin}/?collection=/data/${collection}.json`);
+      await ready(page);
+      await page.locator('#view-aisle').click();
+      await page.waitForFunction(() => window.wunderkammerAisleDebug().scene?.labels?.some(Boolean), null, { timeout: 15000 });
+      const { racks, drawn, list } = await page.evaluate(() => ({
+        racks: window.__cwAisle.art.labelAnchors.map(anchor => anchor.text),
+        drawn: window.wunderkammerAisleDebug().scene.labels,
+        list: [...document.querySelectorAll('.aisle-items optgroup')].map(group => group.label),
+      }));
+      for (const label of want) assert.ok(racks.includes(label), `${collection}: ${racks.join(' | ')}`);
+      assert.ok(!racks.some(label => / items?$/.test(label)), `${collection}: ${racks.join(' | ')}`);
+      assert.deepEqual(drawn, racks, `${collection}: the overlay draws the rack labels`);
+      assert.deepEqual(list, racks, `${collection}: the item list counts as the racks do`);
+    } finally { await page.close(); }
+  }
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectionNouns, counted, plural, NEUTRAL_NOUNS } from '../wall/nouns.mjs';
+import { collectionNouns, counted, plural, wallLabel, NEUTRAL_NOUNS } from '../wall/nouns.mjs';
 import { comparisonCopy } from '../wall/comparison-copy.mjs';
 
 const albums = [{ kind: 'album' }, { kind: 'album' }];
@@ -28,4 +28,15 @@ test('the comparison page reads the same nouns as the wall', () => {
   const ui = { nouns: { item: 'cat', items: 'cats' } };
   assert.equal(comparisonCopy({ clips: albums, ui }).wallLabel('1890s', 1), '1890s · 1 cat');
   assert.equal(comparisonCopy({ clips: albums }).wallLabel('1970s', 1), '1970s · 1 album');
+});
+
+test('the aisle\'s wall labels read as the comparison page\'s do', () => {
+  // nouns.mjs formats the aisle's labels so the aisle needs no comparison-*
+  // module (scripts/build-demo.mjs leaves them out); the two must read alike.
+  const ui = { nouns: { item: 'cat', items: 'cats' } };
+  for (const payload of [{ clips: albums, ui }, { clips: albums }, { clips: [{ kind: 'image' }] }]) {
+    const nouns = collectionNouns(payload), copy = comparisonCopy(payload);
+    for (const count of [0, 1, 2, 1234]) assert.equal(wallLabel('1970s', count, nouns), copy.wallLabel('1970s', count));
+  }
+  assert.equal(wallLabel('1970s', 1), '1970s · 1 item');
 });

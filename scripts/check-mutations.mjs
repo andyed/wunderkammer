@@ -694,8 +694,23 @@ const cases = [
   },
   {
     name: 'nouns: aisle rack labels say items, plural even for one', file: 'wall/aisle-view.mjs',
-    from: ': `${group.label} · ${counted(group.count, this.nouns)}`;', to: ': `${group.label} · ${group.count} items`;',
+    from: ': anchor.text;', to: ': `${group.label} · ${group.count} items`;',
     test: 'tests/collection-view.test.mjs', pattern: 'count in the collection',
+  },
+  {
+    name: 'nouns: the aisle builds its rack labels without the collection nouns', file: 'wall/aisle-view.mjs',
+    from: ', wallLabel: (label, count) => wallLabel(label, count, this.nouns) }', to: ' }',
+    test: 'tests/collection-view.test.mjs', pattern: 'rack labels in the collection',
+  },
+  {
+    name: 'nouns: aisle rack labels keep the nouns known at construction', file: 'wall/aisle-view.mjs',
+    from: '(label, count) => wallLabel(label, count, this.nouns)', to: '(nouns => (label, count) => wallLabel(label, count, nouns))(this.nouns)',
+    test: 'tests/collection-view.test.mjs', pattern: 'rack labels in the collection',
+  },
+  {
+    name: 'nouns: aisle wall labels drop the grouped count', file: 'wall/nouns.mjs',
+    from: '${count.toLocaleString()} ${plural(count, nouns.item, nouns.items)}', to: '${count} ${plural(count, nouns.item, nouns.items)}',
+    test: 'tests/nouns.test.mjs', pattern: 'wall labels read as the comparison page',
   },
   {
     name: 'nouns: the floating space status says items', file: 'wall/float-view.mjs',
