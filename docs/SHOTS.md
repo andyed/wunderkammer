@@ -13,6 +13,86 @@ Small interactive pieces (3D carousels and embeds) are deferred, not dropped.
 [Deferred: small interactive pieces](#deferred-small-interactive-pieces) keeps
 their design.
 
+## Where this stands
+
+Updated 2026-10-19 on `feat/stills`. Read this first; the sections after it
+are the record of each phase.
+
+**Next action.** Build-order step 1:
+1. `observation=<id>` with `observations=<url>`;
+2. then `dim=`;
+3. then the sidecar's `lit` source.
+
+See [the build order](#build-order-for-the-rest-of-shots). The merges below
+do not block it.
+
+**Waiting on Andy.** Nothing is merged or pushed. The merge order is:
+1. muriel `build/three-r186` at 9c4d5c2: three 0.186.1, with the regression
+   test `tests/spatial-tile-pixels.test.mjs`;
+2. wunderkammer `build/three-r186` at 217d825: the three pins, on main
+   6f63fa0;
+3. `feat/stills`, which is already rebased onto 217d825.
+
+**The branch.** These commits sit on 217d825:
+
+| Commit | What |
+|---|---|
+| 9f55001 | Phase 1: `?chrome=none`, `whenStill()`, `scripts/still.mjs` and its sidecar |
+| a68b59d | This roadmap |
+| 7e91ba7 | Phase 2a: `lit=` and `frame=evidence` |
+| 046af67 | Phase 2b: the figure layer and overriding its words |
+| a2618b0 | Phase 2c: the cloud |
+| 0f92ca5 | `front=` orders the cloud |
+| d73e715 | The cause of the placeholder defect |
+| 010bb35 | The framed-shot test demands identical bytes again |
+
+The rebase rewrote every SHA. Before it, phase 1 was eac15c9 and `front=` was
+e2a3d27.
+
+**Verified at 010bb35.**
+- `npm test` passed 465 of 465, exit 0.
+- `scripts/check-public.mjs` passed, exit 0.
+- `tests/still.test.mjs` passed five more runs of five.
+- An earlier full run failed one facet test ("changing a facet-local query
+  removes stale value preview…" in `tests/facet-view.test.mjs`). It fails
+  about 1 run in 30 on main as well. Its fix is on its own branch,
+  `fix/facet-preview-stale-pointer` at b361cfe, and is not in this one.
+
+**The three.js finding.**
+- **The bug.** Floating-space shots sometimes drew a far tile's placeholder
+  under load. three r169's `copyTextureToTexture` could send that tile's
+  cover to the wrong texture
+  ([mrdoob/three.js#33153](https://github.com/mrdoob/three.js/pull/33153)).
+- **The fix.** three 0.186.1: 200 of 200 delayed-cover shots came out
+  byte-identical, against 20 of 200 differing on r169.
+- **This branch.** Andy decided the rebase onto the upgrade on 2026-10-19,
+  and it is done. The framed-shot test demands identical bytes again. Phase
+  2a's "Measured" has the details.
+
+**Watch for.** On r169, one shot in about 80 once differed from the reference
+by a single 1-pixel column at a tile's edge. That is too faint to be a
+placeholder, and it did not recur in 200 runs on 0.186.1. A byte-for-byte test
+that fails on a one-column difference is probably this.
+
+**Build order status.** Details are in [the build order](#build-order-for-the-rest-of-shots).
+
+| Step | Status |
+|---|---|
+| 1. Brushing by identity | `lit=` is built. `observation=`, `dim=` and the lit source are not started. **Next.** |
+| 2. Frame on the evidence | Built for the wall and the floating space. The stacks and the hallway wait for step 5. Single-item framing needs a decision. |
+| 3. The figure layer | Built. Swatches in the items' own colours, and a choice of band position, are not started. |
+| 4. Camera angles | Not started |
+| 5. Stacks and hallway shots | Not started |
+| 6. Shot lists | Not started |
+| 7. muriel wraps it | Not started |
+| 8. Formats | Not started |
+
+Also not started: a gentler fall-off, or a ring, for a cloud with a small lit
+set.
+
+**Open questions.** Three remain: single-item shots, the flat wall in
+perspective, and WebP. See [Open questions](#open-questions).
+
 ## The shot model
 
 A shot is a view link plus what an image needs. Brushing decides what is lit.
@@ -46,8 +126,8 @@ A shot is a view link plus what an image needs. Brushing decides what is lit.
 
 ## Built and verified (phase 1)
 
-Commit eac15c9 on `feat/stills`, cut from main 6f63fa0. It is not merged or
-pushed. `npm test` passed 452 of 452 on that commit.
+Commit 9f55001 on `feat/stills`. Before the rebase onto the three.js upgrade
+it was eac15c9, cut from main 6f63fa0, and `npm test` passed 452 of 452 there.
 
 ### `?chrome=none`
 
