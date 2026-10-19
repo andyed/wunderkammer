@@ -472,6 +472,15 @@ test('on a phone the wall takes the width, the rail is an overlay that closes af
     const stage = await page.locator('#stage').boundingBox();
     assert.equal(stage.width, 390, 'the wall has the whole width');
     assert.ok(stage.y < 130, `header is compact (stage starts at ${stage.y})`);
+    // The view, zoom and link buttons share one header row: every one is a 44 px
+    // touch target on the same centre line, not a jagged mix of 32 and 44.
+    const row = await page.evaluate(() => ['tour', 'view-3d', 'view-aisle', 'view-float', 'zoom-out', 'zoom-fit', 'zoom-in', 'showcase', 'copy-view', 'copy-live-view']
+      .map(id => document.getElementById(id)).filter(b => b && b.offsetParent)
+      .map(b => { const r = b.getBoundingClientRect(); return { id: b.id, w: r.width, h: r.height, mid: r.top + r.height / 2 }; }));
+    assert.ok(row.length >= 8, `header row buttons found: ${row.map(b => b.id)}`);
+    for (const b of row) assert.ok(b.w >= 44 && b.h >= 44, `${b.id} is a 44 px target (${b.w}×${b.h})`);
+    const mids = row.map(b => b.mid);
+    assert.ok(Math.max(...mids) - Math.min(...mids) <= 1, `header row buttons share a centre line: ${JSON.stringify(row)}`);
     assert.equal(await page.locator('#rail').isVisible(), false, 'rail starts closed');
     assert.equal(await page.locator('#attribute-lens').isVisible(), false, 'hover-only controls are dropped');
     await page.locator('#toggle-rail').tap(); await settled(page);

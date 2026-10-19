@@ -772,7 +772,11 @@ body[data-view-mode=aisle] .review-tip .brush-key { font-size:16px; }
    * outgrow it (the floating space's ✺ added one), the group scrolls sideways
    * instead of pushing ↗ onto a fourth header row. */
   .main-controls .zoomctl { flex:1 1 0; min-width:200px; overflow-x:auto; scrollbar-width:none; }
-  #view-aisle,#copy-live-view { min-height:44px; }
+  /* Every button in this row is a 44 px touch target, centred, so the row reads
+   * as one level band. Only ▥ and ↗ used to be, which made it jagged; the row was
+   * already 44 px tall, so the header does not grow. */
+  .main-controls .zoomctl { align-items:center; }
+  .main-controls .zoomctl .btn, #copy-view, #copy-live-view { min-width:44px; min-height:44px; }
   body[data-view-mode=aisle] #attribute-lens { display:block; }
   body[data-view-mode=aisle] .review-tip[data-brush-active] { display:block; }
   #lens-value { max-width:150px; }

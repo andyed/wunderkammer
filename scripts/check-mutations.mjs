@@ -741,6 +741,11 @@ const cases = [
     name: 'validate-collection: observations for another corpus pass', file: 'scripts/validate-collection.mjs',
     from: "if (named.id !== want.id || (named.revision ?? null) !== (want.revision ?? null)) {", to: 'if (false) {',
     test: 'tests/validate-collection.test.mjs', pattern: 'a citation the page cannot resolve',
+  },
+  {
+    name: 'phone header: only two row buttons are touch targets again', file: 'wall/wall.css',
+    from: '.main-controls .zoomctl .btn, #copy-view, #copy-live-view { min-width:44px; min-height:44px; }', to: '#view-aisle,#copy-live-view { min-height:44px; }',
+    test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
   }
 ];
 
