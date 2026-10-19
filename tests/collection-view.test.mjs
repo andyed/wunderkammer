@@ -619,9 +619,9 @@ test('the wall, the aisle and the floating space count in the collection\'s own 
   } finally { await page.close(); }
 });
 
-test('the aisle builds its rack labels in the collection\'s own nouns, as its list counts them', async () => {
+test('the aisle builds its rack labels in the collection\'s own nouns', async () => {
   // The rack labels come from album-walls.mjs, built after setClips hands the
-  // aisle its nouns; the overlay draws them and the item list counts the same.
+  // aisle its nouns; the overlay draws them.
   for (const [collection, want] of [['nouns', ['1970s · 10 cats', '2000s · 1 cat']], ['albums', ['1970s · 10 albums', '1990s · 10 albums']]]) {
     const page = await newPage();
     try {
@@ -629,15 +629,13 @@ test('the aisle builds its rack labels in the collection\'s own nouns, as its li
       await ready(page);
       await page.locator('#view-aisle').click();
       await page.waitForFunction(() => window.wunderkammerAisleDebug().scene?.labels?.some(Boolean), null, { timeout: 15000 });
-      const { racks, drawn, list } = await page.evaluate(() => ({
+      const { racks, drawn } = await page.evaluate(() => ({
         racks: window.__cwAisle.art.labelAnchors.map(anchor => anchor.text),
         drawn: window.wunderkammerAisleDebug().scene.labels,
-        list: [...document.querySelectorAll('.aisle-items optgroup')].map(group => group.label),
       }));
       for (const label of want) assert.ok(racks.includes(label), `${collection}: ${racks.join(' | ')}`);
       assert.ok(!racks.some(label => / items?$/.test(label)), `${collection}: ${racks.join(' | ')}`);
       assert.deepEqual(drawn, racks, `${collection}: the overlay draws the rack labels`);
-      assert.deepEqual(list, racks, `${collection}: the item list counts as the racks do`);
     } finally { await page.close(); }
   }
 });

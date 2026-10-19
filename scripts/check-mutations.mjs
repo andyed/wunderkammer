@@ -804,6 +804,71 @@ const cases = [
     name: 'phone header: the parked ▶ showcase button returns', file: 'index.html',
     from: 'aria-label="Zoom in">+</button>', to: 'aria-label="Zoom in">+</button>\n    <button class="btn" id="showcase" type="button" aria-pressed="false" aria-label="Showcase">▶</button>',
     test: 'tests/flat-wall.test.mjs', pattern: 'on a phone the wall takes the width',
+  },
+  {
+    name: 'item readout: the live region shows on screen', file: 'wall/wall.css',
+    from: '.item-readout { position:absolute; width:1px; height:1px; margin:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'item readout: the flat-wall fallback does nothing', file: 'wall/wall.mjs',
+    from: ',onFlatWall:()=>toggleSpatial(false)', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'without 3D graphics',
+  },
+  {
+    name: 'float keys: plain arrows orbit again', file: 'wall/float-view.mjs',
+    from: 'if (arrow && !event.shiftKey)', to: 'if (arrow && event.shiftKey)',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float keys: the callout is never placed beside the item', file: 'wall/float-view.mjs',
+    from: '    this.placeCallout(occupied, t);\n', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float keys: the live region stays silent', file: 'wall/float-view.mjs',
+    from: 'const text = this.syncCallout(); if (text) this.announcer.textContent = text;', to: 'this.syncCallout();',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float keys: Enter in the jump box goes nowhere', file: 'wall/keyboard-path.mjs',
+    from: 'onClose(true); if (first !== undefined) onPick(first);', to: 'onClose(true);',
+    test: 'tests/float-view.test.mjs', pattern: 'float fly-to',
+  },
+  {
+    name: 'float keys: arrows leap off the row', file: 'wall/float-space.mjs',
+    from: 'export const OFF_AXIS_WEIGHT = 2;', to: 'export const OFF_AXIS_WEIGHT = 0;',
+    test: 'tests/float-navigation.test.mjs', pattern: 'walks the row',
+  },
+  {
+    name: 'float keys: the callout repeats what the title says', file: 'wall/float-space.mjs',
+    from: "p.short && !title.startsWith(p.short) && all.findIndex", to: "p.short && all.findIndex",
+    test: 'tests/float-navigation.test.mjs', pattern: 'describeItem',
+  },
+  {
+    name: 'aisle keys: → no longer crosses the far end', file: 'wall/aisle-keys.mjs',
+    from: "    if (deeper) { const other = -at.side, last = grid[other].length - 1; return last >= 0 ? cell(grid, other, last, at.row) : null; }\n", to: '',
+    test: 'tests/aisle-keys.test.mjs', pattern: 'walks the rack as a U',
+  },
+  {
+    name: 'aisle keys: plain arrows turn again', file: 'wall/aisle-view.mjs',
+    from: 'if (arrow && !event.shiftKey)', to: 'if (arrow && event.shiftKey)',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: the callout is never placed beside the cover', file: 'wall/aisle-view.mjs',
+    from: '    this.placeCallout();\n', to: '',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: a keyboard move keeps looking down the aisle', file: 'wall/aisle-view.mjs',
+    from: 'this.fitted = false; this.setCamera([cover.x - place.side * across, cover.y, cover.z + 1.2], cover.toArray());', to: 'this.fitted = true; this.applyPose();',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
+  },
+  {
+    name: 'aisle keys: the live region stays silent', file: 'wall/aisle-view.mjs',
+    from: 'const text = this.syncMark(); if (text) this.announcer.textContent = text;', to: 'this.syncMark();',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'keyboard item inspection',
   }
 ];
 

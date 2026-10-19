@@ -222,11 +222,12 @@ test('float Axes places each item by its chosen dimensions, keeps attribute plan
   } finally { await p.close(); }
 });
 
-test('float fly-to: clicking an item flies to it and opens the detail pane; the item menu, keys and Fit reach every item', async () => {
+test('float fly-to: clicking an item flies to it and opens the detail pane; arrows along the axes, / to jump, Enter and Fit reach items without a dropdown', async () => {
   const p = await open(); try {
     let { scene, view } = await debug(p);
     const id = key('fa8072');
     await clickItem(p, scene, id); await p.waitForSelector('#detail.open'); await settled(p);
+    assert.equal(await p.locator('.float-callout').isVisible(), false, 'a pointer visitor sees no keyboard callout');
     ({ scene, view } = await debug(p));
     assert.equal(view.ui.focus, id); assert.equal(scene.selection, id); assert.equal(scene.state.fitted, false);
     const stage = await p.locator('.float-canvas').boundingBox(), pane = await p.locator('#detail').boundingBox();
@@ -236,20 +237,43 @@ test('float fly-to: clicking an item flies to it and opens the detail pane; the 
     near([share], [0.38], 0.03, 'large enough to read');
     await p.keyboard.press('Escape'); await p.waitForSelector('#detail.open', { state: 'hidden' });
 
-    // The item menu flies without opening; Inspect opens.
-    await p.selectOption('.float-items select', key('0000ff')); await settled(p); ({ scene } = await debug(p));
-    near(scene.screen[key('0000ff')].slice(0, 2), [0, 0], 0.03, 'the menu flies to the chosen item');
-    assert.equal(await p.locator('#detail.open').count(), 0);
-    await p.locator('.float-toolbar button').click(); await p.waitForSelector('#detail.open');
-    assert.equal((await debug(p)).view.ui.focus, key('0000ff'));
+    // No item dropdown: the space is the keyboard path. → moves the selection to the
+    // next item along the arrangement's across axis and flies to it without opening
+    // it; a callout beside the item and a hidden live region say where it sits.
+    assert.equal(await p.getByText(/Choose an item/).count(), 0, 'no item dropdown');
+    assert.equal(await p.getByRole('button', { name: 'Inspect', exact: true }).count(), 0, 'no Inspect button');
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('ArrowRight'); await settled(p); ({ scene } = await debug(p));
+    const first = scene.selection;
+    assert.notEqual(first, id); near(scene.screen[first].slice(0, 2), [0, 0], 0.03, '→ flies to the item');
+    assert.ok(scene.positions[first][0] > scene.positions[id][0], '→ moves along the across axis, to the right');
+    assert.equal(await p.locator('#detail.open').count(), 0, 'moving does not open the item');
+    const title = clips.find(c => c.url === first).title;
+    assert.equal(scene.callout?.title, title, 'the callout names the item');
+    assert.match(scene.callout.where, /^L \d\.\d\d · (grey|red|yellow|green|cyan|blue|magenta)/, 'and says where it sits: lightness, then hue');
+    assert.match(scene.announcement, new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\. lightness \\d\\.\\d\\d, `), 'the live region says the same');
+    const callout = await p.locator('.float-callout').boundingBox(), canvasBox = await p.locator('.float-canvas').boundingBox(), toolbar = await p.locator('.float-toolbar').boundingBox();
+    const [sx, sy] = scene.screen[first], itemX = canvasBox.x + (sx + 1) / 2 * canvasBox.width, itemY = canvasBox.y + (1 - sy) / 2 * canvasBox.height;
+    assert.ok(callout.width > 60 && callout.y + callout.height <= toolbar.y && Math.abs(callout.y + callout.height / 2 - itemY) < 120 && Math.abs(callout.x - itemX) < 600,
+      `the callout is on screen beside the item, above the toolbar (${JSON.stringify(callout)}, item at ${itemX.toFixed(0)},${itemY.toFixed(0)})`);
+    assert.equal(await p.locator('.item-readout').evaluate(n => n.getBoundingClientRect().width <= 1), true, 'the live region is never seen');
+    // Shift+arrows orbit: the camera turns and the selection stays.
+    await p.keyboard.press('Shift+ArrowLeft'); await settled(p); ({ scene } = await debug(p));
+    assert.equal(scene.selection, first, 'Shift+← orbits without moving the selection');
+    await p.keyboard.press('Enter'); await p.waitForSelector('#detail.open');
+    assert.equal((await debug(p)).view.ui.focus, first, 'Enter opens the item the arrows reached');
     await p.keyboard.press('Escape'); await p.waitForSelector('#detail.open', { state: 'hidden' });
 
-    // ] steps to the next item in the arrangement's order, and flies there.
-    await p.locator('.float-canvas').focus(); await p.keyboard.press(']'); await settled(p); ({ scene } = await debug(p));
-    assert.notEqual(scene.selection, key('0000ff')); near(scene.screen[scene.selection].slice(0, 2), [0, 0], 0.03, '] flies to the next item');
+    // / jumps to a title: the first match, punctuation and case ignored, then the arrows carry on from there.
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('/');
+    assert.equal(await p.locator('.float-jump input').evaluate(n => n === document.activeElement), true, '/ opens the jump box');
+    await p.keyboard.type('NAVY'); assert.equal(await p.locator('.float-jump-count').textContent(), '1 match');
+    await p.keyboard.press('Enter'); await settled(p); ({ scene } = await debug(p));
+    assert.equal(scene.selection, key('1a2a6c'), 'Enter flies to the match'); assert.equal(await p.locator('.float-jump').isVisible(), false);
+    assert.equal(await p.locator('.float-canvas').evaluate(n => n === document.activeElement), true, 'focus returns to the space');
+    near(scene.screen[key('1a2a6c')].slice(0, 2), [0, 0], 0.03, 'the jump flies to the item');
 
     // Free flight changes the camera; Home returns to the whole space.
-    await p.keyboard.press('w'); await p.keyboard.press('ArrowLeft'); assert.equal((await debug(p)).scene.state.fitted, false);
+    await p.keyboard.press('w'); await p.keyboard.press('Shift+ArrowLeft'); assert.equal((await debug(p)).scene.state.fitted, false);
     await p.keyboard.press('Home'); await settled(p); ({ scene } = await debug(p));
     assert.equal(scene.state.fitted, true);
     for (const [k2, [sx, sy, depth]] of Object.entries(scene.screen)) assert.ok(depth > 0 && Math.abs(sx) <= 1 && Math.abs(sy) <= 1, `${k2} is on screen after Fit`);
@@ -261,7 +285,7 @@ test('float scope dims items outside the search and facets in place, without mov
     // A fitted camera refits when the stage resizes (the scope bar appears with
     // a filter), so step off Fit first: a placed camera must not move at all.
     if (await p.locator('#rail.hidden').count()) { await p.locator('#toggle-rail').click(); await settled(p); }
-    await p.locator('.float-canvas').focus(); await p.keyboard.press('ArrowLeft'); await settled(p);
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('Shift+ArrowLeft'); await settled(p);
     const before = (await debug(p)).scene; assert.equal(before.state.fitted, false);
     const sample = id => p.evaluate(k => window.__cwFloat.samplePixel(k), id);
     // Every tile draws its own flat colour across its whole face, as sRGB: mid
@@ -284,10 +308,14 @@ test('float scope dims items outside the search and facets in place, without mov
     const red = await sample(key('ff0000')), luma = 0.2126 * 255;
     near(red, [(luma + 0.35 * (255 - luma)) * 0.25, luma * 0.65 * 0.25, luma * 0.65 * 0.25], 4, 'dimmed red pixel');
     near(await sample(key('00ff00')), [0, 255, 0], 4, 'in-scope green keeps its colour');
-    // A click on a dimmed item passes through it; the menu lists only the scope.
+    // A click on a dimmed item passes through it, and the arrows only ever land in the scope.
     await clickItem(p, scoped, key('ff0000')); await p.waitForTimeout(300);
     assert.equal(await p.locator('#detail.open').count(), 0, 'dimmed items do not take clicks');
-    assert.equal(await p.locator('.float-items select option[value]:not([value=""])').count(), coolCount);
+    await p.locator('.float-canvas').focus();
+    for (const k of ['ArrowRight', 'ArrowUp', 'ArrowLeft', 'PageUp', 'ArrowDown', 'PageDown']) {
+      await p.keyboard.press(k); const s = (await debug(p)).scene;
+      assert.ok(s.inScope.includes(s.selection), `${k} lands on an item in the scope (${s.selection})`);
+    }
     await p.locator('.chip[data-facet=family][data-value=cool]').click();
     await p.waitForFunction(n => window.wunderkammerFloatDebug().scene.scopeCount === n, clips.length); await settled(p);
     const widened = (await debug(p)).scene;
@@ -452,7 +480,20 @@ test('float phone layout keeps every control inside the viewport and reachable',
     assert.ok(Math.max(...xs) - Math.min(...xs) >= 1, `the space spans at least half the phone's width (${(Math.max(...xs) - Math.min(...xs)).toFixed(2)} of 2)`);
     await p.locator('.float-arrange label:has(input[value=az])').tap(); await settled(p);
     assert.equal((await debug(p)).scene.arrangement, 'az');
-    await p.selectOption('.float-items select', key('00ffff')); await settled(p);
-    near((await debug(p)).scene.screen[key('00ffff')].slice(0, 2), [0, 0], 0.03, 'the menu flies on a phone');
+    assert.equal(await p.locator('.float-toolbar select').count(), 3, 'on a phone the toolbar holds the three axis menus and no item dropdown');
+    await clickItem(p, (await debug(p)).scene, key('00ffff')); await p.waitForSelector('#detail.open');
+    assert.equal((await debug(p)).view.ui.focus, key('00ffff'), 'a tap reaches an item on a phone');
+  } finally { await p.close(); }
+});
+
+test('without 3D graphics the floating space offers the flat wall, which holds every item', async () => {
+  const p = await open(); try {
+    await p.evaluate(() => document.querySelector('.float-canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext());
+    const status = p.locator('.float-status');
+    await status.locator('.view-fallback').waitFor();
+    assert.match(await status.textContent(), /^3D graphics are unavailable here\. Show the flat wall$/);
+    await status.locator('.view-fallback').click();
+    await p.waitForFunction(() => document.body.dataset.viewMode === 'flat');
+    assert.equal(await p.locator('#canvas > .tile').count(), clips.length, 'the flat wall shows every item');
   } finally { await p.close(); }
 });

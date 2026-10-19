@@ -145,7 +145,7 @@ test('a turned aisle view slides along the wall at its angle, and Back returns t
   const p = await openAisle();
   try {
     await p.locator('.aisle-canvas').focus();
-    for (let i = 0; i < 4; i++) await p.keyboard.press('ArrowRight');
+    for (let i = 0; i < 4; i++) await p.keyboard.press('Shift+ArrowRight');
     const turned = await aisle(p);
     assert.equal(turned.state.fitted, false);
     await hover(p, '.aisle-canvas'); await sideways(p);

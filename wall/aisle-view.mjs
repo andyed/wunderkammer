@@ -7,6 +7,8 @@ import { groupBy } from './layout.mjs';
 import { clipKey, matchesFacet } from './context-clusters.mjs';
 import { sortClips, attributeMark } from './attributes.mjs';
 import { NEUTRAL_NOUNS, wallLabel } from './nouns.mjs';
+import { Callout, JumpBox, announcer, titleMatches as matchTitles } from './keyboard-path.mjs';
+import { aisleMove, AISLE_EDGES } from './aisle-keys.mjs';
 
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
@@ -27,16 +29,25 @@ export class AisleView {
     const travelLabel = element('label', 'aisle-travel', 'Walk aisle');
     this.slider = element('input'); this.slider.type = 'range'; this.slider.min = '0'; this.slider.max = '1'; this.slider.step = '.001'; this.slider.value = '0';
     this.slider.setAttribute('aria-label', 'Walk aisle'); travelLabel.append(this.slider);
-    const selectLabel = element('label', 'aisle-items', 'Item');
-    this.itemSelect = element('select'); this.itemSelect.setAttribute('aria-label', 'Choose an item in this scope'); selectLabel.append(this.itemSelect);
-    this.inspectButton = element('button', '', 'Inspect'); this.inspectButton.type = 'button'; this.inspectButton.disabled = true;
-    this.toolbar.append(travelLabel, selectLabel, this.inspectButton);
-    this.help = element('p', 'aisle-help', 'Drag to look · Scroll to zoom, sideways to walk · Arrows turn · Home: entrance');
+    this.toolbar.append(travelLabel);
+    // The keyboard path to items is the aisle itself (aisle-keys.mjs): arrows walk a
+    // rack's walls and rows, Page Up and Page Down change rack, / jumps to a title,
+    // Enter opens. A ring and a callout mark the cover; a hidden live region speaks.
+    this.callout = new Callout('aisle-callout');
+    this.announcer = announcer('aisle-announcer');
+    this.jump = new JumpBox('aisle-jump', { matches: q => matchTitles([...this.clipsByKey].map(([key, clip]) => [key, clip.title || key]), q),
+      onPick: key => { const place = this.placeOf(key); if (place) this.keyChoose(place); },
+      onClose: refocus => { if (refocus) this.canvas?.focus({ preventScroll: true }); }, listen: (node, type, fn) => this.listen(node, type, fn) });
+    this.ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]].map(([x, y]) => new THREE.Vector3(0, y, x))),
+      new THREE.LineBasicMaterial({ color: 0xaaffaa, depthTest: false }));
+    this.ring.renderOrder = 10; this.ring.visible = false; this.scene.add(this.ring);
+    this.fallback = element('button', 'view-fallback', 'Show the flat wall'); this.fallback.type = 'button';
+    this.help = element('p', 'aisle-help', 'Drag to look · Scroll to zoom, sideways to walk · Arrows move along a rack, Shift+arrows turn · Page Up/Down: racks · / jumps · Home: entrance');
     try {
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.canvas = this.renderer.domElement; this.canvas.className = 'aisle-canvas'; this.canvas.tabIndex = 0;
-      this.canvas.setAttribute('role', 'img'); this.canvas.setAttribute('aria-label', 'Artwork aisle. Drag or use arrow keys to turn, plus and minus to zoom, scroll sideways to walk, Home for entrance. Tab to choose and inspect any item.');
+      this.canvas.setAttribute('role', 'img'); this.canvas.setAttribute('aria-label', 'Artwork aisle. Arrow keys move between covers: right goes deeper along the left wall and back along the right one, up and down change row, Page Up and Page Down change rack, slash jumps to a title, Enter opens the cover; Shift with arrows turns, plus and minus zoom, scroll sideways to walk, Home for entrance.');
       this.host.append(this.canvas);
       // Sideways scroll is a walk along the aisle; vertical scroll stays OrbitControls' zoom.
       this.unlistenWheel = listenSideScroll(this.canvas, { walk: distance => this.walk(distance) });
@@ -48,7 +59,7 @@ export class AisleView {
       // The nouns arrive with setClips, after this; the label reads them when each rack is built.
       this.art = new AlbumWalls(this.root, () => this.invalidate(), { onProgress: () => this.updateStatus(), wallLabel: (label, count) => wallLabel(label, count, this.nouns) });
       this.raycaster = new THREE.Raycaster();
-      this.listen(this.canvas, 'pointerdown', e => { this.cancelHover(); this.down = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; });
+      this.listen(this.canvas, 'pointerdown', e => { this.cancelHover(); this.down = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; if (this.keyboardPlace) { this.keyboardPlace = null; this.syncMark(); } });
       this.listen(this.canvas, 'pointerup', e => {
         if (this.down?.id === e.pointerId && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5) {
           const hit = this.pick(e); if (hit) this.open(hit.key);
@@ -70,11 +81,9 @@ export class AisleView {
       this.listen(this.canvas, 'webglcontextrestored', () => { this.contextLost = false; this.host.dataset.graphicsState = 'ready'; this.updateStatus(); this.invalidate(); });
       this.host.dataset.graphicsState = 'ready';
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
-    this.host.append(this.overlay, this.status, this.toolbar, this.help);
+    this.host.append(this.overlay, this.callout.node, this.status, this.jump.node, this.toolbar, this.help, this.announcer);
     this.listen(this.slider, 'input', () => { this.travel = Number(this.slider.value); this.fitted = true; this.applyPose(); this.cancelHover(); this.interact(); });
-    this.listen(this.itemSelect, 'change', () => this.choose(this.itemSelect.value));
-    this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection); } });
-    this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection); });
+    this.listen(this.fallback, 'click', () => this.callbacks.onFlatWall?.());
     // Debug handle, as in the floating space (window.__cwFloat): the camera,
     // spread and travel live in WebGL, so probes and seeked captures reach them here.
     window.__cwAisle = this;
@@ -97,15 +106,10 @@ export class AisleView {
     this.camera.far = Math.max(2000, (this.art?.totalDepth || 0) * 2 + 100); this.camera.updateProjectionMatrix();
     this.overlay.replaceChildren(); this.labels = [];
     for (const anchor of this.art?.labelAnchors || []) { const node = element('span', 'aisle-cohort-label'); this.overlay.append(node); this.labels.push({ anchor, node }); }
-    this.itemSelect.replaceChildren(new Option('Choose an item…', ''));
-    const used = new Set();
-    for (const group of this.cohorts) {
-      const optgroup = element('optgroup'); optgroup.label = wallLabel(group.label, group.count, this.nouns);
-      for (const key of group.keys) if (!used.has(key)) { used.add(key); optgroup.append(new Option(this.clipsByKey.get(key).title || key, key)); }
-      if (optgroup.children.length) this.itemSelect.append(optgroup);
-    }
     if (!this.clipsByKey.has(this.selection)) this.selection = null;
-    this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; this.itemSelect.disabled = !sorted.length; this.slider.disabled = !sorted.length;
+    // A rebuilt aisle has new places; a keyboard mark follows its cover if the cover is still here.
+    if (this.keyboardPlace) this.keyboardPlace = this.placeOf(this.keyboardPlace.key, this.keyboardPlace.cohort);
+    this.syncMark(); this.slider.disabled = !sorted.length;
     this.built = true; this.setLens(this.lens); this.updateStatus(); if (this.fitted) this.applyPose(); this.resize(); this.invalidate();
   }
 
@@ -131,20 +135,68 @@ export class AisleView {
   }
 
   updateStatus() {
-    if (this.contextLost) this.status.textContent = '3D graphics unavailable. Choose an item below to inspect it, or use the flat wall.';
+    // Without graphics the flat wall is the way to every item; the button takes the visitor there.
+    if (this.contextLost) this.status.replaceChildren('3D graphics are unavailable here. ', this.fallback);
     else if (!this.clipsByKey.size) this.status.textContent = 'No items in this scope. Change the search or filters to continue.';
     else this.status.textContent = '';
     this.status.hidden = !this.status.textContent;
   }
 
-  choose(key) {
-    if (!this.clipsByKey.has(key)) return;
-    this.selection = key; this.itemSelect.value = key; this.inspectButton.disabled = false;
-    const rack = this.art?.racks.find(rack => this.cohorts.find(group => group.key === rack.cohort)?.keys.includes(key));
-    if (rack) { this.travel = clamp(rack.start / Math.max(1, this.art.totalDepth - 3.2), 0, 1); this.slider.value = String(this.travel); this.fitted = true; this.applyPose(); }
-    this.interact();
+  /** Racks as aisle-keys.mjs reads them: each wall's grid of places, and whether it is shown. */
+  keyRacks() { return (this.art?.racks || []).map(rack => ({ grid: rack.grid, visible: rack.group.visible })); }
+  /** A cover's place (album-walls.mjs): in `cohort` when given, else its first shown rack. */
+  placeOf(key, cohort = null) {
+    const racks = this.art?.racks || [];
+    return (this.art?.places || []).find(p => p.key === key && (cohort ? p.cohort === cohort : racks[p.rack]?.group.visible)) || null;
   }
-  open(key) { const clip = this.clipsByKey.get(key); if (!clip) return; this.selection = key; this.itemSelect.value = key; this.inspectButton.disabled = false; this.cancelHover(); this.callbacks.onOpen?.(clip); }
+  /** The ring and callout at a keyboard-chosen cover; returns the spoken text, or null when there is none. */
+  syncMark() {
+    const place = this.keyboardPlace, clip = place && this.clipsByKey.get(place.key);
+    this.ring.visible = !!clip;
+    if (!clip) { this.callout.hide(); this.invalidate(); return null; }
+    this.art.worldOf(place, this.ring.position); this.ring.position.x -= place.side * .03; this.ring.scale.setScalar(1.08);
+    const title = String(clip.title || place.key), rack = this.cohorts.find(group => group.key === place.cohort)?.label || '';
+    const wall = place.side === -1 ? 'left' : 'right', row = place.row + 1, column = place.column + 1;
+    this.callout.show(title, [rack, `${wall} wall`, `row ${row}`, `column ${column}`].filter(Boolean).join(' · '));
+    this.invalidate();
+    return `${title}. ${rack ? `${rack}, ` : ''}${wall} wall, row ${row}, column ${column} from the front.`;
+  }
+  /**
+   * A keyboard move or jump: face the cover's wall from across the aisle, a step
+   * before it, so the cover sits mid-frame with its neighbours around it; mark it
+   * and say where it is. Looking straight down the aisle would leave a wall cover
+   * outside the view, beyond its 21° half-height and a phone's narrower width.
+   */
+  keyChoose(place) {
+    if (!place || !this.clipsByKey.has(place.key)) return false;
+    this.keyboardPlace = place; this.selection = place.key;
+    this.travel = this.art.travelFor(place); this.slider.value = String(this.travel);
+    const cover = this.art.worldOf(place), across = Math.min(this.art.gap * .8, 5.5) * (this.camera.aspect < 1 ? 1.35 : 1);
+    this.fitted = false; this.setCamera([cover.x - place.side * across, cover.y, cover.z + 1.2], cover.toArray());
+    const text = this.syncMark(); if (text) this.announcer.textContent = text;
+    this.interact(); return true;
+  }
+  /**
+   * Arrow and Page keys (aisle-keys.mjs). The first press takes a cover in the
+   * rack the camera stands in, a few steps ahead at eye level, on the left wall
+   * where it has covers: the middle of the view is the vanishing point, racks away.
+   */
+  moveSelection(direction) {
+    if (!this.art?.places.length) return;
+    let at = this.keyboardPlace || (this.selection && this.placeOf(this.selection));
+    if (!at) {
+      const ahead = -this.camera.position.z + 3, racks = this.art.racks;
+      const rack = racks.findIndex(r => r.group.visible && r.start + r.length > ahead - 3), index = rack < 0 ? racks.findIndex(r => r.group.visible) : rack;
+      const inRack = this.art.places.filter(p => p.rack === index), side = inRack.some(p => p.side === -1) ? -1 : 1;
+      at = inRack.filter(p => p.side === side).sort((a, b) => Math.abs(a.depth - ahead) + Math.abs(a.row - 3) - (Math.abs(b.depth - ahead) + Math.abs(b.row - 3)))[0];
+      this.keyChoose(at); return;
+    }
+    const next = aisleMove(this.keyRacks(), at, direction);
+    if (!next) { this.announcer.textContent = AISLE_EDGES[direction]; return; }
+    this.keyChoose(next);
+  }
+  choose(key) { this.keyChoose(this.placeOf(key)); }
+  open(key) { const clip = this.clipsByKey.get(key); if (!clip) return; this.selection = key; this.cancelHover(); this.callbacks.onOpen?.(clip); }
   pick(event) {
     if (!this.art || this.contextLost) return null;
     const rect = this.canvas.getBoundingClientRect(); if (!rect.width || !rect.height) return null;
@@ -188,8 +240,14 @@ export class AisleView {
   keydown(event) {
     if (event.altKey || event.ctrlKey || event.metaKey || !this.controls) return;
     if (event.key === 'Home') { event.preventDefault(); this.fitView(); return; }
+    if (event.key === 'Enter' && this.selection) { event.preventDefault(); this.open(this.selection); return; }
+    if (event.key === '/') { event.preventDefault(); this.jump.show(); return; }
+    if (event.key === 'PageUp' || event.key === 'PageDown') { event.preventDefault(); this.moveSelection(event.key === 'PageUp' ? 'away' : 'toward'); return; }
     if (['+', '=', '-'].includes(event.key)) { event.preventDefault(); this.zoomBy(event.key === '-' ? 1 / 1.15 : 1.15); return; }
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    const arrow = { ArrowRight: 'right', ArrowLeft: 'left', ArrowUp: 'up', ArrowDown: 'down' }[event.key];
+    if (arrow && !event.shiftKey) { event.preventDefault(); this.moveSelection(arrow); return; }
+    // Shift+arrows turn; plain arrows move between covers (above).
+    if (!arrow) return;
     event.preventDefault(); const sphere = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
     if (event.key === 'ArrowLeft') sphere.theta -= .1;
     if (event.key === 'ArrowRight') sphere.theta += .1;
@@ -206,7 +264,7 @@ export class AisleView {
     const distance = new THREE.Vector3().fromArray(state.position).distanceTo(new THREE.Vector3().fromArray(state.target));
     if (distance < .1 || distance > 1000) return false;
     this.travel = clamp(state.travel, 0, 1); this.spread = clamp(state.spread, 0, 1); this.slider.value = String(this.travel); this.fitted = state.fitted === true;
-    this.selection = this.clipsByKey.has(state.selection) ? state.selection : null; this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection;
+    this.selection = this.clipsByKey.has(state.selection) ? state.selection : null; this.keyboardPlace = null; this.syncMark();
     this.art?.setPresentation({ spread: this.spread, slice: null });
     if (this.fitted) this.applyPose(); else this.setCamera(state.position, state.target);
     return true;
@@ -214,7 +272,7 @@ export class AisleView {
   // Aliases keep the adapter easy to use alongside the existing spatial view.
   captureView() { return this.capture(); }
   restoreView(state) { return this.restore(state); }
-  setFocused(key) { this.selection = this.clipsByKey.has(key) ? key : null; this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; }
+  setFocused(key) { this.selection = this.clipsByKey.has(key) ? key : null; if (this.keyboardPlace && this.keyboardPlace.key !== this.selection) { this.keyboardPlace = null; this.syncMark(); } }
   captureState() { return this.capture(); }
   restoreState(state) { return this.restore(state); }
   resize() {
@@ -227,6 +285,8 @@ export class AisleView {
   invalidate() { if (this.frame || this.disposed || !this.visible || this.contextLost || !this.renderer) return; this.frame = requestAnimationFrame(() => { this.frame = null; this.render(); }); }
   render() {
     if (this.disposed || !this.visible || this.contextLost || !this.renderer) return;
+    // The ring follows its cover: the walls move apart with the spread.
+    if (this.keyboardPlace && this.ring.visible) { this.art.worldOf(this.keyboardPlace, this.ring.position); this.ring.position.x -= this.keyboardPlace.side * .03; }
     this.renderer.render(this.scene, this.camera); this.renderCount = (this.renderCount || 0) + 1;
     const occupied = [], point = new THREE.Vector3();
     for (const { anchor, node } of this.labels) {
@@ -236,11 +296,24 @@ export class AisleView {
       const visible = point.z > -1 && point.z < 1 && Math.abs(point.x) < 1.2 && !occupied.some(p => Math.abs(p.y - y) < 38 && Math.abs(p.x - x) < 250);
       node.hidden = !visible; if (visible) { node.style.left = `${x}px`; node.style.top = `${y}px`; occupied.push({ x, y }); }
     }
+    this.placeCallout();
+  }
+  /** The callout beside the marked cover: a cover's width runs along the aisle, its height up the wall. */
+  placeCallout() {
+    const place = this.keyboardPlace; if (!place || this.callout.node.hidden) return;
+    const c = this.art.worldOf(place), along = c.clone().add(new THREE.Vector3(0, 0, .49)), up = c.clone().add(new THREE.Vector3(0, .49, 0));
+    c.project(this.camera); along.project(this.camera); up.project(this.camera);
+    const px = v => (v + 1) / 2 * this.width, py = v => (1 - v) / 2 * this.height, cx = px(c.x), cy = py(c.y), t = this.toolbar;
+    this.callout.place({ cx, cy, halfW: Math.abs(px(along.x) - cx), halfH: Math.abs(py(up.y) - cy), width: this.width, height: this.height,
+      floor: (t.offsetWidth ? t.offsetTop : this.height) - 8, onScreen: c.z > -1 && c.z < 1 && Math.abs(c.x) < 1.1 && Math.abs(c.y) < 1.1 });
   }
   getDiagnostics() { return { built: this.built, visible: this.visible, contextLost: !!this.contextLost, itemCount: this.clipsByKey.size, cohortCount: this.cohorts.length, lensMatchKeys:this.lensMatchKeys || [],
     cohorts: this.cohorts.map(group => ({ ...group })), state: this.capture(), renderCount: this.renderCount || 0,
     ...(this.art?.getDiagnostics() || {}), pickTargets: this.art && !this.contextLost ? this.art.getPickTargets(this.camera) : [],
-    labels: this.labels.map(({node}) => node.textContent), selection: this.selection, graphicsError: this.graphicsError || null }; }
+    labels: this.labels.map(({node}) => node.textContent), selection: this.selection, graphicsError: this.graphicsError || null,
+    place: this.keyboardPlace ? { cohort: this.keyboardPlace.cohort, side: this.keyboardPlace.side, column: this.keyboardPlace.column, row: this.keyboardPlace.row, rack: this.keyboardPlace.rack } : null,
+    callout: this.callout.text, announcement: this.announcer.textContent,
+    markScreen: this.keyboardPlace && this.art ? (({ x, y, z }) => ({ x, y, z }))(this.art.worldOf(this.keyboardPlace).project(this.camera)) : null }; }
   dispose() {
     if (this.disposed) return; this.disposed = true; this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame);
     this.resizeObserver?.disconnect(); this.unlistenWheel?.(); for (const [node, name, fn] of this.listeners) node.removeEventListener(name, fn);

@@ -46,7 +46,7 @@ export class AlbumWalls {
     this.generation = 0;
     this.disposed = false;
     this.pages = [];
-    this.racks = [];
+    this.racks = []; this.places = [];
     this.meshes = [];
     this.labelAnchors = [];
     this.requests = new Set();
@@ -70,7 +70,7 @@ export class AlbumWalls {
     for (const resource of this.resources) resource.dispose();
     this.resources.clear();
     for (const page of this.pages) { page.canvas.width = page.canvas.height = 1; }
-    this.pages = []; this.racks = []; this.meshes = []; this.labelAnchors = [];
+    this.pages = []; this.racks = []; this.meshes = []; this.labelAnchors = []; this.places = [];
     this.loadedArtwork = 0; this.failedArtwork = 0; this.totalTiles = 0;
     this.highlightedTiles = 0;
   }
@@ -144,6 +144,8 @@ export class AlbumWalls {
       const rack = new THREE.Group(); rack.userData.cohort = cohort.key;
       this.root.add(rack);
       const walls = [], color = COLORS[cohortIndex % COLORS.length];
+      // Each cover's place, for keyboard moves: columns[c][r] per wall, column 0 nearest the entrance, row 0 at the top.
+      const grid = { [-1]: [], [1]: [] };
       for (const side of [-1, 1]) {
         const wall = new THREE.Group(); wall.userData.side = side; rack.add(wall); walls.push(wall);
         const background = new THREE.Mesh(this._own(new THREE.PlaneGeometry(bayDepth + .12, HEIGHT + .16)), backingMaterial);
@@ -169,6 +171,8 @@ export class AlbumWalls {
           mesh.name = `${cohort.label} covers`;
           mesh.userData.items = items;
           items.forEach((item, i) => {
+            const place = { key: item.key, cohort: cohort.key, rack: cohortIndex, side, column: item.column, row: item.row, depth: depth + item.column * PITCH, mesh, index: i };
+            (grid[side][item.column] ||= [])[item.row] = place; this.places.push(place);
             dummy.position.set(0, HEIGHT - PITCH * (item.row + .5), -depth - item.column * PITCH);
             dummy.rotation.set(0, side === -1 ? Math.PI / 2 : -Math.PI / 2, 0);
             dummy.scale.set(1, 1, 1); dummy.updateMatrix(); matrix.copy(dummy.matrix);
@@ -184,7 +188,7 @@ export class AlbumWalls {
       const label = { text: this.wallLabel(cohort.label, cohort.count),
         point: new THREE.Vector3(0, HEIGHT + .6, -depth), cohort: cohort.key, color, visible: true };
       this.labelAnchors.push(label);
-      this.racks.push({ group: rack, walls, cohort: cohort.key, start: depth, length: bayDepth, label });
+      this.racks.push({ group: rack, walls, cohort: cohort.key, start: depth, length: bayDepth, label, grid });
       depth += bayDepth + 1.2;
     });
     this.totalDepth = Math.max(1, depth - 1.2);
@@ -326,6 +330,17 @@ export class AlbumWalls {
       }
     }
     return targets;
+  }
+
+  /** A cover's centre in world space; walls move apart with the spread. */
+  worldOf(place, out = new THREE.Vector3()) {
+    const matrix = new THREE.Matrix4(); place.mesh.getMatrixAt(place.index, matrix); this.root.updateMatrixWorld(true);
+    return out.setFromMatrixPosition(matrix).applyMatrix4(place.mesh.matrixWorld);
+  }
+  /** The travel (0..1) that stands the camera a few steps before a cover's column. */
+  travelFor(place) {
+    const { start, length } = this.travelSpan();
+    return length ? clamp((place.depth - start - 1.5) / length, 0, 1) : 0;
   }
 
   /** Where the shown racks begin, and the world units travel 0..1 walks past them. */

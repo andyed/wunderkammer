@@ -21,14 +21,16 @@ import { sourceFor, proxied } from './spatial/spatial-view.mjs';
 import { spriteCovers } from './sprite-covers.mjs';
 import { clipKey } from './context-clusters.mjs';
 import { perf } from './instrument.mjs';
-import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys } from './float-space.mjs';
+import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys, attributeAxis, nearestAlong, describeItem } from './float-space.mjs';
 import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
+import { Callout, JumpBox, announcer, titleMatches as matchTitles } from './keyboard-path.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
-const titleOrder = new Intl.Collator(undefined, { numeric: true });
+/** Words for "No more items …" when an arrow finds nothing that way. */
+const EDGE_WORDS = { right: 'to the right', left: 'to the left', up: 'above', down: 'below', away: 'further away', toward: 'nearer' };
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
 const element = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text) node.textContent = text; return node; };
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,23 +134,30 @@ export class FloatView {
       select.setAttribute('aria-label', `${AXIS_LABELS[axis]} axis`);
       label.append(element('span', '', AXIS_LABELS[axis]), select); this.axesGroup.append(label); this.axisSelects.set(axis, select);
     }
-    const selectLabel = element('label', 'float-items');
-    this.itemSelect = element('select'); this.itemSelect.setAttribute('aria-label', 'Choose an item in this scope to fly to it'); selectLabel.append(element('span', '', 'Item'), this.itemSelect);
-    this.inspectButton = element('button', '', 'Inspect'); this.inspectButton.type = 'button'; this.inspectButton.disabled = true;
     this.scopeNote = element('span', 'float-scope');
-    this.toolbar.append(this.arrangeGroup, this.axesGroup, selectLabel, this.inspectButton, this.scopeNote);
-    this.help = element('p', 'float-help', 'Drag to orbit · Wheel dollies toward the pointer · W A S D fly, Q E down and up · Click or [ ] to fly to items · Home fits');
+    this.toolbar.append(this.arrangeGroup, this.axesGroup, this.scopeNote);
+    // The keyboard path to items is the space itself: arrows move the selection
+    // along the arrangement's axes, / jumps to a title, Enter opens. A callout at
+    // the selected item says where it sits in the arrangement's terms, and a
+    // visually hidden live region says the same to a screen reader. Neither
+    // takes room in the toolbar, so nothing moves when focus comes and goes.
+    this.callout = new Callout('float-callout');
+    this.announcer = announcer('float-announcer');
+    this.jump = new JumpBox('float-jump', { matches: q => this.titleMatches(q), onPick: i => this.keyChoose(this.keys[i]),
+      onClose: refocus => { if (refocus) this.canvas?.focus({ preventScroll: true }); }, listen: (node, type, fn) => this.listen(node, type, fn) });
+    this.fallback = element('button', 'view-fallback', 'Show the flat wall'); this.fallback.type = 'button';
+    this.help = element('p', 'float-help', 'Drag to orbit · Arrows move between items, Shift+arrows orbit · / jumps to a title · Enter opens · W A S D fly · Home fits');
     try {
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.canvas = this.renderer.domElement; this.canvas.className = 'float-canvas'; this.canvas.tabIndex = 0;
       this.canvas.setAttribute('role', 'img');
-      this.canvas.setAttribute('aria-label', '3D space: every item placed by the arrangement below. Drag or arrow keys to orbit, W A S D to fly, Home to fit. Tab to the item menu to fly to any item.');
+      this.canvas.setAttribute('aria-label', '3D space: every item placed by the arrangement below. Arrow keys move between items along its axes, Page Up and Page Down move in depth, slash jumps to a title, Enter opens the item; Shift with arrows orbits, W A S D fly, Home fits.');
       this.host.append(this.canvas);
       this.controls = new OrbitControls(this.camera, this.canvas);
       Object.assign(this.controls, { enableDamping: false, zoomToCursor: true, screenSpacePanning: true, rotateSpeed: .6, zoomSpeed: .8, minDistance: 8 });
       this.controls.addEventListener('change', () => { if (!this.programmatic) { this.tween = null; this.fitted = false; this.cancelHover(); this.interact(); } this.invalidate(); });
-      this.listen(this.canvas, 'pointerdown', e => { this.cancelHover(); this.down = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; });
+      this.listen(this.canvas, 'pointerdown', e => { this.cancelHover(); this.down = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; if (this.keyboardSelection) { this.keyboardSelection = false; this.syncCallout(); } });
       this.listen(this.canvas, 'pointerup', e => {
         if (this.down?.id === e.pointerId && Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5) {
           const index = this.pick(e.clientX, e.clientY); if (index >= 0) this.open(this.keys[index], { fly: true });
@@ -171,11 +180,9 @@ export class FloatView {
       this.listen(this.canvas, 'webglcontextrestored', () => { this.contextLost = false; this.host.dataset.graphicsState = 'ready'; this.updateStatus(); this.invalidate(); });
       this.host.dataset.graphicsState = 'ready';
     } catch (error) { this.contextLost = true; this.host.dataset.graphicsState = 'unavailable'; this.graphicsError = error.message; }
-    this.host.append(this.overlay, this.status, this.toolbar, this.help);
+    this.host.append(this.overlay, this.callout.node, this.status, this.jump.node, this.toolbar, this.help, this.announcer);
     for (const [axis, select] of this.axisSelects) this.listen(select, 'change', () => { if (this.chooseAxis(axis, select.value)) this.interact(); });
-    this.listen(this.itemSelect, 'change', () => { if (this.itemSelect.value) this.choose(this.itemSelect.value); });
-    this.listen(this.itemSelect, 'keydown', e => { if (e.key === 'Enter' && this.selection) { e.preventDefault(); this.open(this.selection, { fly: true }); } });
-    this.listen(this.inspectButton, 'click', () => { if (this.selection) this.open(this.selection, { fly: true }); });
+    this.listen(this.fallback, 'click', () => this.callbacks.onFlatWall?.());
     this.syncRadios();
     // Debug handle, as in the 3D view (window.__cwSpatial): atlas failures and
     // GPU output are invisible from the DOM, so tests and probes reach them here.
@@ -242,12 +249,8 @@ export class FloatView {
       for (let i = 0; i < this.count; i++) opacity[i] = this.inScope[i] ? 1 : dim;
       this.field.aOpacity.needsUpdate = true;
     }
-    this.itemSelect.replaceChildren(new Option(this.scopeCount ? 'Choose an item…' : 'No items in this scope', ''));
-    const titles = [...this.inScope.keys()].filter(i => this.inScope[i])
-      .map(i => [i, String(this.clips[i].title || this.keys[i])]).sort((a, b) => titleOrder.compare(a[1], b[1]));
-    for (const [i, title] of titles) this.itemSelect.append(new Option(title, this.keys[i]));
     if (!this.inScopeKey(this.selection)) this.selection = null;
-    this.itemSelect.value = this.selection || ''; this.inspectButton.disabled = !this.selection; this.itemSelect.disabled = !this.scopeCount;
+    this.syncCallout();
     this.scopeNote.textContent = this.scopeCount === this.count ? `All ${counted(this.count, this.nouns ?? NEUTRAL_NOUNS)}` : `${this.scopeCount} of ${this.count} in scope · the rest are dimmed`;
     if (this.hoverKey && !this.inScopeKey(this.hoverKey)) this.cancelHover();
     this.updateStatus(); this.invalidate();
@@ -299,6 +302,7 @@ export class FloatView {
   }
   relayout({ animate = true } = {}) {
     this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());
+    this.syncCallout(); // a new arrangement reads the item differently
     const p = this.layout.positions, s = this.layout.sizes, q = this.camera.quaternion, still = !animate || reducedMotion();
     for (let i = 0; i < this.count; i++) {
       if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q); continue; }
@@ -332,7 +336,8 @@ export class FloatView {
   }
 
   updateStatus() {
-    if (this.contextLost) this.status.textContent = '3D graphics are unavailable. Choose an item below to inspect it, or use the flat wall.';
+    // Without graphics the flat wall is the way to every item; the button takes the visitor there.
+    if (this.contextLost) this.status.replaceChildren('3D graphics are unavailable here. ', this.fallback);
     else if (this.built && !this.count) this.status.textContent = 'This collection has no items.';
     else if (this.built && !this.scopeCount) this.status.textContent = 'No items in this scope. Every item is dimmed; change the search or filters to continue.';
     else if (this.dimMode === 'hidden') this.status.textContent = 'Dimming is unavailable in this build, so items outside the scope are hidden.';
@@ -342,27 +347,85 @@ export class FloatView {
 
   /* ---------------------------------------------------------- reaching --- */
 
-  /** Fly to an item without opening it (the item menu, [ ] keys). */
+  /** An attribute axis's model for the whole collection, built once per corpus. */
+  modelFor(id) {
+    if (!this.models || this.models.identity !== this.identity) this.models = { identity: this.identity, byId: new Map() };
+    if (!this.models.byId.has(id)) this.models.byId.set(id, attributeAxis(this.clips, id)?.model || null);
+    return this.models.byId.get(id);
+  }
+  /** In-scope indices. */
+  scoped() { return [...this.inScope.keys()].filter(i => this.inScope[i]); }
+  /**
+   * The callout at a keyboard-chosen item: its title and where it sits in the
+   * arrangement's terms (describeItem). Returns the spoken text, or null when
+   * the callout is off (no keyboard choice, or the item left the scope).
+   */
+  syncCallout() {
+    const index = this.keyboardSelection ? this.indexOf?.get(this.selection) : undefined;
+    const on = index !== undefined && this.inScope?.[index] === 1;
+    if (!on) { this.callout.hide(); return null; }
+    const clip = this.clips[index], title = String(clip.title || this.keys[index]);
+    const where = describeItem(clip, this.arrangement, { axes: this.axes, modelFor: id => this.modelFor(id), labelFor: this.callbacks.labelFor });
+    this.callout.show(title, where.short.join(' · '));
+    this.invalidate();
+    return where.spoken ? `${title}. ${where.spoken}.` : `${title}.`;
+  }
+  /** A keyboard move or jump: select, fly, and say where the item is. */
+  keyChoose(key) {
+    this.keyboardSelection = true;
+    if (!this.choose(key)) return false;
+    const text = this.syncCallout(); if (text) this.announcer.textContent = text;
+    return true;
+  }
+  /**
+   * Arrow and Page keys: the next in-scope item along the arrangement axis that
+   * points `screen` way (right, left, up, down, away, toward) from where the
+   * camera is now. With nothing selected, the first move takes the item
+   * nearest the point the camera looks at.
+   */
+  moveSelection(screen) {
+    if (!this.layout || !this.field) return;
+    const scoped = this.scoped(); if (!scoped.length) return;
+    const p = this.layout.positions, from = this.indexOf.get(this.selection);
+    if (from === undefined || !this.inScope[from]) {
+      const t = this.controls?.target || new THREE.Vector3();
+      let near = scoped[0], best = Infinity;
+      for (const i of scoped) { const d = (p[i * 3] - t.x) ** 2 + (p[i * 3 + 1] - t.y) ** 2 + (p[i * 3 + 2] - t.z) ** 2; if (d < best) { best = d; near = i; } }
+      this.keyChoose(this.keys[near]); return;
+    }
+    const { k, sign } = this.screenAxis(screen), next = nearestAlong(p, scoped, from, k, sign);
+    if (next < 0) { this.announcer.textContent = `No more items ${EDGE_WORDS[screen]}.`; return; }
+    this.keyChoose(this.keys[next]);
+  }
+  /** Which arrangement axis, and which way along it, points `screen` way on screen now. */
+  screenAxis(screen) {
+    const e = this.camera.matrixWorld.elements, right = [e[0], e[1], e[2]], up = [e[4], e[5], e[6]], back = [e[8], e[9], e[10]];
+    const pick = (v, taken) => [0, 1, 2].filter(i => !taken.includes(i)).reduce((a, b) => Math.abs(v[b]) > Math.abs(v[a]) ? b : a);
+    const kr = pick(right, []), ku = pick(up, [kr]), kd = 3 - kr - ku, sgn = x => Math.sign(x) || 1;
+    return {
+      right: { k: kr, sign: sgn(right[kr]) }, left: { k: kr, sign: -sgn(right[kr]) },
+      up: { k: ku, sign: sgn(up[ku]) }, down: { k: ku, sign: -sgn(up[ku]) },
+      away: { k: kd, sign: -sgn(back[kd]) }, toward: { k: kd, sign: sgn(back[kd]) },
+    }[screen];
+  }
+  /** In-scope items whose title starts with, then contains, `query`; punctuation is ignored. */
+  titleMatches(query) { return matchTitles(this.scoped().map(i => [i, this.clips[i].title || this.keys[i]]), query); }
+
+  /** Fly to an item without opening it (arrow keys, jump). */
   choose(key) {
     if (!this.inScopeKey(key)) return false;
-    this.selection = key; this.itemSelect.value = key; this.inspectButton.disabled = false;
+    this.selection = key;
     this.flyTo(key); this.interact(); return true;
   }
   /** Open an item in the detail pane; `fly` also brings the camera to it. */
   open(key, { fly = false } = {}) {
     const index = this.indexOf.get(key); if (index === undefined) return;
-    this.selection = key; this.itemSelect.value = this.inScopeKey(key) ? key : ''; this.inspectButton.disabled = false; this.cancelHover();
+    this.selection = key; this.syncCallout(); this.cancelHover();
     this.callbacks.onOpen?.(this.clips[index]);
     // After onOpen: the detail pane is now open and its width known, so the
     // flight can land the item beside it rather than under it.
     if (fly) this.flyTo(key);
     this.invalidate();
-  }
-  step(direction) {
-    const order = (this.layout?.order || []).filter(i => this.inScope[i]); if (!order.length) return;
-    const at = order.indexOf(this.indexOf.get(this.selection));
-    const next = order[at < 0 ? (direction > 0 ? 0 : order.length - 1) : (at + direction + order.length) % order.length];
-    this.choose(this.keys[next]);
   }
 
   /** Where the camera ends up to look at item `index`: on the line from where it is now. */
@@ -462,7 +525,10 @@ export class FloatView {
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (key === 'Home' || key === '0') { event.preventDefault(); this.tween = null; this.fitView(); return; }
     if (key === 'Enter' && this.selection) { event.preventDefault(); this.open(this.selection, { fly: true }); return; }
-    if (key === ']' || key === '[') { event.preventDefault(); this.step(key === ']' ? 1 : -1); return; }
+    if (key === '/') { event.preventDefault(); this.jump.show(); return; }
+    if (key === 'PageUp' || key === 'PageDown') { event.preventDefault(); this.moveSelection(key === 'PageUp' ? 'away' : 'toward'); return; }
+    const arrow = { ArrowRight: 'right', ArrowLeft: 'left', ArrowUp: 'up', ArrowDown: 'down' }[key];
+    if (arrow && !event.shiftKey) { event.preventDefault(); this.moveSelection(arrow); return; }
     if (['+', '=', '-'].includes(key)) { event.preventDefault(); this.zoomBy(key === '-' ? 1 / 1.15 : 1.15); return; }
     const target = this.controls.target, offset = this.camera.position.clone().sub(target);
     const forward = offset.clone().negate().normalize(), right = new THREE.Vector3().crossVectors(forward, this.camera.up).normalize();
@@ -474,7 +540,8 @@ export class FloatView {
       const move = fly.clone().multiplyScalar(speed);
       this.setCamera(this.camera.position.clone().add(move).toArray(), target.clone().add(move).toArray()); this.interact(); return;
     }
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) return;
+    // Shift+arrows orbit; plain arrows move between items (above).
+    if (!arrow) return;
     event.preventDefault(); this.tween = null; this.fitted = false;
     const sphere = new THREE.Spherical().setFromVector3(offset);
     if (key === 'ArrowLeft') sphere.theta -= .1;
@@ -542,7 +609,7 @@ export class FloatView {
     }
     this.setArrangement(state.arrangement, { animate: false });
     this.selection = this.indexOf.has(state.selection) ? state.selection : null;
-    this.itemSelect.value = this.inScopeKey(this.selection) ? this.selection : ''; this.inspectButton.disabled = !this.selection;
+    this.keyboardSelection = false; this.syncCallout();
     this.tween = null; this.fitted = state.fitted === true;
     if (this.fitted) this.fitView({ animate: false, quiet: true }); else this.setCamera(state.position, state.target);
     return true;
@@ -551,7 +618,7 @@ export class FloatView {
   restoreView(state) { return this.restore(state); }
   setFocused(key) {
     this.selection = this.indexOf.has(key) ? key : null;
-    this.itemSelect.value = this.inScopeKey(this.selection) ? this.selection : ''; this.inspectButton.disabled = !this.selection; this.invalidate();
+    this.syncCallout(); this.invalidate();
   }
 
   /* ------------------------------------------------------------ frame --- */
@@ -640,6 +707,7 @@ export class FloatView {
     const point = new THREE.Vector3(), t = this.toolbar;
     // The toolbar counts as taken: a label half under it reads as broken.
     const occupied = t.offsetWidth ? [{ x: t.offsetLeft + t.offsetWidth / 2, y: t.offsetTop + t.offsetHeight / 2, w: t.offsetWidth / 2, h: t.offsetHeight / 2 }] : [];
+    this.placeCallout(occupied, t);
     for (const label of this.labels) {
       const { point: anchor, node } = label;
       point.copy(anchor).project(this.camera);
@@ -657,6 +725,24 @@ export class FloatView {
       if (!visible) continue;
       node.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`; occupied.push(box);
     }
+  }
+
+  /**
+   * The keyboard callout sits beside the selected item, on whichever side has
+   * room, above the toolbar. It goes first, so axis labels that would touch it
+   * hide rather than cover it.
+   */
+  placeCallout(occupied, t) {
+    if (this.callout.node.hidden || !this.field) return;
+    const index = this.indexOf.get(this.selection); if (index === undefined) return;
+    const c = this.centreOf(index, new THREE.Vector3()), q = this.camera.quaternion;
+    const right = c.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(q), this.field.sizes[index * 2] / 2);
+    const top = c.clone().addScaledVector(new THREE.Vector3(0, 1, 0).applyQuaternion(q), this.field.sizes[index * 2 + 1] / 2);
+    c.project(this.camera); right.project(this.camera); top.project(this.camera);
+    const px = v => (v + 1) / 2 * this.width, py = v => (1 - v) / 2 * this.height, cx = px(c.x), cy = py(c.y);
+    const box = this.callout.place({ cx, cy, halfW: Math.abs(px(right.x) - cx), halfH: Math.abs(py(top.y) - cy), width: this.width, height: this.height,
+      floor: (t.offsetWidth ? t.offsetTop : this.height) - 8, onScreen: c.z > -1 && c.z < 1 });
+    if (box) occupied.push({ x: box.x + box.w / 2, y: box.y + box.h / 2, w: box.w / 2 + 4, h: box.h / 2 + 2 });
   }
 
   /** Read one pixel at an item's centre straight after drawing it (tests). */
@@ -717,7 +803,8 @@ export class FloatView {
       opacity: f ? byKey(i => r(f.aOpacity.array[i])) : {}, screen, stretch: this.layout?.stretch ?? 1,
       moving: f?.moving || 0, flying: !!this.tween, edge: this.layout?.edge || 0, declumped: this.layout?.declumped || null,
       unplaced: this.layout?.unplaced || 0, labels: this.labels.map(l => l.node.textContent),
-      axes: this.axes, axisInfo: this.layout?.axisInfo || null, dimensions: this.dimensions.map(d => d.id),
+      axes: this.axes, axisInfo: this.layout?.axisInfo || null,
+      callout: this.callout.text, announcement: this.announcer.textContent, dimensions: this.dimensions.map(d => d.id),
       state: this.capture(), selection: this.selection, renderCount: this.renderCount, farResident,
       failed: f?.atlases._failed?.size ?? 0, loading: f ? (f.atlases._inflight || 0) + f.atlases._farQueue.length + f.atlases._nearQueue.length + (f.atlases.far._dirty || f.atlases.near._dirty ? 1 : 0) : 0,
       pickTargets, frameTimes: this.frameTimes.slice() };
