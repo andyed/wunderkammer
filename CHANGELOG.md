@@ -95,6 +95,12 @@
   `?view=float` link that names no arrangement now opens Axes instead of
   OKLab.
   [SPATIAL.md](docs/SPATIAL.md#the-3d-entry).
+- **A mark and wordmark.** One wall of the aisle, a rack of tiles each in its
+  own hue, dimmed but for one gold tile, beside the lowercase word in Geist. The wall page shows the rack before
+  the collection's title, the comparison page's header shows the full
+  wordmark, both pages have a favicon, and the README leads with it. Outlined
+  SVGs in `wall/brand/`, rebuilt by `scripts/build-brand.py`.
+  [BRAND.md](docs/BRAND.md).
 - **Sideways scroll is a walk in the 3D hallways.** In the wall page's aisle and on
   the comparison page's walls, a sideways wheel or trackpad scroll moves along
   the aisle, as the Walk aisle slider does, and the travel is kept in the link

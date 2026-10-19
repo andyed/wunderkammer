@@ -986,7 +986,47 @@ const cases = [
     name: 'still: cloud, the exact link loses front=', file: 'wall/float-view.mjs',
     from: '...(this.front ? { front: this.front } : {}), ', to: '',
     test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
-  }
+  },
+  {
+    name: 'brand: the lockup word drops below 8:1', file: 'wall/brand/lockup-dark.svg',
+    from: 'fill="#f0f0f0"', to: 'fill="#5c5c80"',
+    test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
+  },
+  {
+    name: 'brand: a second tile is lit', file: 'wall/brand/mark.svg',
+    from: '<polygon fill=', to: '<polygon class="lit" fill=',
+    test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
+  },
+  {
+    name: 'brand: a dim tile fades into the dark ground', file: 'wall/brand/mark.svg',
+    change: source => source.replace(/<polygon fill="#[0-9a-f]{6}"/, '<polygon fill="#262636"'),
+    test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
+  },
+  {
+    name: 'brand: the lit tile stops leading the dim ones', file: 'wall/brand/mark.svg',
+    change: source => source.replace(/class="lit" fill="#[0-9a-f]{6}"/, 'class="lit" fill="#8a8aa0"'),
+    test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',
+  },
+  {
+    name: 'brand: the header mark is named from the server root', file: 'index.html',
+    from: 'src="wall/brand/mark.svg"', to: 'src="/wall/brand/mark.svg"',
+    test: 'tests/brand.test.mjs', pattern: 'both pages show the mark and the favicon',
+  },
+  {
+    name: 'brand: the favicon is named from the server root', file: 'index.html',
+    from: 'href="wall/brand/favicon.svg"', to: 'href="/wall/brand/favicon.svg"',
+    test: 'tests/brand.test.mjs', pattern: 'both pages show the mark and the favicon',
+  },
+  {
+    name: 'brand: the comparison wordmark loses its name', file: 'wall/compare.html',
+    from: 'alt="wunderkammer"', to: 'alt=""',
+    test: 'tests/brand.test.mjs', pattern: 'both pages show the mark and the favicon',
+  },
+  {
+    name: 'brand: the README shows the light lockup on a dark page', file: 'README.md',
+    from: 'srcset="wall/brand/lockup-dark.svg"', to: 'srcset="wall/brand/lockup-light.svg"',
+    test: 'tests/brand.test.mjs', pattern: 'the README heading shows the lockup',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));
@@ -994,7 +1034,7 @@ if (!selectedCases.length) throw new Error('No mutation matched MUTATION_FILTER'
 for (const mutation of selectedCases) {
   const dir = await mkdtemp(path.join(tmpdir(), 'wunderkammer-mutation-'));
   try {
-    for (const file of ['clip.mjs', 'index.html', 'lib', 'wall', 'tests', 'scripts', 'package.json']) {
+    for (const file of ['clip.mjs', 'index.html', 'README.md', 'lib', 'wall', 'tests', 'scripts', 'package.json']) {
       await cp(path.join(root, file), path.join(dir, file), { recursive: true });
     }
     await symlink(path.join(root, 'node_modules'), path.join(dir, 'node_modules'), 'dir');
