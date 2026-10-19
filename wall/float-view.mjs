@@ -42,7 +42,7 @@ const ease = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 const FIT_DIRECTION = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(70), THREE.MathUtils.degToRad(32));
 const AXES_DIRECTION = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(74), THREE.MathUtils.degToRad(20));
 const FRONT = new THREE.Vector3(0, 0, 1);
-const fitDirection = arrangement => arrangement === 'az' ? FRONT : arrangement === 'axes' ? AXES_DIRECTION : FIT_DIRECTION;
+const fitDirection = arrangement => arrangement === 'az' || arrangement === 'cloud' ? FRONT : arrangement === 'axes' ? AXES_DIRECTION : FIT_DIRECTION;
 
 /**
  * Dimming, patched into the vendored TileField fragment shader on this view's
@@ -247,6 +247,8 @@ export class FloatView {
     this.scopeCount = 0;
     for (let i = 0; i < this.count; i++) { const on = wanted.has(this.keys[i]) ? 1 : 0; this.inScope[i] = on; this.scopeCount += on; }
     this.applyOpacity();
+    // The cloud's order is the scope's: it moves items when the scope changes, as no other arrangement does.
+    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });
     if (!this.inScopeKey(this.selection)) this.selection = null;
     this.syncCallout();
     this.updateScopeNote();
@@ -272,7 +274,9 @@ export class FloatView {
    */
   setLit(keys) {
     this.lit = keys && keys.size ? new Set(keys) : null;
-    this.applyOpacity(); this.updateScopeNote(); this.invalidate();
+    this.applyOpacity(); this.updateScopeNote();
+    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });
+    this.invalidate();
   }
 
   /** Move every item to its place in another arrangement, animated by the field's own motion. */
@@ -307,7 +311,12 @@ export class FloatView {
     return true;
   }
   resolveAxes() { this.axes = resolveAxes(this.dimensions, this.requestedAxes); this.fillAxisMenus(); }
-  arrangeOptions() { return { axes: this.axes, labelFor: this.callbacks.labelFor }; }
+  arrangeOptions() { return { axes: this.axes, labelFor: this.callbacks.labelFor, priority: this.arrangement === 'cloud' ? this.cloudPriority() : undefined }; }
+  /** Who stands in front of the cloud: lit items, then the rest of the scope, then everything outside it. */
+  cloudPriority() {
+    const tier = i => this.lit && this.lit.has(this.keys[i]) ? 0 : this.inScope[i] ? 1 : 2;
+    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);
+  }
   fillAxisMenus() {
     for (const [axis, select] of this.axisSelects) {
       const groups = [['colour', 'Dominant colour'], ['attribute', 'Attributes']].map(([group, label]) => {

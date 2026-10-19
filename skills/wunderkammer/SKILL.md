@@ -148,6 +148,9 @@ steps and traps.
      were yours.
    - It refuses a shot whose text does not fit or measures under 8:1 on the
      image itself.
+   - For a picture rather than a measurement, `view=float&arrange=cloud`
+     puts the lit items (or the scope) front and centre, larger, with the
+     rest of the collection receding behind them.
    - Stills cover the flat wall and the floating space so far.
      [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.

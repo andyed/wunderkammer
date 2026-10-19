@@ -294,6 +294,45 @@ Under `chrome=none` a shot gets a figure (`wall/figure.mjs`), drawn by
   detected: the count line under an overridden headline, the reserved band,
   the clip check, and the contrast floor.
 
+## The cloud (phase 2c)
+
+Andy, 2026-10-19: "a sexy viz might be a cloud of image screenshot with some
+prioritization for whos in front."
+
+`arrange=cloud` is an arrangement of the floating space made for shots. Use
+it by link; it is not in the Arrange by menu.
+- **Order.** Items spiral out from the centre in priority order, each a
+  golden angle on from the last, so the front of the order holds the middle.
+- **Depth and size.** Rank also sets depth and size. The first items stand
+  closest to the camera and largest, at up to 1.9 times a tile's edge, and the
+  cloud thins and recedes behind them to 0.7 times.
+- **Priority.** The lit items come first, then the rest of the scope, then
+  everything outside it. Within each tier, collection order holds.
+- **Re-forming.** The cloud re-forms when the lit set or the scope changes. It
+  is the one arrangement whose positions do: in the others, scope only dims.
+- **Its one claim is the order.** No position encodes a value, so the
+  figure's note says what decided the order, for example "Cloud: the lit items
+  in front, the rest behind".
+- **Shared with the floating space.** Fit looks at it square on. Dimming,
+  framing, fly-to, permalinks and the figure work as everywhere else in the
+  floating space.
+
+**Measured.**
+- On the demo collection, 46 lit frames and the April 2026 scope (35 frames)
+  each stand front and centre.
+- `tests/still.test.mjs` adds one test, covering both of these:
+  - Lit items stand in front, nearest the middle and largest on screen, and
+    the note says why.
+  - Without a lit set the scope stands in front, and a new scope re-forms the
+    cloud.
+- Two mutation cases each remove one protection, and each is detected: the
+  priority, and the re-forming on a scope change.
+
+**Next for the cloud.**
+- `front=<key>`: an attribute orders the cloud, such as the newest capture
+  first or the most saturated colour first, within or without a lit set.
+- A gentler fall-off, or a ring, for small lit sets.
+
 ## Build order for the rest of shots
 
 This is the recommended order. Each step ships with tests in

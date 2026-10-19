@@ -580,6 +580,11 @@ function viewNotes() {
       brief = `Axes: ${AXES.map(axis => `${axis} ${figureLabels.axes[axis] ?? title(axis).replace(/\s*\(.*?\)|\s+from\s+\d+°/g, '')}`).join(' · ')}`;
       name = 'Axes';
     } else if (arrangement === 'az') view = name = 'Shelved A–Z by title';
+    else if (arrangement === 'cloud') {
+      // The cloud's only claim is its order; the note says what decided it.
+      view = state.lit ? 'Cloud: the lit items in front, the rest behind' : state.filtered.length < state.clips.length ? 'Cloud: the scope in front, the rest behind' : 'Cloud';
+      name = 'Cloud';
+    }
     else { view = `Placed by dominant colour in ${ARRANGEMENT_LABELS[arrangement]}`; name = ARRANGEMENT_LABELS[arrangement]; }
   } else if (state.mode === 'flat') {
     const key = state.groupKey;

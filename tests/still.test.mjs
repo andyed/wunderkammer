@@ -247,6 +247,39 @@ test('contrast is read from the shot\'s pixels: the ground behind a text box is 
   } finally { await page.close(); }
 });
 
+/* --------------------------------------------------------------- cloud --- */
+
+/** Front to back, by depth toward the camera: the cloud's order as drawn. */
+const frontToBack = scene => Object.entries(scene.targets).sort((a, b) => b[1][2] - a[1][2]).map(([key]) => key);
+
+test('the cloud puts the lit items in front, nearest the middle and largest, and says what decided the order', async () => {
+  const { page, errors } = await open(`view=float&arrange=cloud&${litQuery}&chrome=none`); try {
+    const { figure } = await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    const { scene } = await page.evaluate(() => window.wunderkammerFloatDebug());
+    assert.equal(scene.arrangement, 'cloud');
+    const order = frontToBack(scene);
+    assert.deepEqual([...order.slice(0, 3)].sort(), [...LIT].sort(), `the lit items stand in front: ${order.slice(0, 5)}`);
+    const radius = key => Math.hypot(scene.targets[key][0], scene.targets[key][1]), share = key => scene.screen[key][3];
+    const rest = order.slice(3);
+    assert.ok(Math.max(...LIT.map(radius)) < Math.min(...rest.slice(3).map(radius)), 'and nearest the middle');
+    assert.ok(Math.min(...LIT.map(share)) > Math.max(...rest.map(share)), 'and largest on screen');
+    assert.equal(figure.note.endsWith('Cloud: the lit items in front, the rest behind'), true, figure.note);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+  // Without a lit set, the scope stands in front; the cloud re-forms when the scope changes.
+  const warmKeys = hexes.filter(warm).map(hex => `urn:still:${hex}`);
+  const scoped = await open('view=float&arrange=cloud&facet.family=warm&chrome=none'); try {
+    await scoped.page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
+    const { scene } = await scoped.page.evaluate(() => window.wunderkammerFloatDebug());
+    assert.deepEqual(frontToBack(scene).slice(0, warmKeys.length).sort(), [...warmKeys].sort(), 'the warm scope stands in front');
+    // The view on its own: a new scope re-forms the cloud, with or without a lit set to set.
+    await scoped.page.evaluate(() => { const f = window.__cwFloat; f.setScope(f.clips.filter(c => c.props.family === 'cool')); });
+    const after = (await scoped.page.evaluate(() => window.wunderkammerFloatDebug())).scene;
+    const coolKeys = hexes.filter(hex => !warm(hex)).map(hex => `urn:still:${hex}`);
+    assert.deepEqual(frontToBack(after).slice(0, coolKeys.length).sort(), [...coolKeys].sort(), 'the cool scope now stands in front');
+  } finally { await scoped.page.close(); }
+});
+
 /* ------------------------------------------------------------ the tool --- */
 
 const run = (...args) => spawnSync(process.execPath, [path.join(ROOT, 'scripts/still.mjs'), ...args], { encoding: 'utf8', timeout: 120000 });

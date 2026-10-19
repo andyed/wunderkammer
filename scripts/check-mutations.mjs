@@ -960,6 +960,17 @@ const cases = [
     name: 'still: contrast under the floor passes', file: 'scripts/still.mjs',
     from: '  const below = items.filter(item => item.ratio < floor);', to: '  const below = [];',
     test: 'tests/still.test.mjs', pattern: 'contrast is read from the shot',
+  },
+  {
+    name: 'still: cloud, the order ignores the lit set and the scope', file: 'wall/float-view.mjs',
+    from: '    return [...this.keys.keys()].sort((a, b) => tier(a) - tier(b) || a - b);', to: '    return [...this.keys.keys()];',
+    test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
+  },
+  {
+    name: 'still: cloud, a scope change leaves the old order', file: 'wall/float-view.mjs',
+    from: "    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });\n    if (!this.inScopeKey(this.selection)) this.selection = null;",
+    to: "    if (!this.inScopeKey(this.selection)) this.selection = null;",
+    test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
   }
 ];
 

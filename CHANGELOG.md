@@ -37,6 +37,11 @@
       which shortens.
   - Every readable text box is measured against the shot's own pixels; under
     8:1 the shot is refused (`--allow-low-contrast` records it instead).
+  - `arrange=cloud`: the collection as a cloud with the evidence in front.
+    - The lit items, else the scope, spiral out from the middle, closest and
+      largest.
+    - The rest recede behind, smaller and dimmed.
+    - The figure's note says what decided the order.
   - [SHOTS.md](docs/SHOTS.md) has the shot model and the build order:
     brushing by identity, framing on the evidence, captions from the page's
     counts, and camera angles. Interactive embeds are deferred.
