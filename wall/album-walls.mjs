@@ -8,16 +8,21 @@ import { NEUTRAL_COPY } from './comparison-copy.mjs';
 
 const COLORS = [0x90e4f4, 0xffda9c, 0xcbb7ff, 0xaaffaa, 0xffb8d0, 0xd7e7ff];
 const ROWS = 8, PITCH = 1.04, TILE = .98, HEIGHT = ROWS * PITCH;
-const ATLAS = 2048, CELL = 128, PAD = 2, PER_ROW = ATLAS / CELL, PER_PAGE = PER_ROW ** 2;
+const ATLAS = 2048, PAD = 2;
+/** A cover's cell in the atlas: 256 px for up to 400 covers, so a small collection
+ * (a pet, a trip) stays sharp up close, else 128 px. Either way at most 128 MiB:
+ * 400 covers fill 7 pages of 64, and 1,793 covers 8 pages of 256. */
+const CELL = 128, SHARP_CELL = 256, SHARP_LIMIT = 400;
+const cellFor = covers => (covers <= SHARP_LIMIT ? SHARP_CELL : CELL);
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 
 /** A cover served by sprite-sheet cells is cropped from its sheet in _load. */
-const coverSource = clip => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip);
+const coverSource = (clip, cell) => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip, cell);
 
-function fileSource(clip) {
+function fileSource(clip, cell = CELL) {
   const variants = (clip?.coverVariants || []).filter(v => v?.src && v.width > 0)
     .sort((a, b) => a.width - b.width);
-  const source = (variants.find(v => v.width >= CELL) || variants.at(-1))?.src || clip?.cover;
+  const source = (variants.find(v => v.width >= cell) || variants.at(-1))?.src || clip?.cover;
   if (!source) return null;
   try {
     const url = new URL(source, location.href);
@@ -55,6 +60,7 @@ export class AlbumWalls {
     this.failedArtwork = 0;
     this.totalTiles = 0;
     this.totalDepth = 1;
+    this.cell = CELL;
   }
 
   _own(resource) { this.resources.add(resource); return resource; }
@@ -80,13 +86,14 @@ export class AlbumWalls {
     canvas.width = canvas.height = ATLAS;
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#26333b'; ctx.fillRect(0, 0, ATLAS, ATLAS);
+    const cell = this.cell, perRow = ATLAS / cell, perPage = perRow ** 2, k = cell / CELL;
     // Distinct, honest placeholders remain when artwork is unavailable.
-    for (let slot = 0; slot < PER_PAGE; slot++) {
-      const x = slot % PER_ROW * CELL, y = Math.floor(slot / PER_ROW) * CELL;
-      ctx.strokeStyle = '#6b7c83'; ctx.lineWidth = 2;
-      ctx.strokeRect(x + 32, y + 32, 64, 64);
-      ctx.beginPath(); ctx.moveTo(x + 40, y + 86); ctx.lineTo(x + 61, y + 62);
-      ctx.lineTo(x + 84, y + 86); ctx.stroke();
+    for (let slot = 0; slot < perPage; slot++) {
+      const x = slot % perRow * cell, y = Math.floor(slot / perRow) * cell;
+      ctx.strokeStyle = '#6b7c83'; ctx.lineWidth = 2 * k;
+      ctx.strokeRect(x + 32 * k, y + 32 * k, 64 * k, 64 * k);
+      ctx.beginPath(); ctx.moveTo(x + 40 * k, y + 86 * k); ctx.lineTo(x + 61 * k, y + 62 * k);
+      ctx.lineTo(x + 84 * k, y + 86 * k); ctx.stroke();
     }
     const texture = this._own(new THREE.CanvasTexture(canvas));
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -101,12 +108,12 @@ export class AlbumWalls {
       shader.fragmentShader = `varying vec2 vAtlasOffset;\n${shader.fragmentShader}`;
       shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
         #ifdef USE_MAP
-          vec4 sampledDiffuseColor = texture2D(map, vAtlasOffset + vMapUv * ${((CELL - 2 * PAD) / ATLAS).toFixed(10)});
+          vec4 sampledDiffuseColor = texture2D(map, vAtlasOffset + vMapUv * ${((cell - 2 * PAD) / ATLAS).toFixed(10)});
           diffuseColor *= sampledDiffuseColor;
         #endif`);
     };
-    material.customProgramCacheKey = () => 'wunderkammer-cover-atlas-v1';
-    const page = { canvas, ctx, texture, material, slots: 0 };
+    material.customProgramCacheKey = () => `wunderkammer-cover-atlas-v1-${cell}`;
+    const page = { canvas, ctx, texture, material, slots: 0, perRow, perPage };
     this.pages.push(page);
     return page;
   }
@@ -115,18 +122,19 @@ export class AlbumWalls {
     if (this.disposed) return;
     // Metric, category rank and lens changes reuse decoded images and stable geometry.
     const keys = [...new Set(model.cohorts.flatMap(group => group.keys))].sort();
-    const sources = new Map(keys.map(key => [key, coverSource(model.clipsByKey.get(key))]));
+    const cell = cellFor(keys.length);
+    const sources = new Map(keys.map(key => [key, coverSource(model.clipsByKey.get(key), cell)]));
     const signature = JSON.stringify([model.cohorts.map(group => [group.key, group.label, group.count, preserveOrder ? group.keys : [...group.keys].sort()]), [...sources]]);
     if (signature === this.signature) { this.model = model; this._highlight(); return; }
-    this._clear(); this.model = model; this.signature = signature;
+    this._clear(); this.model = model; this.signature = signature; this.cell = cell;
     const generation = this.generation;
     const slots = new Map(), queue = [];
     // Stable identity order is independent of metric, category ranking and hover.
     for (const key of keys) {
       let page = this.pages.at(-1);
-      if (!page || page.slots === PER_PAGE) page = this._page();
-      const slot = page.slots++, x = slot % PER_ROW * CELL, y = Math.floor(slot / PER_ROW) * CELL;
-      const record = { key, page, x, y, u: (x + PAD) / ATLAS, v: 1 - (y + CELL - PAD) / ATLAS };
+      if (!page || page.slots === page.perPage) page = this._page();
+      const slot = page.slots++, x = slot % page.perRow * cell, y = Math.floor(slot / page.perRow) * cell;
+      const record = { key, page, x, y, u: (x + PAD) / ATLAS, v: 1 - (y + cell - PAD) / ATLAS };
       slots.set(key, record);
       const source = sources.get(key);
       const clip = model.clipsByKey.get(key);
@@ -216,7 +224,7 @@ export class AlbumWalls {
         // Crop the cell at the rack's cell size, then draw it like a file. A
         // page that fails leaves the clip's own file, when it has one.
         this.pendingSprites = (this.pendingSprites || 0) + 1;
-        void spriteCovers.bitmap(item.clip, CELL).then(bitmap => {
+        void spriteCovers.bitmap(item.clip, this.cell).then(bitmap => {
           this.pendingSprites--;
           if (this.disposed || generation !== this.generation) { bitmap?.close?.(); return; }
           if (!bitmap && item.file) { loadFile(item, item.file); return; }
@@ -252,7 +260,7 @@ export class AlbumWalls {
     const edge = Math.min(width, height);
     const sx = (width - edge) / 2, sy = (height - edge) / 2;
     try {
-      item.page.ctx.drawImage(image, sx, sy, edge, edge, item.x, item.y, CELL, CELL);
+      item.page.ctx.drawImage(image, sx, sy, edge, edge, item.x, item.y, this.cell, this.cell);
       item.page.texture.needsUpdate = true; this.loadedArtwork++;
     } catch { this.failedArtwork++; }
   }
@@ -368,7 +376,7 @@ export class AlbumWalls {
       atlasPages: this.pages.length, visibleCohorts: this.racks.filter(rack => rack.group.visible).length,
       highlightedTiles: this.highlightedTiles, pendingArtwork: this.requests.size + (this.pendingSprites || 0),
       visibleMeshCount: this.meshes.filter(mesh => mesh.parent?.parent?.visible).length,
-      atlasBytes: this.pages.length * ATLAS * ATLAS * 4, drawMeshes: this.meshes.length,
+      atlasBytes: this.pages.length * ATLAS * ATLAS * 4, cellSize: this.cell, perPage: (ATLAS / this.cell) ** 2, drawMeshes: this.meshes.length,
       totalDepth: this.totalDepth, gap: this.gap || 0, travelLength: this.travelSpan().length };
   }
 

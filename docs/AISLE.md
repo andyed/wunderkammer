@@ -128,8 +128,16 @@ so no frame drops however slow the machine:
 node scripts/warehouse-video.mjs --collection cats.collection.json --view 'group=decade' --walk 3 --out cats-warehouse.mp4
 ```
 
-`--walk` walks on down the aisle once the lights are down; `--hold` keeps the
-last frame; `--labels` keeps the rack labels, which the video leaves out. The
+Once the lights are down, `--walk <seconds>` turns to the left wall and
+slides along it. `--tour <seconds>` pans over every cover instead: along the
+left wall to the far end, round through a look back down the hall, and back
+along the right wall. The camera stands a step past the aisle's centre at
+mid-height, so each wall fills the frame top to bottom, and it glides at a
+steady pace of at most 2.5 world units a second. A hall longer than that pace
+covers in the time is toured part of the way. `group=none` makes each side one
+continuous wall, which suits a tour; small groups leave gaps between short
+racks. `--hold` keeps the last frame, and `--labels` keeps the rack labels,
+which the video leaves out. The
 sidecar JSON beside the video holds the exact link of its last frame, which
 opens the wall right there to browse. It needs ffmpeg on the PATH.
 
@@ -149,8 +157,11 @@ page can reach resolves. The experimental comparison route remains
 available on local instances; its statistics and recipe machinery are not
 required by the main aisle. This does not yet supply a Cartographer adapter.
 
-Artwork uses 128px atlas slots and memory grows with distinct identities; the
-1,793-album proof allocated 128 MiB of atlas textures. No arbitrary-size paging
+Artwork uses 256px atlas slots for up to 400 distinct covers, so a small
+collection stays sharp up close, and 128px slots above that. Memory grows with
+distinct identities either way and stays within 128 MiB: 400 covers fill seven
+2,048px pages of 64, and the 1,793-album proof allocated eight pages of 256
+(128 MiB). The aisle's diagnostics report `cellSize` and `perPage`. No arbitrary-size paging
 or higher-resolution near-cover promotion is claimed. The detail pane supplies
 the inspection path. This verifies implementation, not a human reasoning benefit.
 

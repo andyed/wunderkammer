@@ -72,7 +72,7 @@ function options(argv) {
  * relative covers and sheet pages resolve as they would on a static host.
  * GET only; nothing outside those two folders is served. warehouse-video.mjs serves the same way.
  */
-export async function serve(collectionDir) {
+export async function serve(collectionDir, port = 0) {
   const inside = (base, rel) => { const full = path.resolve(base, '.' + path.posix.normalize('/' + rel)); return full === base || full.startsWith(base + path.sep) ? full : null; };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://still.local');
@@ -87,7 +87,7 @@ export async function serve(collectionDir) {
       res.end(await readFile(file));
     } catch { res.writeHead(404); res.end(); }
   });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
   return server;
 }
 

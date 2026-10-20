@@ -20,7 +20,7 @@ try{
   const initial=await page.evaluate(()=>window.comparisonDebug());
   assert.equal(initial.scene.totalTiles,initial.cohorts.reduce((n,c)=>n+c.count,0));
   assert(initial.scene.loadedArtwork>100);assert.equal(initial.scene.failedArtwork,0);
-  assert(initial.scene.atlasPages<=Math.ceil(initial.evidenceKeys.length/256));
+  assert(initial.scene.atlasPages<=Math.ceil(initial.evidenceKeys.length/initial.scene.perPage));
   assert(initial.scene.pickTargets.length>0);
   report.initial=initial.scene;
   await page.locator('#scope-panel summary').click();

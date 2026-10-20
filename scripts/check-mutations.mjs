@@ -1027,7 +1027,22 @@ const cases = [
     from: 'srcset="wall/brand/lockup-dark.svg"', to: 'srcset="wall/brand/lockup-light.svg"',
     test: 'tests/brand.test.mjs', pattern: 'the README heading shows the lockup',
   },
+  {
+    name: 'atlas: a small collection keeps soft 128px cells', file: 'wall/album-walls.mjs',
+    from: 'const CELL = 128, SHARP_CELL = 256, SHARP_LIMIT = 400;', to: 'const CELL = 128, SHARP_CELL = 256, SHARP_LIMIT = 0;',
+    test: 'tests/aisle-integration.test.mjs', pattern: 'aisle uses canonical groups',
+  },
   // The image warehouse (docs/AISLE.md, "The warehouse"): MUTATION_FILTER=warehouse
+  {
+    name: 'warehouse: the walk runs past the end of a short aisle', file: 'scripts/warehouse-video.mjs',
+    from: 'return Math.max(from, Math.min(WALK_END, from + WALK_SPEED * seconds / length));', to: 'return Math.max(from, Math.min(1, from + WALK_SPEED * seconds / length));',
+    test: 'tests/warehouse-video.test.mjs', pattern: 'a walk never passes the end',
+  },
+  {
+    name: 'warehouse: the tour glides past the far end', file: 'scripts/warehouse-video.mjs',
+    from: '  const reach = Math.min(near - farZ, TOUR_SPEED * .47 * seconds);', to: '  const reach = TOUR_SPEED * .47 * seconds;',
+    test: 'tests/warehouse-video.test.mjs', pattern: 'a tour stays inside the hall',
+  },
   {
     name: 'warehouse: the copies stay in the aisle', file: 'wall/warehouse-show.mjs',
     from: '    this.group.removeFromParent(); this.instances = [];\n', to: '    this.instances = [];\n',

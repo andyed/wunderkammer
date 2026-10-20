@@ -170,10 +170,26 @@ steps and traps.
      reads "Items. Lots of items."
    - Group by an attribute with several values (era, colour, decade). One
      group makes one short rack and a thin show.
-   - For a video: `node scripts/warehouse-video.mjs --collection cats/collection.json --view 'group=era' --walk 3 --out cats.mp4`.
+   - For a video: `node scripts/warehouse-video.mjs --collection cats/collection.json --view 'group=none' --tour 30 --out cats.mp4`.
+     `--tour 30` ends it with 30 seconds panning over every cover, along one
+     wall and back along the other; `group=none` keeps each wall continuous.
      It needs ffmpeg. It writes `cats.json` beside the video, with the exact
      link of the last frame: give the person that link to browse from where
      the video ends.
+
+10. **From the person's Apple Photos (macOS).** When they want a wall of their
+    pet, a person or a trip from their own library, and osxphotos is installed:
+    `python3 scripts/photos-collection.py --caption dog --label Dog --animal dog --alone --title '<name>' --item '<name>' --items '<name>' --out ~/<name>-wall`,
+    then `node scripts/show-collection.mjs ~/<name>-wall/collection.json`.
+    - It is read-only and keeps about 150 photos (`--limit`). It leaves out
+      screenshots, others' shared photos, specks and bursts, and spreads the
+      rest over time. It prints why it left the others out.
+    - Use the pet's name as both nouns, so the warehouse says "Biscuit. Lots of
+      Biscuit."
+    - Look at the wall, then rerun with `--exclude photos:<id>` for strays.
+    - `--places` adds place names; leave it off for anything shared.
+      [APPLE_PHOTOS.md](https://github.com/andyed/wunderkammer/blob/main/docs/APPLE_PHOTOS.md)
+      has the rest.
 
 ## Traps
 
