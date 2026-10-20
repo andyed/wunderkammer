@@ -17,6 +17,16 @@ const bounded = value => {
   if (!value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 1) invalid('travel and spread must be between 0 and 1');
   return Number(value);
 };
+/**
+ * `view=warehouse` opens the aisle with the image warehouse played over it
+ * once (aisle-view.mjs, playWarehouse). It is an arrival, not a view: the
+ * ViewSpec says aisle, so the exact link written after it, a reload and Back
+ * open the aisle without replaying it. A saved view in the fragment wins.
+ */
+export function isWarehouseIntent(url) {
+  const u = new URL(url), hash = new URLSearchParams(u.hash.slice(1));
+  return !hash.has('s') && !hash.has('ref') && u.searchParams.get('view') === 'warehouse';
+}
 export function stripViewIntent(url) {
   const result = new URL(url);
   for (const key of [...result.searchParams.keys()]) if (recognized(key)) result.searchParams.delete(key);
@@ -35,8 +45,8 @@ export function applyViewIntent(url, defaultView) {
   for (const key of SINGLE) if (p.getAll(key).length > 1) invalid(`${key} may appear only once`);
   if (p.has('view')) {
     const mode = p.get('view');
-    if (!['flat', '3d', 'aisle', 'float'].includes(mode)) invalid('unknown view');
-    view.presentation.mode = mode;
+    if (!['flat', '3d', 'aisle', 'float', 'warehouse'].includes(mode)) invalid('unknown view');
+    view.presentation.mode = mode === 'warehouse' ? 'aisle' : mode;
   }
   if (p.has('q')) view.scope.query = p.get('q');
   if (p.has('group')) view.presentation.group = field(p.get('group'));

@@ -1,6 +1,6 @@
 ---
 name: wunderkammer
-description: Show a person a visual collection (dozens to a few thousand images with attributes) as a wall they can pan, filter, group and walk through, make claims about it that cite the exact items, and read back what they selected. Use when a set of images is too large to paste and the person needs to browse, filter or compare it; when a claim about a collection should be checkable; or when you need the exact items a person picked. You write one JSON collection document and validate it before handing over a link. If the muriel skill is installed, start from muriel's collections reference instead; it routes here for the engine's details.
+description: Show a person a visual collection (dozens to a few thousand images with attributes) as a wall they can pan, filter, group and walk through, make claims about it that cite the exact items, and read back what they selected. Use when a set of images is too large to paste and the person needs to browse, filter or compare it; when a claim about a collection should be checkable; or when you need the exact items a person picked. You write one JSON collection document and validate it before handing over a link. Also use for the image warehouse, also asked for as the "matrix guns view" or "X. Lots of X.": a collection's racks rushing out of a white void into a hallway, live as a link or rendered as a video. If the muriel skill is installed, start from muriel's collections reference instead; it routes here for the engine's details.
 ---
 
 # Wunderkammer
@@ -80,7 +80,8 @@ steps and traps.
      the 3D button opens: Axes, with the collection's time across, lightness
      up and hue in depth; name them with `arrange=axes&across=era&up=lightness&depth=hue`,
      or pick a colour space with `arrange=oklch`, `oklab`, `hsl` or `az`), and
-     `view=3d` (each group as a stack).
+     `view=3d` (each group as a stack), and `view=warehouse` (the hallway
+     arriving: see step 9).
    - Covers on another origin need CORS headers and
      `"images": { "cors": true }`, or they stay blank in the 3D views.
    - To embed the wall in a page:
@@ -156,6 +157,23 @@ steps and traps.
    - Stills cover the flat wall and the floating space so far.
      [SHOTS.md](https://github.com/andyed/wunderkammer/blob/main/docs/SHOTS.md)
      has the roadmap.
+
+9. **The image warehouse ("matrix guns view", "X. Lots of X.").** When the
+   person asks for either by name, or for a dramatic way into a collection,
+   link `?view=warehouse&group=<attribute>`, with any other keys `view=aisle`
+   takes. Rows of the collection's racks rush out of a white void under
+   "Cats. Lots of cats.", the camera drops into the hallway, and the lights
+   go down on the aisle itself, which the person then browses. It plays once:
+   the address becomes an exact aisle link, so a reload or a copied link
+   opens the aisle. Any touch or key ends it, and reduced motion skips it.
+   - The word in the caption is `ui.nouns.items`. Set it, or the caption
+     reads "Items. Lots of items."
+   - Group by an attribute with several values (era, colour, decade). One
+     group makes one short rack and a thin show.
+   - For a video: `node scripts/warehouse-video.mjs --collection cats/collection.json --view 'group=era' --walk 3 --out cats.mp4`.
+     It needs ffmpeg. It writes `cats.json` beside the video, with the exact
+     link of the last frame: give the person that link to browse from where
+     the video ends.
 
 ## Traps
 

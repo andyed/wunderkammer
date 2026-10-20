@@ -1027,6 +1027,43 @@ const cases = [
     from: 'srcset="wall/brand/lockup-dark.svg"', to: 'srcset="wall/brand/lockup-light.svg"',
     test: 'tests/brand.test.mjs', pattern: 'the README heading shows the lockup',
   },
+  // The image warehouse (docs/AISLE.md, "The warehouse"): MUTATION_FILTER=warehouse
+  {
+    name: 'warehouse: the copies stay in the aisle', file: 'wall/warehouse-show.mjs',
+    from: '    this.group.removeFromParent(); this.instances = [];\n', to: '    this.instances = [];\n',
+    test: 'tests/warehouse-integration.test.mjs', pattern: 'leaves it exactly as',
+  },
+  {
+    name: 'warehouse: the lights stay up', file: 'wall/warehouse-show.mjs',
+    from: '    scene.background.copy(this.base.background); scene.fog.color.copy(this.base.background);\n', to: '',
+    test: 'tests/warehouse-integration.test.mjs', pattern: 'leaves it exactly as',
+  },
+  {
+    name: 'warehouse: copies carry every cover record', file: 'wall/warehouse-show.mjs',
+    from: '    for (const node of source) node.userData = {};\n', to: '',
+    test: 'tests/warehouse-integration.test.mjs', pattern: 'leaves it exactly as',
+  },
+  {
+    name: 'warehouse: a saved view replays it', file: 'wall/view-intent.mjs',
+    from: "return !hash.has('s') && !hash.has('ref') && u.searchParams.get('view') === 'warehouse';", to: "return u.searchParams.get('view') === 'warehouse';",
+    test: 'tests/view-intent.test.mjs', pattern: 'view=warehouse is an arrival',
+  },
+  {
+    name: 'warehouse: a key acts before the show ends', file: 'wall/aisle-view.mjs',
+    from: "if (this.show?.playing) this.show.finish('skipped'); }, { capture: true, passive: true });", to: "if (this.show?.playing) this.show.finish('skipped'); }, { passive: true });",
+    test: 'tests/warehouse-integration.test.mjs', pattern: 'a key ends the show',
+  },
+  {
+    name: 'warehouse: plays under reduced motion', file: 'wall/aisle-view.mjs',
+    from: "    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { this.lastShow = { reason: 'reduced-motion' }; return null; }\n", to: '',
+    test: 'tests/warehouse-integration.test.mjs', pattern: 'reduced motion opens the aisle',
+  },
+  {
+    name: 'warehouse: the copies never leave the hall', file: 'wall/warehouse.mjs',
+    from: '    return { x: row.x * lerp(TIMING.wide, 1, k), y: row.real ? 0 : -sink, z: row.z - TIMING.far * (1 - k) };',
+    to: '    return { x: row.x * lerp(TIMING.wide, 1, k), y: 0, z: row.z - TIMING.far * (1 - k) };',
+    test: 'tests/warehouse.test.mjs', pattern: 'the show opens on a white void',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));

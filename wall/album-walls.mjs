@@ -70,7 +70,7 @@ export class AlbumWalls {
     for (const resource of this.resources) resource.dispose();
     this.resources.clear();
     for (const page of this.pages) { page.canvas.width = page.canvas.height = 1; }
-    this.pages = []; this.racks = []; this.meshes = []; this.labelAnchors = []; this.places = [];
+    this.pages = []; this.racks = []; this.meshes = []; this.labelAnchors = []; this.places = []; this.floor = this.floorGrid = null;
     this.loadedArtwork = 0; this.failedArtwork = 0; this.totalTiles = 0;
     this.highlightedTiles = 0;
   }
@@ -194,14 +194,15 @@ export class AlbumWalls {
     this.totalDepth = Math.max(1, depth - 1.2);
     const floor = new THREE.Mesh(this._own(new THREE.PlaneGeometry(40, this.totalDepth + 18)), floorMaterial);
     floor.rotation.x = -Math.PI / 2; floor.position.set(0, -.18, -this.totalDepth / 2 + 3);
-    this.root.add(floor);
+    this.root.add(floor); this.floor = floor;
     const lineMaterial = this._own(new THREE.LineBasicMaterial({ color: 0x23303c, transparent: true, opacity: .8 }));
     const points = [];
     for (let z = 6; z > -this.totalDepth - 2; z -= PITCH * 2) {
       points.push(new THREE.Vector3(-12, -.17, z), new THREE.Vector3(12, -.17, z));
     }
     const lines = new THREE.LineSegments(this._own(new THREE.BufferGeometry().setFromPoints(points)), lineMaterial);
-    this.root.add(lines);
+    // The floor and its grid, for the warehouse (warehouse-show.mjs), which lights them for the white void.
+    this.root.add(lines); this.floorGrid = lines;
     this.setPresentation(this.presentation); this._highlight();
     this._load(queue, generation); this.invalidate();
   }

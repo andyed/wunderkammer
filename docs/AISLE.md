@@ -17,7 +17,7 @@ corpus. For example:
 
 Highlight keeps the other items in place; a facet changes membership. Repeated
 `facet.KEY` values retain the canonical OR-within/AND-across semantics. Supported
-parameters are `view=flat|3d|aisle|float`, `arrange=oklab|oklch|hsl|az` (floating space), `q`, `group`, `sort`, `direction=asc|desc`,
+parameters are `view=flat|3d|aisle|float|warehouse`, `arrange=oklab|oklch|hsl|az` (floating space), `q`, `group`, `sort`, `direction=asc|desc`,
 `lens`, one `highlight.KEY`, repeated `facet.KEY`, `travel`, `spread`, `focus`
 (stable item URL), and `rail=0|1`. Travel and spread range from zero to one.
 
@@ -86,6 +86,53 @@ the same module, `wall/aisle-wheel.mjs`.
 The listener is registered in the capture phase on the canvas, ahead of
 OrbitControls, which reads only a wheel's deltaY.
 
+## The warehouse
+
+`view=warehouse` opens the aisle with the image warehouse played over it once:
+"Cats. Lots of cats." Asked for by name, it is also the "matrix guns view",
+after the shot in *The Matrix*. Rows of the aisle's racks rush out of a white
+void and lock into shelving, five lanes wide, while the camera drops from above
+into the entrance. Then the lights go down, the extra rows sink through the
+floor, and the aisle's labels and controls come up: what is left is the aisle
+exactly as `view=aisle` opens it, ready to browse.
+
+```text
+/?view=warehouse&group=decade
+/?view=warehouse&group=color&facet.kaleido=kaleido
+```
+
+- It takes the same keys as `view=aisle`. The caption's word is the
+  collection's own: `ui.nouns.items`, "albums" for a music library, else "items".
+- It is an arrival, not a view. The ViewSpec says `aisle`, so the exact link
+  written as the page opens, a reload, Back and ↗ all open the aisle without
+  replaying it. A saved `#s`/`#ref` view wins over the request.
+- Any touch, wheel or key ends it at once, in the capture phase, so the
+  gesture then acts on the aisle. A reduced-motion setting skips it; so does
+  an aisle with nothing in scope or no WebGL. `lastWarehouse` in the aisle's
+  diagnostics says which.
+- The rows are copies of the aisle's own racks: the same geometry, materials
+  and covers, cloned without their cover records, which three.js would
+  deep-copy through JSON. At most 240 racks fly; a large aisle sheds copies
+  down the hall, then the outer lanes, then the side rows, and never its own
+  racks.
+- The covers get up to 2.5 s to arrive before the rush starts; "Cats." holds
+  over the white until then.
+- The caption is ink on an opaque white plate, 20.3:1 over anything behind it.
+
+`wall/warehouse.mjs` holds the timing and placement as plain functions of
+time, `wall/warehouse-show.mjs` plays them in the aisle, and
+`scripts/warehouse-video.mjs` seeks the same frames one by one into an MP4,
+so no frame drops however slow the machine:
+
+```sh
+node scripts/warehouse-video.mjs --collection cats.collection.json --view 'group=decade' --walk 3 --out cats-warehouse.mp4
+```
+
+`--walk` walks on down the aisle once the lights are down; `--hold` keeps the
+last frame; `--labels` keeps the rack labels, which the video leaves out. The
+sidecar JSON beside the video holds the exact link of its last frame, which
+opens the wall right there to browse. It needs ffmpeg on the PATH.
+
 ## Source map and limits
 
 `wall/aisle-view.mjs` adapts the shared `wall/album-walls.mjs` artwork renderer to
@@ -119,6 +166,14 @@ URL and Back, vertical scroll only zooms, a turned or zoomed view slides at its
 angle, and each gesture keeps one axis. `MUTATION_FILTER='side scroll' node
 scripts/check-mutations.mjs` removes each of those protections in turn and
 shows the tests failing.
+
+`tests/warehouse.test.mjs` covers the warehouse's timing: every rack of the
+aisle once as itself, the budget, the void at the start, the aisle's camera at
+the end and the copies below the floor. `tests/warehouse-integration.test.mjs`
+plays it on the aisle fixture and compares what it leaves with a fresh
+`view=aisle`, node for node; a key skips it and then acts; reduced motion and
+a reload skip it. `MUTATION_FILTER=warehouse node scripts/check-mutations.mjs`
+removes each protection in turn.
 
 For rendered proof against an explicitly verified instance:
 

@@ -18,9 +18,13 @@ export class AisleView {
   constructor(host, callbacks = {}) {
     this.host = host; this.callbacks = callbacks; this.visible = true; this.built = false;
     this.travel = 0; this.spread = .65; this.fitted = true; this.selection = null; this.nouns = NEUTRAL_NOUNS;
-    this.clipsByKey = new Map(); this.cohorts = []; this.labels = []; this.listeners = [];
+    this.clipsByKey = new Map(); this.cohorts = []; this.labels = []; this.listeners = []; this.show = null; this.lastShow = null;
     this.host.classList.add('aisle-host'); this.host.replaceChildren();
     this.scene = new THREE.Scene(); this.scene.background = new THREE.Color('#050510');
+    // Fog far beyond anything the camera can reach, so it changes nothing here. The
+    // warehouse (warehouse-show.mjs) pulls it in for its white void; adding fog
+    // there instead would recompile every material as the show starts and ends.
+    this.scene.fog = new THREE.Fog('#050510', 1e6, 2e6);
     this.camera = new THREE.PerspectiveCamera(42, 1, .05, 2000);
     this.root = new THREE.Group(); this.scene.add(this.root);
     this.status = element('p', 'aisle-status'); this.status.setAttribute('role', 'status');
@@ -84,16 +88,21 @@ export class AisleView {
     this.host.append(this.overlay, this.callout.node, this.status, this.jump.node, this.toolbar, this.help, this.announcer);
     this.listen(this.slider, 'input', () => { this.travel = Number(this.slider.value); this.fitted = true; this.applyPose(); this.cancelHover(); this.interact(); });
     this.listen(this.fallback, 'click', () => this.callbacks.onFlatWall?.());
+    // Any touch, wheel or key ends the warehouse at once, before the aisle acts
+    // on it, so the gesture lands on the aisle as it is left.
+    for (const type of ['pointerdown', 'wheel', 'keydown']) this.listen(this.host, type, () => { if (this.show?.playing) this.show.finish('skipped'); }, { capture: true, passive: true });
     // Debug handle, as in the floating space (window.__cwFloat): the camera,
     // spread and travel live in WebGL, so probes and seeked captures reach them here.
     window.__cwAisle = this;
     this.resizeObserver = new ResizeObserver(() => this.resize()); this.resizeObserver.observe(host); this.resize();
   }
 
-  listen(node, name, fn) { node.addEventListener(name, fn); this.listeners.push([node, name, fn]); }
+  listen(node, name, fn, options) { node.addEventListener(name, fn, options); this.listeners.push([node, name, fn, options]); }
   interact() { if (!this.programmatic && !this.disposed) this.callbacks.onInteraction?.(); }
 
   setClips(filtered, groupKey, { sort = { key: 'none', direction: 'asc' }, labelFor, nouns = NEUTRAL_NOUNS } = {}) {
+    // The warehouse's copies are of the racks being replaced.
+    this.show?.finish('rebuilt');
     this.nouns = nouns;
     const sorted = sortClips(filtered, sort);
     this.clipsByKey = new Map(sorted.map(clip => [clipKey(clip), clip]));
@@ -196,6 +205,22 @@ export class AisleView {
     this.keyChoose(next);
   }
   choose(key) { this.keyChoose(this.placeOf(key)); }
+  /**
+   * The image warehouse (warehouse.mjs, warehouse-show.mjs): racks rush in
+   * from a white void, then the lights go down on this aisle as it stands.
+   * Plays once; a reduced-motion setting, or an aisle with nothing to show,
+   * skips it and says why in `lastShow`. Resolves to the show, or null.
+   */
+  async playWarehouse({ nouns = this.nouns } = {}) {
+    if (this.show) return this.show;
+    if (!this.built || this.contextLost || !this.renderer || !this.art?.racks.length || this.disposed) { this.lastShow = { reason: 'unavailable' }; return null; }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { this.lastShow = { reason: 'reduced-motion' }; return null; }
+    const { WarehouseShow } = await import('./warehouse-show.mjs');
+    if (this.show || this.disposed || !this.visible) return this.show;
+    this.show = new WarehouseShow(this, { nouns, onFinish: info => { this.show = null; this.lastShow = info; } });
+    this.show.start(); this.invalidate();
+    return this.show;
+  }
   open(key) { const clip = this.clipsByKey.get(key); if (!clip) return; this.selection = key; this.cancelHover(); this.callbacks.onOpen?.(clip); }
   pick(event) {
     if (!this.art || this.contextLost) return null;
@@ -281,13 +306,16 @@ export class AisleView {
     this.width = rect.width; this.height = rect.height; this.camera.aspect = rect.width / rect.height; this.camera.updateProjectionMatrix();
     this.renderer?.setSize(rect.width, rect.height, false); if (this.fitted) this.applyPose(); this.invalidate();
   }
-  setVisible(on) { this.visible = !!on; this.host.hidden = !on; if (this.controls) this.controls.enabled = !!on; if (on) this.resize(); else { this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame); this.frame = null; } }
+  setVisible(on) { if (!on) this.show?.finish('hidden'); this.visible = !!on; this.host.hidden = !on; if (this.controls) this.controls.enabled = !!on; if (on) this.resize(); else { this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame); this.frame = null; } }
   invalidate() { if (this.frame || this.disposed || !this.visible || this.contextLost || !this.renderer) return; this.frame = requestAnimationFrame(() => { this.frame = null; this.render(); }); }
   render() {
     if (this.disposed || !this.visible || this.contextLost || !this.renderer) return;
     // The ring follows its cover: the walls move apart with the spread.
     if (this.keyboardPlace && this.ring.visible) { this.art.worldOf(this.keyboardPlace, this.ring.position); this.ring.position.x -= this.keyboardPlace.side * .03; }
+    // A playing warehouse moves the racks and camera for this frame, and asks for the next.
+    this.show?.beforeRender(performance.now());
     this.renderer.render(this.scene, this.camera); this.renderCount = (this.renderCount || 0) + 1;
+    if (this.show?.playing) this.invalidate();
     const occupied = [], point = new THREE.Vector3();
     for (const { anchor, node } of this.labels) {
       point.copy(anchor.point).project(this.camera);
@@ -313,10 +341,11 @@ export class AisleView {
     labels: this.labels.map(({node}) => node.textContent), selection: this.selection, graphicsError: this.graphicsError || null,
     place: this.keyboardPlace ? { cohort: this.keyboardPlace.cohort, side: this.keyboardPlace.side, column: this.keyboardPlace.column, row: this.keyboardPlace.row, rack: this.keyboardPlace.rack } : null,
     callout: this.callout.text, announcement: this.announcer.textContent,
+    warehouse: this.show?.diagnostics() || null, lastWarehouse: this.lastShow,
     markScreen: this.keyboardPlace && this.art ? (({ x, y, z }) => ({ x, y, z }))(this.art.worldOf(this.keyboardPlace).project(this.camera)) : null }; }
   dispose() {
-    if (this.disposed) return; this.disposed = true; this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame);
-    this.resizeObserver?.disconnect(); this.unlistenWheel?.(); for (const [node, name, fn] of this.listeners) node.removeEventListener(name, fn);
+    if (this.disposed) return; this.show?.finish('disposed'); this.disposed = true; this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame);
+    this.resizeObserver?.disconnect(); this.unlistenWheel?.(); for (const [node, name, fn, options] of this.listeners) node.removeEventListener(name, fn, options);
     this.controls?.dispose(); this.art?.dispose(); this.renderer?.dispose(); this.renderer?.forceContextLoss(); this.host.replaceChildren();
   }
 }
