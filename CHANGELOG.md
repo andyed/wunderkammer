@@ -20,6 +20,9 @@
   Right step through the plane's items outside the scope, Up and Down move
   through its grid, and the camera brings each one under the pane. The pane's
   ‹ › bar counts the item's place in that walk.
+- **Edge zoom takes a push.** A drag zooms only after 120 px of travel aimed
+  into an edge, past the edge cue. Drift along an edge while panning never
+  adds up to a zoom.
 - **A far tile no longer draws its placeholder after its cover loaded.** When
   four or fewer covers landed between atlas uploads, three.js r169's
   `copyTextureToTexture` could write a far tile into the near atlas, or into

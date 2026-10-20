@@ -2506,10 +2506,10 @@ panBehavior.addEventListener('change', () => {
 });
 edgeUndo.addEventListener('click', () => viewport.undoEdge());
 el.stage.addEventListener('edge-pan', ({ detail }) => {
-  const labels = { limit: 'Collection edge', edge: 'Edge reached · keep dragging to zoom',
+  const labels = { limit: 'Collection edge', edge: 'Edge reached · keep pushing into it to zoom',
     zoom: 'Edge zoom · reverse this drag to undo', done: 'Edge zoom applied · Esc or Undo restores the previous view' };
   edgeFeedback.textContent = labels[detail.phase] || (detail.mode === 'edge'
-    ? 'Drag beyond an edge to zoom · wheel scrolling stays bounded'
+    ? 'Push a drag past an edge to zoom · wheel scrolling stays bounded'
     : detail.mode === 'bounded' ? 'Panning stops at collection edges' : '');
   edgeUndo.hidden = !detail.canUndo;
 });

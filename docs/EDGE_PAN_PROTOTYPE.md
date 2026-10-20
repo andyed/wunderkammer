@@ -19,10 +19,14 @@ The selected experiment is reflected in the URL; corpus and saved piles are
 unchanged. The selector is disabled in 3D.
 
 Drag normally through the collection. Once a drag reaches its outer bounds,
-32 CSS pixels of further travel produce an edge cue before scaling begins.
-Continued movement increases scale exponentially, with a 2× cap per gesture
-and the existing absolute maximum scale. Only blocked movement contributes;
-tangential movement continues along the edge. The zoom anchor is a point on
+120 CSS pixels of further push produce an edge cue before scaling begins.
+Continued pushing increases scale exponentially, with a 2× cap per gesture
+and the existing absolute maximum scale. Only blocked movement aimed into the
+edge contributes: a pointer event counts as push when it is within about 53°
+of straight in (`PUSH_ALIGNMENT`, 0.6). Drift along an edge does not add up to
+a zoom, which matters most on an axis where the collection fits, since every
+pixel of drift on that frozen axis is blocked. Pulling back always counts, so
+reversal still unwinds at once. Tangential movement continues along the edge. The zoom anchor is a point on
 an actual image at the approached boundary and remains fixed for the gesture.
 Reversing unwinds zoom before resuming ordinary pan. Extra travel beyond the
 cap is discarded so reversal responds immediately.
@@ -51,7 +55,13 @@ it cannot cancel the canvas gesture; detail images remain ordinary images.
 
 This is not semantic entry into a stack, a scope change, or related-item
 navigation. Geometry can be verified automatically, but anchor choice, the
-change from translation to scaling, and the 32px / 320px tuning need human use.
+change from translation to scaling, and the 120px / 320px tuning need human use.
+
+Tuning record: the dead zone was 32 px until 2026-10-20, with every blocked
+pixel counted. In use, a drag that only arrived in a corner zoomed, and the
+landing opened details on zoom (ZOOM_DETAIL.md). The request was that an edge
+zoom should take a real push. The dead zone went to 120 px and drift stopped
+counting; details on zoom is unchanged, since an edge zoom is now deliberate.
 No automatic zoom from wheel tails and no 3D conversion are implemented.
 
 ## Probe and evidence
