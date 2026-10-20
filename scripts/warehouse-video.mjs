@@ -10,8 +10,8 @@
  *     --view 'group=decade' --size 1920x1080 --fps 30 --walk 3 --out cats-warehouse.mp4
  *
  * --view takes a live link's keys (group, q, facet.<key>, sort, spread, ...);
- * the tool sets view=warehouse. --walk walks on down the aisle for that many
- * seconds once the lights are down; --hold keeps the last frame. The aisle's
+ * the tool sets view=warehouse. --walk turns to the left wall once the lights
+ * are down and slides along it for that many seconds; --hold keeps the last frame. The aisle's
  * rack labels, which come up with the lights, are left out unless --labels. The sidecar
  * JSON beside the video records what it shows and the exact link of its last
  * frame, which opens the wall right there to browse.
@@ -32,8 +32,8 @@ import { TIMING, cubicInOut } from '../wall/warehouse.mjs';
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const USAGE = `usage: node scripts/warehouse-video.mjs --collection <file or URL> [--view '<link keys>'] [--size 1920x1080] [--fps 30]
   [--walk <seconds>] [--hold <seconds>] [--labels] [--out warehouse.mp4] [--timeout 60000]`;
-/** World units a second for --walk, as the long reel's side scroll. */
-const WALK_SPEED = 4.5;
+/** --walk, as the long reel's side scroll: world units a second, the furthest travel (0..1) and the turn toward the left wall. */
+const WALK_SPEED = 4.5, WALK_END = .7, WALK_TURN = 55 * Math.PI / 180;
 
 class VideoError extends Error {}
 const fail = message => { throw new VideoError(message); };
@@ -120,11 +120,23 @@ export async function warehouseVideo(argv) {
     await shoot(() => { const a = window.__cwAisle; a.show.finish('captured'); return a.renderCount || 0; });
     const walkFrames = Math.round(opts.walk * opts.fps);
     if (walkFrames) {
+      // The long reel's side scroll: the camera turns toward the left wall and
+      // slides along it, so even a short hall shows covers, not its dark far end.
+      await page.evaluate(() => {
+        window.__warehouseWalk = (travel, turn) => {
+          const a = window.__cwAisle, pose = a.art.cameraPose(travel, a.camera.aspect);
+          const [px, py, pz] = pose.position, [fx, fy, fz] = pose.target.map((v, i) => v - pose.position[i]);
+          const c = Math.cos(turn), s = Math.sin(turn), position = [px + 1.2 * turn, py, pz];
+          a.travel = travel; a.slider.value = String(travel); a.fitted = false;
+          a.setCamera(position, [position[0] + fx * c + fz * s, position[1] + fy, position[2] - fx * s + fz * c]);
+          return a.renderCount || 0;
+        };
+      });
       const span = await page.evaluate(() => { const a = window.__cwAisle; return { from: a.travel, length: a.art.travelSpan().length }; });
-      const to = span.length > 0 ? Math.min(1, span.from + WALK_SPEED * opts.walk / span.length) : span.from;
+      const to = span.length > 0 ? Math.max(span.from, Math.min(WALK_END, span.from + WALK_SPEED * opts.walk / span.length)) : span.from;
       for (let i = 1; i <= walkFrames; i++) {
-        const travel = span.from + (to - span.from) * cubicInOut(i / walkFrames);
-        await shoot(new Function(`const a = window.__cwAisle; a.travel = ${travel}; a.slider.value = String(${travel}); a.fitted = true; a.applyPose(); return a.renderCount || 0;`));
+        const k = i / walkFrames, travel = span.from + (to - span.from) * cubicInOut(k), turn = WALK_TURN * cubicInOut(Math.min(1, k / .4));
+        await shoot(new Function(`return window.__warehouseWalk(${travel}, ${turn});`));
       }
     }
     if (errors.length) fail(`The page threw: ${errors.join(' | ')}`);

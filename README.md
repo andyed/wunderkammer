@@ -140,6 +140,24 @@ node scripts/warehouse-video.mjs --collection examples/psychodeli/collection.jso
 
 [AISLE.md](docs/AISLE.md#the-warehouse) has the options.
 
+### Try it with your own photos
+
+On a Mac, a wall of your dog, your kids or a trip takes two commands. With
+[osxphotos](https://github.com/RhetTbull/osxphotos) installed
+(`uv tool install osxphotos`):
+
+```bash
+python3 scripts/photos-collection.py --caption dog --label Dog --animal dog --alone --title 'Biscuit' --item Biscuit --items Biscuit --out ~/biscuit-wall
+node scripts/show-collection.mjs ~/biscuit-wall/collection.json
+```
+
+It reads the Photos library read-only and keeps about 150 photos. It leaves
+out screenshots, photos other people shared and pictures where the dog is a
+speck, and keeps one of each burst. Every stretch of time stays represented.
+The images it writes carry no location. `show-collection.mjs` prints the
+wall's link and the warehouse's ("Biscuit. Lots of Biscuit."). [APPLE_PHOTOS.md](docs/APPLE_PHOTOS.md)
+has the options.
+
 The example's 297 images are low-resolution screenshots from the Psychodeli
 visualizer, served from the public demo site with CORS. The collection
 document names 16 sprite-sheet pages there, of which the overview needs

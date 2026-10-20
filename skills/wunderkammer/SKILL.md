@@ -175,6 +175,20 @@ steps and traps.
      link of the last frame: give the person that link to browse from where
      the video ends.
 
+10. **From the person's Apple Photos (macOS).** When they want a wall of their
+    pet, a person or a trip from their own library, and osxphotos is installed:
+    `python3 scripts/photos-collection.py --caption dog --label Dog --animal dog --alone --title '<name>' --item '<name>' --items '<name>' --out ~/<name>-wall`,
+    then `node scripts/show-collection.mjs ~/<name>-wall/collection.json`.
+    - It is read-only and keeps about 150 photos (`--limit`). It leaves out
+      screenshots, others' shared photos, specks and bursts, and spreads the
+      rest over time. It prints why it left the others out.
+    - Use the pet's name as both nouns, so the warehouse says "Biscuit. Lots of
+      Biscuit."
+    - Look at the wall, then rerun with `--exclude photos:<id>` for strays.
+    - `--places` adds place names; leave it off for anything shared.
+      [APPLE_PHOTOS.md](https://github.com/andyed/wunderkammer/blob/main/docs/APPLE_PHOTOS.md)
+      has the rest.
+
 ## Traps
 
 - A `props` key that names a clip field is refused: `title`, `source`,

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **A wall from Apple Photos.** `scripts/photos-collection.py` reads a Mac's
+  Photos library read-only (through osxphotos) and writes a tidy collection
+  of one subject, about 150 photos.
+  - It finds photos by Photos' labels, its captions, a named person or pet,
+    an album or a keyword.
+  - It leaves out screenshots, photos shared with you, pictures with no
+    camera behind them and low scores. With `--animal`, it also leaves out
+    photos where Apple's Vision framework finds the animal only as a speck.
+  - It keeps one shot per moment and spreads the rest across the months.
+    `selection.json` says why each photo was left out.
+  - Images carry no metadata, and place names go in only with `--places`.
+  - `scripts/show-collection.mjs` serves any local collection document and
+    prints its wall, warehouse and comparison links.
+  - `warehouse-video.mjs --walk` now turns to the left wall and slides
+    along it, as the long reel does, and stops short of the hall's dark far
+    end.
+  - Six mutations (`scripts/check-photos-mutations.py`), each caught.
+
 - **The image warehouse.** `?view=warehouse` opens the aisle with "Cats.
   Lots of cats." played over it once: rows of the aisle's racks, five lanes
   wide, rush out of a white void while the camera drops into the entrance;
