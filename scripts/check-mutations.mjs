@@ -371,7 +371,7 @@ const cases = [
   },
   {
     name: 'sprite album walls ignore cells', file: 'wall/album-walls.mjs',
-    from: 'const coverSource = clip => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip);', to: 'const coverSource = clip => fileSource(clip);',
+    from: 'const coverSource = (clip, cell) => spriteCovers.has(clip) ? spriteSource(clip) : fileSource(clip, cell);', to: 'const coverSource = (clip, cell) => fileSource(clip, cell);',
     test: 'tests/collection-view.test.mjs', pattern: 'compare.html shows sprite-sheet cells',
   },
   {
