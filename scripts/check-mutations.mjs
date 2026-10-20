@@ -1064,6 +1064,21 @@ const cases = [
     to: '    return { x: row.x * lerp(TIMING.wide, 1, k), y: 0, z: row.z - TIMING.far * (1 - k) };',
     test: 'tests/warehouse.test.mjs', pattern: 'the show opens on a white void',
   },
+  {
+    name: 'context plane: the arrows walk the foreground only', file: 'wall/wall.mjs',
+    from: 'const framed = state.background.mounted && state.background.framed;', to: 'const framed = null;',
+    test: 'tests/flat-wall.test.mjs', pattern: 'an item opened from the context plane walks the plane',
+  },
+  {
+    name: 'context plane: the camera stays put on a step', file: 'wall/wall.mjs',
+    from: 'return { order: plane, tiles, centre: centreOnPlaneTile };', to: 'return { order: plane, tiles, centre: () => {} };',
+    test: 'tests/flat-wall.test.mjs', pattern: 'an item opened from the context plane walks the plane',
+  },
+  {
+    name: 'context plane: details on zoom replace the plane selection', file: 'wall/wall.mjs',
+    from: 'atFloor || offForeground ||', to: 'atFloor ||',
+    test: 'tests/flat-wall.test.mjs', pattern: 'an item opened from the context plane walks the plane',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));

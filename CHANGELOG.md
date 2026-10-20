@@ -16,7 +16,10 @@
   - The aisle's scene now carries a fog too far away to show, so the show
     can pull it in without recompiling every material.
   - `MUTATION_FILTER=warehouse` holds seven mutations, each caught.
-
+- **The arrow keys walk an item opened from the context plane.** Left and
+  Right step through the plane's items outside the scope, Up and Down move
+  through its grid, and the camera brings each one under the pane. The pane's
+  ‹ › bar counts the item's place in that walk.
 - **A far tile no longer draws its placeholder after its cover loaded.** When
   four or fewer covers landed between atlas uploads, three.js r169's
   `copyTextureToTexture` could write a far tile into the near atlas, or into

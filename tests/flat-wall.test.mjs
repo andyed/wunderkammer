@@ -417,6 +417,56 @@ test('with a detail open, Up and Down move to the neighbouring tile in the grid'
   } finally { await page.close(); }
 });
 
+test('an item opened from the context plane walks the plane: the arrows step it and the camera follows', async () => {
+  const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, reducedMotion: 'reduce' });
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  try {
+    await contextFixture(page);
+    await page.goto(origin); await settled(page);
+    await page.locator('[data-facet="year"][data-value="2026"]').click(); await settled(page);
+    await page.click('#zoom-out'); await settled(page);
+    await page.click('#zoom-in'); await settled(page);
+    const plane = await page.$$eval('#bg-plane .tile:not(.in-scope)', ts => ts.map(t => t.getAttribute('aria-label')));
+    assert.equal(plane.length, 8, 'the plane holds eight items outside the scope');
+    // A pointer click, as a reader makes it: focus lands on the plane tile and the pointer stays over the stage.
+    await page.locator('#bg-plane .tile:not(.in-scope)').first().click(); await settled(page);
+    const read = () => page.evaluate(() => {
+      const t = document.querySelector('#bg-plane .tile.selected'), b = t.getBoundingClientRect();
+      const st = document.querySelector('#stage').getBoundingClientRect(), pane = document.querySelector('#detail').getBoundingClientRect();
+      const [x, y] = (t.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/) || []).slice(1).map(Number);
+      return { selected: t.getAttribute('aria-label'), h2: document.querySelector('#detail h2').textContent,
+        pos: document.querySelector('.detail-nav .pos')?.textContent ?? null, x, y, w: parseFloat(t.style.width), h: parseFloat(t.style.height),
+        dx: b.x + b.width / 2 - (st.x + (pane.left - st.x) / 2), dy: b.y + b.height / 2 - (st.y + st.height / 2) };
+    });
+    let at = await read();
+    assert.equal(at.h2, plane[0]);
+    assert.equal(at.pos, `1 of ${plane.length}`, 'the pane counts its place in the plane\'s walk');
+
+    await page.keyboard.press('ArrowRight'); await settled(page);
+    at = await read();
+    assert.equal(at.selected, plane[1], 'Right steps to the next item on the plane');
+    assert.equal(at.h2, plane[1], 'the pane shows it, not a foreground cover the camera landed near');
+    assert.equal(at.pos, `2 of ${plane.length}`);
+    assert.ok(Math.abs(at.dx) < 3 && Math.abs(at.dy) < 3, `the camera centres it in the free view, through the plane's tilt and depth (off by ${at.dx.toFixed(1)}, ${at.dy.toFixed(1)})`);
+
+    const top = at;
+    await page.keyboard.press('ArrowDown'); await settled(page);
+    at = await read();
+    assert.notEqual(at.selected, top.selected, 'Down changes the selection');
+    assert.equal(at.h2, at.selected);
+    assert.ok(at.y >= top.y + top.h - 1, 'the new tile lies below the old one on the plane');
+    assert.ok(Math.max(at.x, top.x) < Math.min(at.x + at.w, top.x + top.w), 'and shares its column');
+    assert.ok(Math.abs(at.dx) < 3 && Math.abs(at.dy) < 3, 'and comes under the camera');
+    await page.keyboard.press('ArrowUp'); await settled(page);
+    assert.equal((await read()).selected, top.selected, 'Up returns to the tile above');
+
+    await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft'); await settled(page);
+    assert.equal((await read()).selected, plane[plane.length - 1], 'the plane\'s walk wraps at the ends');
+    assert.equal(await page.locator('#count b').textContent(), '8', 'walking the plane never changes scope');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
 test('a tile that absorbed duplicates lists them, with only web links, in its detail', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   try {
