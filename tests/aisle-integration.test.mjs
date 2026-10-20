@@ -22,6 +22,7 @@ const settled=p=>p.waitForTimeout(450);
 
 test('aisle uses canonical groups, value highlighting and scope without sampling members',async()=>{const p=await open('?view=aisle&group=decade&highlight.genre=Jazz&rail=0');try{
  const a=await debug(p);assert.equal(a.mode,'aisle');assert.equal(a.scopeKeys.length,80);assert.equal(a.scene.totalTiles,81);assert.deepEqual(a.view.ui.highlight,{key:'genre',value:'Jazz'});assert.equal(a.scene.lensMatchKeys.length,27);assert.equal(a.scene.cohorts.length,2);
+ assert.equal(a.scene.cellSize,256,'80 covers are few enough for sharp cells');assert.equal(a.scene.atlasPages,2,'80 covers at 64 a page');
  assert.deepEqual(a.scene.cohorts.map(c=>[c.key,c.count]),[['1990s',41],['1970s',40]]);
  const before=await debug(p);await p.selectOption('#lens-value','Rock');await settled(p);const rock=await debug(p);
  assert.deepEqual(rock.scopeKeys,before.scopeKeys);assert.equal(rock.scene.lensMatchKeys.length,53);assert.deepEqual(rock.scene.state.position,before.scene.state.position);

@@ -11,12 +11,37 @@ node scripts/show-collection.mjs ~/biscuit-wall/collection.json
 ```
 
 The second command prints three links: the wall, the same wall arriving as
-the image warehouse ("Biscuit. Lots of Biscuit."), and the comparison page. Open
-one. To make a video of the warehouse:
+the image warehouse, and the comparison page. Open one.
 
-```bash
-node scripts/warehouse-video.mjs --collection ~/biscuit-wall/collection.json --view 'group=year' --walk 3 --out biscuit.mp4
-```
+## The warehouse from your photos
+
+The image warehouse is the wall's arrival: rows of racks rush out of a white
+void under "Biscuit. Lots of Biscuit.", the camera drops into the hallway,
+and the lights go down on the aisle, ready to browse
+([AISLE.md](AISLE.md#the-warehouse)).
+
+1. **Name it.** `--item` and `--items` are the word in the caption. A pet's
+   name in both reads "Biscuit. Lots of Biscuit."; the wall's counts read
+   "2022 · 77 Biscuit".
+2. **Keep the subject in frame.** `--animal dog --alone` keeps photos where the
+   dog can be seen and is the only one. The racks then show the dog, not the
+   beach it was on.
+3. **Open it live.** The warehouse link `show-collection.mjs` prints is
+   `…&view=warehouse`. Add `group=year` for one rack per year, or `group=none`
+   for one long rack. It plays once, and any touch skips it.
+4. **Render it.** A short video, then 30 seconds panning over every photo:
+
+   ```bash
+   node scripts/warehouse-video.mjs --collection ~/biscuit-wall/collection.json --view 'group=none' --tour 30 --out biscuit.mp4
+   ```
+
+   `group=none` makes each side of the hall one continuous wall, which suits
+   the tour. It takes about three minutes for 36 seconds at 1080p, and writes
+   `biscuit.json` beside the video, with the link that opens the wall where the
+   video ends.
+
+A video of someone's pet is theirs; the script writes it where `--out` says and
+nowhere else.
 
 ## What it reads
 

@@ -17,7 +17,12 @@
     prints its wall, warehouse and comparison links.
   - `warehouse-video.mjs --walk` now turns to the left wall and slides
     along it, as the long reel does, and stops short of the hall's dark far
-    end.
+    end. `--tour <seconds>` pans over every cover instead: along the left
+    wall, round, and back along the right, each wall filling the frame.
+- **Sharper covers in small collections.** The aisle and the comparison walls
+  draw covers into 256px atlas cells for up to 400 distinct covers, and
+  128px cells above that, so a pet's 150 photos stay sharp up close. Atlas
+  memory stays within the 128 MiB the 1,793-album library already takes.
   - Six mutations (`scripts/check-photos-mutations.py`), each caught.
 
 - **The image warehouse.** `?view=warehouse` opens the aisle with "Cats.

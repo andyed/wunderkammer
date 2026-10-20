@@ -170,7 +170,9 @@ steps and traps.
      reads "Items. Lots of items."
    - Group by an attribute with several values (era, colour, decade). One
      group makes one short rack and a thin show.
-   - For a video: `node scripts/warehouse-video.mjs --collection cats/collection.json --view 'group=era' --walk 3 --out cats.mp4`.
+   - For a video: `node scripts/warehouse-video.mjs --collection cats/collection.json --view 'group=none' --tour 30 --out cats.mp4`.
+     `--tour 30` ends it with 30 seconds panning over every cover, along one
+     wall and back along the other; `group=none` keeps each wall continuous.
      It needs ffmpeg. It writes `cats.json` beside the video, with the exact
      link of the last frame: give the person that link to browse from where
      the video ends.

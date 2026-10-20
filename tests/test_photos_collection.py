@@ -117,6 +117,7 @@ class DocumentTests(unittest.TestCase):
             self.assertEqual(len(document['clips']), 3)
             self.assertEqual(document['ui']['nouns'], {'item': 'photo', 'items': 'photos'})
             self.assertTrue(all(c['props']['setting'] == 'beach' for c in document['clips']))
+            self.assertEqual(document['clips'][0]['captured'], '2022-03-12T14:00:00-08:00', 'local time with its offset')
             self.assertTrue(all('place' not in c['props'] and 'Santa Cruz' not in c['note'] for c in document['clips']), 'no place names unless --places')
             for clip in document['clips']:
                 for name in (clip['cover'], clip['detailCover']):

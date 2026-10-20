@@ -346,7 +346,7 @@ def build(args):
             clips.append({
                 'id': f"photos:{photo['uuid']}", 'title': title(photo, moment)[:200],
                 'cover': f'covers/{name}', 'detailCover': f'photos/{name}',
-                'captured': moment.strftime('%Y-%m-%dT%H:%M:%S'), 'source': 'Apple Photos',
+                'captured': moment.isoformat(timespec='seconds'), 'source': 'Apple Photos',  # with Photos' own offset, as muriel.collection writes it
                 'palette': subject_palette(image), 'props': props,
                 'note': ' · '.join(filter(None, [f'{moment:%A, %B %-d, %Y, %-I:%M %p}', where])),
             })
