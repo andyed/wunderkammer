@@ -2018,7 +2018,11 @@ function applyZoomDetail() {
   // nor does a still: a pane opened by the zoom would cover the shot.
   // Zoomed all the way out is never zoomed in, however few items fill the view.
   const floor = viewport.scaleFloor?.(), atFloor = viewport.fitted || (floor > 0 && viewport.scale <= floor * 1.01);
-  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor || window.innerWidth <= 800 ? null
+  // The rule weighs foreground tiles only. With the selection on the context
+  // plane its pick would be whichever foreground cover sits near the centre,
+  // replacing the item being read after every step along the plane.
+  const offForeground = state.selected && !(state.order || []).some(c => c.id === state.selected);
+  const pick = state.spatialOn || hydrating || CHROMELESS || atFloor || offForeground || window.innerWidth <= 800 ? null
     : zoomDetailCandidate({
       tiles: state.positions.values(), pose: viewport.snapshot(), stage,
       // The pane's width whether or not it is open, so opening it moves nothing.
@@ -2137,7 +2141,8 @@ function renderDetail(clip) {
   d.append(close);
 
   // Traverse the review order without leaving Dive: buttons, arrow keys, or a swipe.
-  const order = state.order || [], at = order.findIndex(c => c.id === clip.id);
+  // A context-plane item counts its place in the plane's walk (walkFrom).
+  const order = walkFrom(clip.id)?.order || [], at = order.findIndex(c => c.id === clip.id);
   if (order.length > 1 && at >= 0) {
     const nav = document.createElement('div'); nav.className = 'detail-nav';
     const prev = document.createElement('button'); prev.type = 'button'; prev.className = 'btn'; prev.textContent = '‹'; prev.setAttribute('aria-label', 'Previous item'); prev.addEventListener('click', () => stepDetail(-1));
@@ -2316,17 +2321,37 @@ function linkButton(text, href, external) {
   return a;
 }
 
+/**
+ * What the arrows walk from an item: the layer it lives on. An item in scope
+ * walks the review order over the foreground's tiles. One that exists only on
+ * the context plane walks the plane in its layout order, over the plane's
+ * tiles. The plane's walk leaves out what the foreground holds, so a step
+ * never hands the selection to the other layer and switches orders mid-walk.
+ * Null when the item is on neither (the plane is dismissed).
+ */
+function walkFrom(id) {
+  const order = state.order || [];
+  if (order.some(c => c.id === id)) return { order, tiles: [...state.positions.values()], centre: centreOnTile };
+  const framed = state.background.mounted && state.background.framed;
+  if (!framed) return null;
+  const inScope = new Set(state.filtered.map(clipKey));
+  const tiles = framed.tiles.filter(t => !inScope.has(clipKey(t.clip)));
+  if (!tiles.some(t => t.clip.id === id)) return null;
+  const seen = new Set(), plane = [];
+  for (const t of tiles) if (!seen.has(t.clip.id)) { seen.add(t.clip.id); plane.push(t.clip); }
+  return { order: plane, tiles, centre: centreOnPlaneTile };
+}
 /** Open the neighbouring item in review order and bring its tile under the camera at the current scale. */
 function stepDetail(delta) { perf.span('detail/step', () => stepDetailNow(delta)); }
 function stepDetailNow(delta) {
-  const order = state.order || [];
+  const walk = walkFrom(state.selected), order = walk?.order || [];
   const i = order.findIndex(c => c.id === state.selected);
   if (i < 0 || order.length < 2) return;
   const clip = order[((i + delta) % order.length + order.length) % order.length];
   openDetail(clip);
   if (state.spatialOn) return;
-  const p = [...state.positions.values()].find(t => t.clip.id === clip.id);
-  if (p) centreOnTile(p);
+  const p = walk.tiles.find(t => t.clip.id === clip.id);
+  if (p) walk.centre(p);
 }
 /** Bring a laid-out tile under the camera, centred in the area left of the pane. */
 function centreOnTile(p) {
@@ -2335,15 +2360,38 @@ function centreOnTile(p) {
   viewport.panTo(width / 2 - (p.x + p.w / 2) * s, r.height / 2 - (p.y + p.h / 2) * s, { duration: 220 });
 }
 /**
+ * centreOnTile for a context-plane tile. The plane is not flat world geometry:
+ * mirrorBackground pushes it back, tilts it about the foreground's centre line
+ * and projects it about the stage centre. Solve that projection for the camera
+ * that lands the tile's centre on the same target. A pan moves the camera
+ * inside the projection, so it leaves the tile's depth, and its scale factor f,
+ * unchanged; the solve is closed-form.
+ */
+function centreOnPlaneTile(p) {
+  const d = backgroundDepth(), st = state.background.stage;
+  if (!d || !st) return;
+  const r = el.stage.getBoundingClientRect(), s = viewport.scale, tilt = BG_TILT_DEG * Math.PI / 180;
+  const width = Math.max(120, Math.min(r.width, el.detail.getBoundingClientRect().left - r.left));
+  const wx = p.x + p.w / 2, wy = p.y + p.h / 2;
+  const z = s * ((wy - d.py) * Math.sin(tilt) - d.depth);    // rotateX: above the pivot recedes
+  const f = BG_PERSPECTIVE / (BG_PERSPECTIVE - z);
+  const x = (width / 2 - st.w / 2) / f + st.w / 2 - s * wx;
+  const y = (r.height / 2 - st.h / 2) / f + st.h / 2 - s * (d.py + (wy - d.py) * Math.cos(tilt));
+  if (Number.isFinite(x) && Number.isFinite(y)) viewport.panTo(x, y, { duration: 220 });
+}
+/**
  * Up/Down with a detail open: move to the nearest tile above or below the
  * selection in the laid-out grid, as Left/Right walk the review order. "Nearest"
  * prefers tiles whose column overlaps the current one, then the smallest gap,
  * so a step lands on the visible neighbour rather than the next item in order.
- * Flat wall only; the spatial view has no grid to walk. No-op at the edge.
+ * A context-plane selection walks the plane's grid (walkFrom). Flat wall only;
+ * the spatial view has no grid to walk. No-op at the edge.
  */
 function stepDetailVertical(dir) {
   if (state.spatialOn) return;
-  const tiles = [...state.positions.values()];
+  const walk = walkFrom(state.selected);
+  if (!walk) return;
+  const tiles = walk.tiles;
   const from = tiles.find(t => t.clip.id === state.selected);
   if (!from) return;
   const fromMid = from.x + from.w / 2;
@@ -2358,7 +2406,7 @@ function stepDetailVertical(dir) {
   }
   if (!best) return;
   openDetail(best.clip);
-  centreOnTile(best);
+  walk.centre(best);
 }
 // Swipe across the detail pane steps through the review order (phones).
 { let start = null;

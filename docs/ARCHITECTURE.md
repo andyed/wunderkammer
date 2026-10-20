@@ -295,7 +295,12 @@ history. `filterScope` produces the single `state.filtered` consumed by
 both renderers. Context is the full corpus on a background plane inside the
 canvas (`#bg-plane`, `renderBackground()` / `frameAround()`), mounted only while
 revealed; it never alters Viewport Fit content or stage geometry, though it
-widens the pannable item set through `Viewport.setItems` while mounted. A
+widens the pannable item set through `Viewport.setItems` while mounted. An
+item opened from the plane is walked on the plane: `walkFrom()` gives the arrow
+keys the plane's items outside the scope, in layout order, and
+`centreOnPlaneTile()` solves the plane's depth, tilt and perspective for the
+camera that centres each one. Details on zoom stand down while such an item is
+selected, since that rule weighs foreground tiles only. A
 viewport callback latches the reveal below 90% of Fit scale; Fit, scope change
 and 3D clear it. The cluster suggestion panel is rendered but unplaced. Back
 restores a camera snapshot through `Viewport.restore`; saved piles and clip
