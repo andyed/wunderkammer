@@ -43,7 +43,7 @@ different view of the same collection:
 > read-only, keeps a tidy 150 and arrives as the image warehouse ("Biscuit.
 > Lots of Biscuit."). See [Try it with your own photos](#try-it-with-your-own-photos).
 
-**Status: early public release (0.2).** The interfaces below are versioned and
+**Status: early public release (0.3).** The interfaces below are versioned and
 validated. The renderer is tested in desktop and mobile Chromium; physical
 devices and other browsers have had less coverage.
 

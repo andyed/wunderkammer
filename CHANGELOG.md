@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-20
+
+The collection document is unchanged and stays version 1. Live links gain
+`view=warehouse`, `lit=`, `frame=evidence` and `front=`; a 0.2.0 wall refuses
+`view=warehouse` and ignores the other three.
 
 - **A wall from Apple Photos.** `scripts/photos-collection.py` reads a Mac's
   Photos library read-only (through osxphotos) and writes a tidy collection
@@ -175,6 +179,8 @@
   moved away. Previews from the pointer now start on its first move or press
   inside a value. The facet-view test that checks this read the lens before
   Chrome's hover update and failed about 1 run in 30.
+
+All 479 tests pass, and all 212 mutation cases are detected.
 
 ## 0.2.0 — 2026-10-18
 

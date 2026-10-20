@@ -12,7 +12,7 @@ import { chromium } from 'playwright';
 // are served (`npm pack --dry-run` reads that list), so a page that reaches
 // outside the release, or a file left out of "files", fails here.
 const root = fileURLToPath(new URL('../', import.meta.url));
-const PKG = '/wunderkammer@v0.2.0/';
+const PKG = '/wunderkammer@v0.3.0/';
 const TYPES = { '.html': 'text/html', '.mjs': 'text/javascript', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const svg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="${color}"/></svg>`;
 const doc = () => ({

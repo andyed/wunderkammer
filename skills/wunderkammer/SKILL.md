@@ -88,7 +88,7 @@ steps and traps.
      `import { mount } from './wall/embed.mjs'; await mount(element, collectionOrUrl).ready;`
    - Get Wunderkammer from a release tag on GitHub; no package is published
      to a registry. jsDelivr's GitHub route
-     (`https://cdn.jsdelivr.net/gh/andyed/wunderkammer@v0.2.0/wall/embed.mjs`)
+     (`https://cdn.jsdelivr.net/gh/andyed/wunderkammer@v0.3.0/wall/embed.mjs`)
      serves a tag's modules, but serves HTML as `text/plain`, so the page
      itself needs a static host that serves HTML as `text/html`.
 
