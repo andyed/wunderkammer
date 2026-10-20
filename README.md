@@ -30,6 +30,9 @@ different view of the same collection:
   out.
 - **[The hallway](https://andyed.github.io/clipwall-demo/?view=aisle&group=year)**: one rack per year. Walk it
   with the slider, drag to look around, and select a frame to open it.
+- **[The warehouse](https://andyed.github.io/clipwall-demo/?view=warehouse&group=color)**: the hallway arriving.
+  Rows of racks, one per colour family, rush out of a white void; then the
+  lights go down and you are in the hallway, ready to browse.
 - **[In 3D](https://andyed.github.io/clipwall-demo/?view=float&arrange=axes&across=captured&up=lightness&depth=hue)**:
   what the **3D** button opens. Capture date runs across, lightness up and hue
   in depth, so each frame's colour sits on the collection's timeline. Change
@@ -127,6 +130,15 @@ node scripts/still.mjs --collection examples/psychodeli/collection.json --view '
 It writes `axes.png` and `axes.json`, which records the exact link, the
 camera and the items shown. [SHOTS.md](docs/SHOTS.md) has the details and
 the roadmap.
+
+To render the warehouse as a video, the same frames `?view=warehouse` plays
+(it needs ffmpeg):
+
+```bash
+node scripts/warehouse-video.mjs --collection examples/psychodeli/collection.json --view 'group=color' --walk 3 --out warehouse.mp4
+```
+
+[AISLE.md](docs/AISLE.md#the-warehouse) has the options.
 
 The example's 297 images are low-resolution screenshots from the Psychodeli
 visualizer, served from the public demo site with CORS. The collection

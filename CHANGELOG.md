@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **The image warehouse.** `?view=warehouse` opens the aisle with "Cats.
+  Lots of cats." played over it once: rows of the aisle's racks, five lanes
+  wide, rush out of a white void while the camera drops into the entrance;
+  then the lights go down, the extra rows sink through the floor, and the
+  aisle is exactly as `view=aisle` opens it, ready to browse. The caption
+  uses the collection's nouns. It plays once (the address becomes the exact
+  aisle link), any touch or key ends it, and reduced motion skips it. The
+  skill names it for agents, with "matrix guns view".
+  - `scripts/warehouse-video.mjs` renders the same frames, seeked one by
+    one, to an MP4, with an optional walk down the aisle and a sidecar
+    holding the exact link of the last frame.
+  - The aisle's scene now carries a fog too far away to show, so the show
+    can pull it in without recompiling every material.
+  - `MUTATION_FILTER=warehouse` holds seven mutations, each caught.
+
 - **A far tile no longer draws its placeholder after its cover loaded.** When
   four or fewer covers landed between atlas uploads, three.js r169's
   `copyTextureToTexture` could write a far tile into the near atlas, or into

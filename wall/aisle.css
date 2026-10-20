@@ -24,3 +24,14 @@
   .aisle-travel input { flex:1; }
   .aisle-help { display:none; }
 }
+
+/* The image warehouse (warehouse-show.mjs). Its caption is ink on an opaque
+ * white plate, 20.3:1 whatever rack passes behind it. The aisle's own labels and
+ * controls wait out the show and come up as the lights go down. */
+.warehouse-caption { position:absolute; top:12%; left:6%; right:6%; z-index:2; display:grid; justify-items:center; margin:0; pointer-events:none; }
+.warehouse-caption > span { grid-area:1/1; max-width:100%; padding:.12em .45em; background:#ffffff; color:#050510; text-align:center; text-wrap:balance;
+  font:700 clamp(30px,6vw,84px)/1.08 system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:-.015em; opacity:0; }
+/* Hidden at once as the show starts; they fade back in only as it ends. */
+.aisle-host:not(.warehouse-running) :is(.aisle-labels,.aisle-toolbar,.aisle-help) { transition:opacity .45s ease; }
+.aisle-host.warehouse-running :is(.aisle-labels,.aisle-toolbar,.aisle-help,.aisle-callout) { opacity:0; pointer-events:none; }
+@media (prefers-reduced-motion: reduce) { .aisle-host:not(.warehouse-running) :is(.aisle-labels,.aisle-toolbar,.aisle-help) { transition:none; } }

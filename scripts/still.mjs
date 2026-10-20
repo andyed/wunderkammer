@@ -70,9 +70,9 @@ function options(argv) {
 /**
  * The checkout at /, and a local collection's folder at /__collection/, so its
  * relative covers and sheet pages resolve as they would on a static host.
- * GET only; nothing outside those two folders is served.
+ * GET only; nothing outside those two folders is served. warehouse-video.mjs serves the same way.
  */
-async function serve(collectionDir) {
+export async function serve(collectionDir) {
   const inside = (base, rel) => { const full = path.resolve(base, '.' + path.posix.normalize('/' + rel)); return full === base || full.startsWith(base + path.sep) ? full : null; };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://still.local');

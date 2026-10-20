@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applyViewIntent, targetedViewURL, stripViewIntent } from '../wall/view-intent.mjs';
+import { applyViewIntent, targetedViewURL, stripViewIntent, isWarehouseIntent } from '../wall/view-intent.mjs';
 import { encodeView, decodeView, validateView } from '../wall/permalink.mjs';
 const specimen = () => ({ v: 1, layoutVersion: 1, corpus: { id: 'fixture', revision: 'r1' },
   scope: { query: '', facets: [], branches: null }, presentation: { mode: 'flat', group: 'none', pan: 'edge' },
@@ -108,4 +108,16 @@ test('front orders a cloud: it implies arrange=cloud, round-trips, and is refuse
     ['arrange=axes&front=captured', /front applies only to arrange=cloud/], ['across=year&front=captured', /front applies only to arrange=cloud/]])
     assert.throws(() => applyViewIntent(`${base}&${query}`, specimen()), message, query);
   assert.throws(() => validateView({ ...v, float: { ...v.float, front: '' } }), /Invalid or unsupported view link/);
+});
+
+test('view=warehouse is an arrival in the aisle: the view it leaves is the aisle, and a saved view never replays it', () => {
+  const v = applyViewIntent(base + '&view=warehouse&group=decade&spread=0.4', specimen());
+  assert.equal(v.presentation.mode, 'aisle'); assert.equal(v.aisle.spread, .4); assert.equal(v.aisle.fitted, true);
+  assert.deepEqual(decodeView(encodeView(v)), v);
+  assert.equal(targetedViewURL(v, base).searchParams.get('view'), 'aisle', 'a copied live link opens the aisle, not the show');
+  assert.equal(isWarehouseIntent(base + '&view=warehouse'), true);
+  assert.equal(stripViewIntent(base + '&view=warehouse').searchParams.has('view'), false, 'the exact link written after it drops the request');
+  for (const url of [base + '&view=aisle', base, `${base}&view=warehouse#v=1&s=x`, `${base}&view=warehouse#v=1&ref=${'a'.repeat(64)}`])
+    assert.equal(isWarehouseIntent(url), false, url);
+  assert.throws(() => applyViewIntent(base + '&view=warehouse&view=aisle', specimen()), /view may appear only once/);
 });

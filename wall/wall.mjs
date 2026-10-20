@@ -16,7 +16,7 @@ import { createAttributeBrush } from './attribute-brush.mjs';
 import { buildFacetModel } from './facet-model.mjs';
 import { createFacetRail } from './facet-rail.mjs';
 import { createPermalinks, canonical } from './permalink.mjs';
-import { targetedViewURL } from './view-intent.mjs';
+import { targetedViewURL, isWarehouseIntent } from './view-intent.mjs';
 import { clipKey, filterScope, chooseCluster, contextClusters, valuesOf, matchesFacet } from './context-clusters.mjs';
 import { layout, groupBy, frameAround, HEADER_H, SIMILARITY, SIMILARITY_GRID, isSimilarity } from './layout.mjs';
 import { hasProjection, hasCell } from './similarity-layout.mjs';
@@ -370,9 +370,12 @@ async function boot() {
   state.defaultGroup = state.groupKey;
   applyFilters();
   await frames();
+  // Read before the first exact link replaces the address: ?view=warehouse arrives once.
+  const warehouse = isWarehouseIntent(location.href);
   await links.start();
   document.body.dataset.viewReady = 'true';
   notifyEmbedder({ type: 'wunderkammer:view-ready' });
+  if (warehouse && state.mode === 'aisle') void state.aisle?.playWarehouse({ nouns: state.nouns });
   perf.mark('boot/ready');
 }
 
