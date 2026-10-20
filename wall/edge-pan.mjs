@@ -1,8 +1,17 @@
 // Screen-space pan constraint and a gesture-local zoom conversion. The
 // Viewport remains the camera owner; this object returns candidate transforms.
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-const DEAD_ZONE = 32;
-const ZOOM_DISTANCE = 320;
+// Edge zoom has to be pushed for. 32 px of travel past an edge was a flick: a
+// drag that merely arrived in a corner zoomed, and the landing opened details
+// on zoom (Andy, 2026-10-20). 120 px is a deliberate push past the edge cue.
+export const DEAD_ZONE = 120;
+export const ZOOM_DISTANCE = 320;
+// Only motion aimed into the edge is push: within about 53° of straight in.
+// A pan along an edge drifts into it (a fitting axis is frozen, so every pixel
+// of drift is blocked), and that drift must not add up to a zoom. Judged per
+// event on the raw pointer motion; pulling back always counts, so reversal
+// still unwinds at once.
+export const PUSH_ALIGNMENT = 0.6;
 
 /**
  * Constrain a camera so a pan only ever reveals clipped content.
@@ -42,6 +51,7 @@ export class EdgePan {
       const next = boundPan({ ...view, x: view.x + dx, y: view.y + dy }, area, bounds, view);
       return { ...next, phase: next.x !== view.x + dx || next.y !== view.y + dy ? 'limit' : '' };
     }
+    const travel = Math.hypot(dx, dy);
     if (!this.latch) {
       const proposed = { ...view, x: view.x + dx, y: view.y + dy };
       const base = boundPan(proposed, area, bounds, view);
@@ -49,6 +59,8 @@ export class EdgePan {
       const length = Math.hypot(ox, oy);
       if (length < 0.01) return { ...base, phase: '' };
       const normal = { x: ox / length, y: oy / length };
+      // A blocked event that is not aimed at the edge is drift: pan, no latch.
+      if (dx * normal.x + dy * normal.y < PUSH_ALIGNMENT * travel) return { ...base, phase: '' };
       // Pick real content at the approached edge, not an empty pointer anchor.
       const query = {
         x: Math.abs(normal.x) > 0.1 ? (normal.x > 0 ? bounds.x : bounds.x + bounds.w) : (point.x - base.x) / base.scale,
@@ -68,7 +80,9 @@ export class EdgePan {
 
     const l = this.latch;
     const normalDelta = dx * l.normal.x + dy * l.normal.y;
-    const pressure = l.pressure + normalDelta;
+    // The first event's delta is already its blocked part, so it passed the gate above.
+    const aimed = normalDelta < 0 || normalDelta >= PUSH_ALIGNMENT * Math.hypot(dx, dy);
+    const pressure = l.pressure + (aimed ? normalDelta : 0);
     const corner = Math.abs(l.normal.x) > 0.001 && Math.abs(l.normal.y) > 0.001;
     // Tangential motion still travels along the boundary. Clamp against the
     // latched scale so changing scale cannot alternate pan/zoom every frame.

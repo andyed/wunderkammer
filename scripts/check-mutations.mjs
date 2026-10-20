@@ -1027,6 +1027,21 @@ const cases = [
     from: 'srcset="wall/brand/lockup-dark.svg"', to: 'srcset="wall/brand/lockup-light.svg"',
     test: 'tests/brand.test.mjs', pattern: 'the README heading shows the lockup',
   },
+  {
+    name: 'edge friction: drift along an edge latches the edge cue', file: 'wall/edge-pan.mjs',
+    from: "      if (dx * normal.x + dy * normal.y < PUSH_ALIGNMENT * travel) return { ...base, phase: '' };\n", to: '',
+    test: 'tests/edge-pan.test.mjs', pattern: 'edge zoom has to be pushed for',
+  },
+  {
+    name: 'edge friction: sliding along an edge builds push', file: 'wall/edge-pan.mjs',
+    from: 'const pressure = l.pressure + (aimed ? normalDelta : 0);', to: 'const pressure = l.pressure + normalDelta;',
+    test: 'tests/edge-pan.test.mjs', pattern: 'edge zoom has to be pushed for',
+  },
+  {
+    name: 'edge friction: the dead zone is a flick again', file: 'wall/edge-pan.mjs',
+    from: 'export const DEAD_ZONE = 120;', to: 'export const DEAD_ZONE = 32;',
+    test: 'tests/edge-pan.test.mjs', pattern: 'edge zoom has to be pushed for',
+  },
 ];
 
 const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));
