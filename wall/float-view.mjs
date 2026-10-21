@@ -26,6 +26,7 @@ import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_L
 import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
 import { Callout, JumpBox, announcer, titleMatches as matchTitles } from './keyboard-path.mjs';
+import { VideoTiles, fieldPlacement } from './video-tiles.mjs';
 
 /** Brightness of an item outside the scope. Dim, not gone: the space keeps its shape. */
 export const FLOAT_DIM = 0.25;
@@ -217,6 +218,7 @@ export class FloatView {
     const attributeKeys = this.callbacks.axisKeys?.() ?? clipAttributeKeys(this.clips);
     this.dimensions = axisDimensions(this.clips, attributeKeys, this.callbacks.labelFor);
     this.indexOf = new Map(keys.map((key, i) => [key, i])); this.inScope = new Uint8Array(this.count).fill(1);
+    this.videos?.dispose(); this.videos = null;
     this.field?.dispose(); this.field = null;
     if (!this.renderer) return;
     if (spriteCovers.available) { spriteCovers.warm(64); spriteCovers.warm(160); }
@@ -234,6 +236,12 @@ export class FloatView {
     });
     this.field.count = this.count; this.field.mesh.count = this.count;
     this.field.setRenderer(this.renderer);
+    // Items with a video play it over their cover (video-tiles.mjs).
+    this.videos = new VideoTiles({
+      scene: this.scene, placement: fieldPlacement(this.field),
+      sourceOf: i => clips[i]?.video || null, keyOf: i => this.keys[i],
+      onFrame: () => this.invalidate(),
+    });
     this.dimMode = patchFragment(this.field.material) ? 'brightness' : 'hidden';
     this.resolveAxes();
     this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());
@@ -793,6 +801,7 @@ export class FloatView {
       this.billboard();
       this.field?.update(this.camera, now);
       this.field?.takeDirty();
+      this.videos?.update(this.camera);
       endPass();
       this.render();
       this.frameTimes.push(performance.now() - started); if (this.frameTimes.length > 600) this.frameTimes.shift();
@@ -940,7 +949,7 @@ export class FloatView {
   dispose() {
     if (this.disposed) return; this.disposed = true; this.cancelHover(); if (this.frame) cancelAnimationFrame(this.frame);
     this.resizeObserver?.disconnect(); for (const [node, name, fn] of this.listeners) node.removeEventListener(name, fn);
-    this.controls?.dispose(); this.field?.dispose(); this.guides.geometry.dispose(); this.ring.geometry.dispose();
+    this.controls?.dispose(); this.videos?.dispose(); this.field?.dispose(); this.guides.geometry.dispose(); this.ring.geometry.dispose();
     this.renderer?.dispose(); this.renderer?.forceContextLoss(); this.host.replaceChildren();
   }
 }

@@ -187,3 +187,16 @@ test('images.sheets says what cells are when a clip also has a file', () => {
   assert.equal(validateCollection(spriteDoc({ images: { sheets: 'overview' } })).collection.images.sheets, 'overview');
   assert.ok(problemsOf(spriteDoc({ images: { sheets: 'full' } })).some(p => p.startsWith('images.sheets') && p.includes('overview, covers')));
 });
+
+test('a clip may name a video: http(s), blob: or relative, never data:', () => {
+  const { collection } = validateCollection(doc({ clips: [
+    { id: 'a', cover: 'covers/a.webp', video: 'video/a.mp4', kind: 'video' },
+    { id: 'b', video: 'https://cdn.example/b.webm' },
+  ] }), { baseUrl: 'https://host.example/c/collection.json' });
+  assert.equal(collection.clips[0].video, 'https://host.example/c/video/a.mp4');
+  assert.equal(collection.clips[1].video, 'https://cdn.example/b.webm');
+  assert.equal(validateCollection(doc({ clips: [{ id: 'a', video: 'video/a.mp4' }] })).collection.clips[0].video, 'video/a.mp4');
+  for (const video of ['data:video/mp4;base64,AAAA', 'javascript:alert(1)', 'file:///tmp/a.mp4', '']) {
+    assert.ok(problemsOf(doc({ clips: [{ id: 'a', video }] })).some(p => p.startsWith('clips[0].video')), video);
+  }
+});

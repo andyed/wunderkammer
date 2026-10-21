@@ -74,6 +74,60 @@ test('the warehouse plays over the aisle and leaves it exactly as ?view=aisle op
   } finally { await plain?.close(); await p.close(); }
 });
 
+test('each copied rack names its covers at the instance the rack draws them, and videos play on the copies while the show runs', async () => {
+  const p = await open('?view=warehouse&group=decade&rail=0');
+  try {
+    await p.waitForFunction(() => window.__cwAisle?.show); await p.evaluate(() => window.__cwAisle.show.pause());
+    await rendered(p, () => { const a = window.__cwAisle; a.show.seek(2); return a.renderCount; });
+    const r = await p.evaluate(() => {
+      const a = window.__cwAisle, show = a.show, art = a.art, copies = show.copyPlaces();
+      const id = place => `${place.cohort}\u0000${place.key}`, source = new Map(art.places.map(place => [id(place), place]));
+      const matrix = (mesh, i) => Array.from(mesh.instanceMatrix.array.slice(i * 16, i * 16 + 16));
+      const within = (node, group) => { for (let n = node; n; n = n.parent) if (n === group) return true; return false; };
+      const own = new Set(art.meshes), problems = [];
+      for (const copy of copies) {
+        const from = source.get(id(copy));
+        if (!from) { problems.push(`${id(copy)}: no such place on the aisle`); continue; }
+        if (own.has(copy.mesh) || !within(copy.mesh, show.group)) problems.push(`${id(copy)}: not on a copy`);
+        // Same geometry and material: the same atlas page and cell, so the same cover.
+        if (copy.mesh.geometry !== from.mesh.geometry || copy.mesh.material !== from.mesh.material) problems.push(`${id(copy)}: another cover's mesh`);
+        if (copy.index !== from.index || matrix(copy.mesh, copy.index).join() !== matrix(from.mesh, from.index).join()) problems.push(`${id(copy)}: another instance`);
+      }
+      // Every copy carries exactly its rack's covers.
+      const perCopy = show.instances.filter(inst => !inst.row.real).map(inst => {
+        const got = copies.filter(copy => within(copy.mesh, inst.group)).map(id).sort();
+        const want = art.places.filter(place => place.rack === inst.row.rack).map(id).sort();
+        return got.join('|') === want.join('|');
+      });
+      // Placed from the copy's own world matrix: each place stands somewhere of its own.
+      const placement = art.videoPlacement([...art.places, ...copies]);
+      const c = a.camera.position.clone(), q = a.camera.quaternion.clone(), size = a.camera.position.clone(), spots = new Set();
+      let strengths = 0, tile = 0;
+      for (let i = 0; i < placement.count; i++) {
+        strengths += placement.place(i, c, q, size) === 1;
+        tile += Math.abs(size.x - .98) < 1e-6 && Math.abs(size.y - .98) < 1e-6;
+        spots.add(c.toArray().map(v => v.toFixed(3)).join());
+      }
+      // A video for every cover: the aisle hands the copies to VideoTiles, and drops them when the show ends.
+      for (const clip of a.clipsByKey.values()) clip.video = '/video/none.mp4';
+      a.setVideoPlaces([...art.places, ...copies]); a.videos.budget = 0;
+      const during = a.videos.count;
+      show.finish('test');
+      return { copies: copies.length, places: art.places.length, copyRows: perCopy.length, perCopy: perCopy.every(Boolean), problems: problems.slice(0, 5),
+        count: placement.count, strengths, tile, spots: spots.size, during, after: a.videos.count, budget: a.videos.budget };
+    });
+    assert.deepEqual(r.problems, []);
+    assert.ok(r.copyRows > 0 && r.perCopy, `each of ${r.copyRows} copies carries exactly its rack's covers`);
+    assert.equal(r.copies, r.places * r.copyRows / 2, 'two decades of 40: every copy row holds one rack');
+    assert.equal(r.strengths, r.count, 'every cover is lit while the show runs');
+    assert.equal(r.tile, r.count, 'a video quad is the cover\'s own size');
+    assert.equal(r.spots, r.count, 'no two places, real or copied, stand at the same point');
+    assert.equal(r.during, r.places + r.copies);
+    assert.equal(r.after, r.places, 'the copies\' videos go with the copies');
+    assert.equal(r.budget, 0, 'a capture\'s budget outlasts the show, even a budget of none');
+  } finally { await p.close(); }
+});
+
 test('a key ends the show at once and then acts on the aisle it leaves', async () => {
   const p = await open('?view=warehouse&group=decade&rail=0');
   try {

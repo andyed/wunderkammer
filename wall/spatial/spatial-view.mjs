@@ -32,6 +32,7 @@ import { RowMotion } from './lib/motion.js';
 import { groupBy, layout, SIMILARITY, isSimilarity } from '../layout.mjs';
 import { spreadScale, HOVER_PX } from '../similarity-layout.mjs';
 import { perf } from '../instrument.mjs';
+import { VideoTiles, fieldPlacement } from '../video-tiles.mjs';
 
 
 
@@ -259,6 +260,7 @@ export class SpatialView {
           this.field.update(this.camera, now);
           this.hybrid.update(this.camera);
           this.hybrid.sort(this.camera);
+          this.videos?.update(this.camera);
           endPass();
           // Keep group names readable and steady at every zoom level.
           const focal = h / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
@@ -338,6 +340,8 @@ export class SpatialView {
   _replaceField() {
     this._dirty = true;
     this.hybrid?.dispose();
+    this.videos?.dispose();
+    this.videos = null;
     this.field?.dispose();
     this.cardHost?.dispose();
     this.cardHost = null;
@@ -425,6 +429,15 @@ export class SpatialView {
     this.field.setMotion(this.motion);
     // Per-slot atlas uploads instead of the whole canvas per flush (atlas.js).
     this.field.setRenderer(this.webglRenderer);
+    // Items with a video play it over their cover (video-tiles.mjs); each
+    // presented frame asks for a render, so the on-demand loop keeps up.
+    this.videos = new VideoTiles({
+      scene: this.scene, placement: fieldPlacement(this.field),
+      sourceOf: (i) => clips[i]?.video || null,
+      keyOf: (i) => keyOfClip(clips[i]),
+      onFrame: () => this.invalidate(),
+      standIns: () => [...(this.hybrid?.live || [])].map(([i, entry]) => [i, entry.el.querySelector('video')]).filter(([, v]) => v),
+    });
 
     this.piles = new PileLayout({
       field: this.field, surface: this.surface, maxVisibleInPile: 8,
@@ -489,7 +502,20 @@ export class SpatialView {
 
     const sprite = spriteCovers.has(clip);
     const src = sourceFor(clip, 340) || '';   // the card is authored 340 px wide
-    if (src || sprite) {
+    // A video plays in the DOM card too, over its cover as the poster. Not in a
+    // drawable card: a capture is one still frame, and the field's own video
+    // quad already plays at that distance.
+    if (clip.video && !proxyHero) {
+      const video = document.createElement('video');
+      video.className = 'sp-thumb';
+      video.muted = true; video.loop = true; video.playsInline = true;
+      // A capture holds every video on its clock (video-tiles.mjs seek()).
+      video.autoplay = !this.videos?.frozen;
+      if (src && !sprite) video.poster = src;
+      video.src = clip.video;
+      video.addEventListener('error', () => el.classList.add('broken'), { once: true });
+      el.append(video);
+    } else if (src || sprite) {
       const img = document.createElement('img');
       img.className = 'sp-thumb';
       // The DOM pool renders a plain <img> and is fine cross-origin. A drawable

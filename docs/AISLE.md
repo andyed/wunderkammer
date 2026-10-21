@@ -137,7 +137,11 @@ steady pace of at most 2.5 world units a second. A hall longer than that pace
 covers in the time is toured part of the way. `group=none` makes each side one
 continuous wall, which suits a tour; small groups leave gaps between short
 racks. `--hold` keeps the last frame, and `--labels` keeps the rack labels,
-which the video leaves out. The
+which the video leaves out. `--no-caption` leaves out the show's caption, for
+a plate that gets its words in an edit. Items with a `video` play it on their
+covers, the copied racks' included; every frame holds each video on the
+capture's own clock, so a loop runs at its true speed, and `--videos` sets how
+many play at once (the nearest in view, 64 by default). The
 sidecar JSON beside the video holds the exact link of its last frame, which
 opens the wall right there to browse. It needs ffmpeg on the PATH.
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **Video items.** A clip may name a `video`. The 3D wall, Stacks, the
+  floating space and the aisle play it in place of its cover, muted and
+  looping; the detail pane plays it with controls.
+  - Each video is its own quad laid over its tile every frame, drawn just in
+    front of it, so the tile atlases are untouched and the cover stays the
+    poster.
+  - The nearest 24 videos in view play; the rest hold their poster. A
+    presented frame asks for a render, so the on-demand views draw at the
+    video's rate and an idle view draws nothing.
+  - `seek(t)` holds every video in view at its own phase of a shared clock
+    and resolves once each has the frame, for seeked captures.
+  - `scripts/still.mjs`, and so `show-collection.mjs`, answers byte ranges
+    and serves `.mp4` and `.webm`; without ranges a browser cannot seek a
+    video.
+  - In the warehouse, the copied racks play their covers' videos too, each
+    copy at its own phase, while the show runs.
+  - `scripts/warehouse-video.mjs` holds every video on the capture's clock,
+    so loops run at their true speed however long a frame takes to shoot.
+    `--videos` sets how many play at once (64 by default); `--no-caption`
+    leaves out the show's caption, for a plate that gets its words in an edit.
+
 ## 0.3.0 — 2026-10-20
 
 The collection document is unchanged and stays version 1. Live links gain

@@ -9,6 +9,12 @@
  *   node scripts/warehouse-video.mjs --collection cats.collection.json \
  *     --view 'group=decade' --size 1920x1080 --fps 30 --walk 3 --out cats-warehouse.mp4
  *
+ * Items with a `video` play it on their covers, every frame held on the
+ * capture's own clock, so a loop runs at its true speed however long a frame
+ * takes to shoot. --videos sets how many play at once (the nearest in view;
+ * 64 by default, where a live page plays 24). --no-caption leaves the show's
+ * caption out, for a plate that gets its words in an edit.
+ *
  * --view takes a live link's keys (group, q, facet.<key>, sort, spread, ...);
  * the tool sets view=warehouse. --walk turns to the left wall once the lights
  * are down and slides along it for that many seconds. --tour, instead, pans
@@ -33,7 +39,7 @@ import { TIMING, cubicInOut } from '../wall/warehouse.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const USAGE = `usage: node scripts/warehouse-video.mjs --collection <file or URL> [--view '<link keys>'] [--size 1920x1080] [--fps 30]
-  [--walk <seconds> | --tour <seconds>] [--hold <seconds>] [--labels] [--out warehouse.mp4] [--timeout 60000]`;
+  [--walk <seconds> | --tour <seconds>] [--hold <seconds>] [--labels] [--no-caption] [--videos 64] [--out warehouse.mp4] [--timeout 60000]`;
 /** --walk, as the long reel's side scroll: world units a second, the furthest travel (0..1) and the turn toward the left wall. */
 const WALK_SPEED = 4.5, WALK_END = .7, WALK_TURN = 55 * Math.PI / 180;
 /** --tour: the fastest it glides past a wall (world units a second), the turn toward each wall, the spread it widens
@@ -89,6 +95,7 @@ function options(argv) {
     collection: { type: 'string' }, view: { type: 'string', default: '' }, size: { type: 'string', default: '1920x1080' },
     fps: { type: 'string', default: '30' }, walk: { type: 'string', default: '0' }, tour: { type: 'string', default: '0' }, hold: { type: 'string', default: '1' },
     out: { type: 'string', default: 'warehouse.mp4' }, timeout: { type: 'string', default: '60000' }, labels: { type: 'boolean', default: false },
+    'no-caption': { type: 'boolean', default: false }, videos: { type: 'string', default: '64' },
     help: { type: 'boolean', default: false },
   } });
   if (values.help) { console.log(USAGE); process.exit(0); }
@@ -96,6 +103,8 @@ function options(argv) {
   const size = /^(\d{2,5})x(\d{2,5})$/.exec(values.size);
   if (!size || size[1] % 2 || size[2] % 2) fail(`--size must be WIDTHxHEIGHT with even numbers, e.g. 1920x1080 (got ${values.size})`);
   const fps = Number(values.fps), walk = Number(values.walk), tour = Number(values.tour), hold = Number(values.hold), timeout = Number(values.timeout);
+  const videos = Number(values.videos);
+  if (!(Number.isInteger(videos) && videos >= 0 && videos <= 128)) fail(`--videos is how many play at once, 0 to 128 (got ${values.videos})`);
   if (![24, 25, 30, 50, 60].includes(fps)) fail(`--fps must be 24, 25, 30, 50 or 60 (got ${values.fps})`);
   if (!(walk >= 0 && walk <= 30)) fail(`--walk is seconds, 0 to 30 (got ${values.walk})`);
   if (!(tour >= 0 && tour <= 120)) fail(`--tour is seconds, 0 to 120 (got ${values.tour})`);
@@ -105,7 +114,7 @@ function options(argv) {
   if (path.extname(values.out).toLowerCase() !== '.mp4') fail(`--out must end in .mp4 (got ${values.out})`);
   const view = new URLSearchParams(values.view.replace(/^\?/, ''));
   for (const key of ['view', 'collection', 'chrome', 'figure']) if (view.has(key)) fail(`--view may not set ${key}; the tool sets it`);
-  return { ...values, width: Number(size[1]), height: Number(size[2]), fps, walk, tour, hold, timeout, viewKeys: view };
+  return { ...values, caption: !values['no-caption'], width: Number(size[1]), height: Number(size[2]), fps, walk, tour, hold, timeout, videos, viewKeys: view };
 }
 
 function pageUrl(origin, collection, viewKeys) {
@@ -152,14 +161,27 @@ export async function warehouseVideo(argv) {
     if (started !== 'playing') fail(`The warehouse did not play: ${started === 'unavailable' ? 'the aisle has nothing to show or no WebGL' : started}`);
     await page.evaluate(() => window.__cwAisle.show.pause());
     if (!opts.labels) await page.addStyleTag({ content: '.aisle-labels { display: none !important; }' });
+    if (!opts.caption) await page.addStyleTag({ content: '.warehouse-caption { display: none !important; }' });
+    // Video items: a capture budget, and every video held still until seeked.
+    const videoPlaces = await page.evaluate(budget => {
+      const v = window.__cwAisle.videos; if (!v?.count) return 0;
+      v.budget = budget; v.resident = Math.max(v.resident, budget + 16); v.frozen = true;
+      return v.count;
+    }, opts.videos);
     await page.waitForFunction(() => window.__cwAisle.art.getDiagnostics().pendingArtwork === 0, null, { timeout: opts.timeout })
       .catch(() => fail(`The covers did not load within ${opts.timeout} ms`));
     const shown = await page.evaluate(() => { const a = window.__cwAisle, d = a.getDiagnostics(); return { show: d.warehouse, covers: { loaded: d.loadedArtwork, failed: d.failedArtwork, total: d.totalTiles } }; });
 
     let n = 0;
+    const rendered = before => page.waitForFunction(b => (window.__cwAisle.renderCount || 0) > b, before, { timeout: 10000 }).catch(() => fail(`Frame ${n} never rendered${threw()}`));
     const shoot = async step => {
-      const before = await page.evaluate(step, null);
-      await page.waitForFunction(b => (window.__cwAisle.renderCount || 0) > b, before, { timeout: 10000 }).catch(() => fail(`Frame ${n} never rendered${threw()}`));
+      await rendered(await page.evaluate(step, null));
+      // That render chose the videos in view; hold each on this frame's time and draw again.
+      if (videoPlaces && opts.videos) {
+        await rendered(await page.evaluate(async t => {
+          const a = window.__cwAisle; await a.videos.seek(t); a.invalidate(); return a.renderCount || 0;
+        }, n / opts.fps));
+      }
       await page.screenshot({ path: path.join(frames, `${String(n++).padStart(5, '0')}.png`) });
     };
     const showFrames = Math.ceil(TIMING.end * opts.fps);
@@ -235,7 +257,8 @@ export async function warehouseVideo(argv) {
       format: 'wunderkammer.warehouse-video', version: 1,
       video: { file: path.basename(out), width: opts.width, height: opts.height, fps: opts.fps, frames: n, seconds: Math.round(n / opts.fps * 1000) / 1000,
         probed: probed ? { frames: Number(probed.streams?.[0]?.nb_read_frames), seconds: Number(probed.format?.duration) } : null },
-      shot: { show: TIMING.end, walk: opts.walk, walked, tour: opts.tour, hold: opts.hold, labels: opts.labels, caption: shown.show.caption, rows: shown.show.rows, lanes: shown.show.lanes },
+      shot: { show: TIMING.end, walk: opts.walk, walked, tour: opts.tour, hold: opts.hold, labels: opts.labels, caption: opts.caption ? shown.show.caption : null, rows: shown.show.rows, lanes: shown.show.lanes,
+        videos: videoPlaces ? { items: videoPlaces, budget: opts.videos } : null },
       covers: shown.covers,
       collection: { source: opts.collection, corpus: exported.corpus },
       view: { requested: opts.view, link: link ? link.slice(link.indexOf('#')) : null },
@@ -251,7 +274,7 @@ export async function warehouseVideo(argv) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   warehouseVideo(process.argv.slice(2)).then(({ video, sidecar, record }) => {
-    console.log(`${video}\n${sidecar}\n${record.video.frames} frames at ${record.video.fps} fps, ${record.video.seconds} s · ${record.shot.rows} racks in ${record.shot.lanes} lanes · "${record.shot.caption.join(' ')}"`);
+    console.log(`${video}\n${sidecar}\n${record.video.frames} frames at ${record.video.fps} fps, ${record.video.seconds} s · ${record.shot.rows} racks in ${record.shot.lanes} lanes · ${record.shot.caption ? `"${record.shot.caption.join(' ')}"` : 'no caption'}${record.shot.videos ? ` · ${record.shot.videos.items} video places, ${record.shot.videos.budget} at once` : ''}`);
   }, error => {
     console.error(error instanceof VideoError ? `warehouse-video: ${error.message}` : error);
     process.exit(1);
