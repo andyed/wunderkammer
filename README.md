@@ -13,12 +13,12 @@ attach claims about a comparison, each pointing at the exact items behind it,
 and can read back what the person selected as exact evidence. It runs from
 static files with no server.
 
-**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 297 frames from the Psychodeli
+**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 289 frames from the Psychodeli
 visualizer, served as static files from GitHub Pages. Each link opens a
 different view of the same collection:
 
 - **[The wall](https://andyed.github.io/clipwall-demo/)**: every frame, grouped by capture month. The overview
-  paints from 3 sprite-sheet images instead of 297 files.
+  paints from 3 sprite-sheet images instead of 289 files.
 - **[One facet](https://andyed.github.io/clipwall-demo/?facet.kaleido=kaleido&group=year)**: the 89 kaleidoscopic
   frames, grouped by year. The rest stay reachable as context when you zoom
   out.
@@ -158,7 +158,7 @@ The images it writes carry no location. `show-collection.mjs` prints the
 wall's link and the warehouse's ("Biscuit. Lots of Biscuit."). [APPLE_PHOTOS.md](docs/APPLE_PHOTOS.md)
 has the options.
 
-The example's 297 images are low-resolution screenshots from the Psychodeli
+The example's 289 images are low-resolution screenshots from the Psychodeli
 visualizer, served from the public demo site with CORS. The collection
 document names 16 sprite-sheet pages there, of which the overview needs
 three, and keeps each image's own file as the fallback. The repository holds
@@ -244,7 +244,7 @@ pane. A search or facet is a mask over the field: items outside it dim or
 hide in place, and the far atlas is kept.
 
 The flat wall paints its overview from a few sprite-sheet images (3 pages
-instead of 297 files for the demo) and switches to HTML tiles at a reading
+instead of 289 files for the demo) and switches to HTML tiles at a reading
 zoom. Its HTML tiles are not pooled, so its page cost still grows with the
 collection. The trade-offs, limits and measured numbers are in
 [docs/SPATIAL.md](docs/SPATIAL.md#why-a-hybrid-renderer) and

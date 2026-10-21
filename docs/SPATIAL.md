@@ -210,7 +210,7 @@ the first 3D view carries information the wall does not.
 - **Default axes.** `resolveAxes` picks them, with no special case: Across
   takes the collection's time (`captured`, then `year`, then `decade`), Up takes
   lightness, Depth takes hue. On the demo collection, the Psychodeli example
-  with 297 frames, Across is the capture date. It runs from 2025-11-01 to
+  with 289 frames, Across is the capture date. It runs from 2025-11-03 to
   2026-04-11, and the empty February and March show as a gap. Lightness and
   hue, which no grouping shows, take the other two axes.
 - **Alternatives rejected on the demo.**
