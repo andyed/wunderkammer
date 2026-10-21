@@ -320,7 +320,7 @@ Under `chrome=none` a shot gets a figure (`wall/figure.mjs`), drawn by
   first layout, so every Fit and framing already sees the shorter stage, and
   nothing in the band covers the picture. It holds:
   - **the headline:** the page's count line, for example "3 of 16 items lit",
-    "35 of 297 items · capture month: 2026-04" or "158 of 297 items · color
+    "35 of 289 items · capture month: 2026-04" or "157 of 289 items · color
     family: green";
   - **the legend:** a swatch and a count each for what is lit and what
     recedes (in scope and outside it, or a lens value and the other values);
