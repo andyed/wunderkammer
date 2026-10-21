@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+The collection document is unchanged. Live links gain `arrange=sphere`,
+`facing=` and `cap=`; a 0.3.0 wall refuses `arrange=sphere` and ignores the
+other two.
+
+- **Sphere.** `?view=float&arrange=sphere` puts every item on a sphere, a
+  colour globe: the lightest items at the top, the darkest at the bottom, hue
+  around. The seats are a Fibonacci lattice, so the cards cover the surface
+  evenly and never stack. Positions are therefore ranks: items fill latitude
+  bands in lightness order, and within a band they run around in OKLCH hue
+  order from the collection's emptiest hue, greys first. Items without a
+  palette wait on a shelf below. Sphere sits after HSL under Arrange by.
+  - The cards lie on the surface instead of turning to the camera.
+    `facing=in` turns them toward the centre, a bowl you look into, and
+    `cap=<degrees>` (up to 120) opens the sphere toward the camera. Two menus
+    in the toolbar set both while Sphere is chosen, and exact links keep
+    them.
+  - A card that shows the camera its back is not drawn, and a click or an
+    arrow key passes over it. Flying to a card lands in front of its face.
+  - Cards turn onto the surface and back off it as they travel between
+    arrangements.
+  - `sphereSlots(n, { radius, cap, facing, centre, axis, up })` in
+    `wall/float-space.mjs` returns the seats as positions, quaternions and
+    normals, for scripts that place cards themselves. `faceQuaternion` and
+    `sphereRadius` come with it.
+  - Three mutations (`scripts/check-mutations.mjs`), each caught.
+
 ## 0.3.0 — 2026-10-20
 
 The collection document is unchanged and stays version 1. Live links gain

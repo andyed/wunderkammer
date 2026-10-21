@@ -988,6 +988,21 @@ const cases = [
     test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   },
   {
+    name: 'sphere: a link may ask for any opening', file: 'wall/float-space.mjs',
+    from: 'sphere.cap >= 0 && sphere.cap <= MAX_CAP', to: 'sphere.cap >= 0',
+    test: 'tests/float-sphere.test.mjs', pattern: 'validSphere takes a facing',
+  },
+  {
+    name: 'sphere: cards turn to the camera instead of lying on the surface', file: 'wall/float-view.mjs',
+    from: 'if (!this.field || this.oriented()) return;', to: 'if (!this.field) return;',
+    test: 'tests/float-view.test.mjs', pattern: 'float Sphere lays every card',
+  },
+  {
+    name: 'sphere: a pointer reaches a card showing its back', file: 'wall/float-view.mjs',
+    from: 'if (!this.oriented() || !this.field) return true;', to: 'return true;',
+    test: 'tests/float-view.test.mjs', pattern: 'float Sphere lays every card',
+  },
+  {
     name: 'brand: the lockup word drops below 8:1', file: 'wall/brand/lockup-dark.svg',
     from: 'fill="#f0f0f0"', to: 'fill="#5c5c80"',
     test: 'tests/brand.test.mjs', pattern: 'brand files are outlined',

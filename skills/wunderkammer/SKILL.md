@@ -79,7 +79,8 @@ steps and traps.
      `view=aisle` (a hallway with one rack per group), `view=float` (what
      the 3D button opens: Axes, with the collection's time across, lightness
      up and hue in depth; name them with `arrange=axes&across=era&up=lightness&depth=hue`,
-     or pick a colour space with `arrange=oklch`, `oklab`, `hsl` or `az`), and
+     or pick a colour space with `arrange=oklch`, `oklab`, `hsl` or `az`, or
+     `arrange=sphere` for a colour globe, `&facing=in&cap=60` for a bowl), and
      `view=3d` (each group as a stack), and `view=warehouse` (the hallway
      arriving: see step 9).
    - Covers on another origin need CORS headers and

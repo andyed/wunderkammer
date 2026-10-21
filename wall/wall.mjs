@@ -591,6 +591,11 @@ function viewNotes() {
       const order = state.float.describeFront();
       view = `Cloud${lead || order ? ': ' : ''}${[lead, order && (lead ? `each ${order}` : order)].filter(Boolean).join('; ')}`;
       name = 'Cloud';
+    } else if (arrangement === 'sphere') {
+      const { facing, cap } = state.float.sphereOptions();
+      const shape = facing === 'in' ? `facing in${cap ? `, open ${cap}°` : ''}` : cap ? `open ${cap}°` : '';
+      view = `Sphere${shape ? ` (${shape})` : ''}: lightest at the top, darkest at the bottom, hue around`;
+      brief = 'Sphere: lightness up, hue around'; name = 'Sphere';
     }
     else { view = `Placed by dominant colour in ${ARRANGEMENT_LABELS[arrangement]}`; name = ARRANGEMENT_LABELS[arrangement]; }
   } else if (state.mode === 'flat') {
