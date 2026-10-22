@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { decodeView } from '../wall/permalink.mjs';
-import { measureText, contrastVerdict } from '../scripts/still.mjs';
+import { measureText, contrastVerdict, serve } from '../scripts/still.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 // Sixteen flat-colour covers with capture dates, so the floating space can
@@ -399,4 +399,25 @@ test('scripts/still.mjs refuses, and writes nothing, when the link or the collec
   }
   const missing = run('--collection', path.join(dir, 'nope.json'), '--out', path.join(dir, 'x.png'));
   assert.equal(missing.status, 1); assert.match(missing.stderr, /No collection file at/);
+});
+
+test('the tool\'s server answers byte ranges, so a page can seek a video it serves', async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'wunderkammer-still-')), server = await serve(dir);
+  t.after(async () => { await new Promise(r => server.close(r)); await rm(dir, { recursive: true, force: true }); });
+  const bytes = Buffer.from(Array.from({ length: 100 }, (_, i) => i));
+  await mkdir(path.join(dir, 'video')); await writeFile(path.join(dir, 'video', 'a.mp4'), bytes);
+  const url = `http://127.0.0.1:${server.address().port}/__collection/video/a.mp4`;
+  const get = async range => { const r = await fetch(url, range ? { headers: { range } } : {}); return { status: r.status, headers: r.headers, body: Buffer.from(await r.arrayBuffer()) }; };
+  const whole = await get();
+  assert.equal(whole.status, 200); assert.equal(whole.headers.get('content-type'), 'video/mp4'); assert.equal(whole.headers.get('accept-ranges'), 'bytes');
+  assert.deepEqual(whole.body, bytes);
+  for (const [range, start, end] of [['bytes=10-19', 10, 19], ['bytes=90-', 90, 99], ['bytes=-5', 95, 99], ['bytes=95-500', 95, 99], ['bytes=0-0', 0, 0]]) {
+    const r = await get(range);
+    assert.equal(r.status, 206, range); assert.equal(r.headers.get('content-range'), `bytes ${start}-${end}/100`, range);
+    assert.deepEqual(r.body, bytes.subarray(start, end + 1), range);
+  }
+  for (const range of ['bytes=100-', 'bytes=20-10']) {
+    const r = await get(range);
+    assert.equal(r.status, 416, range); assert.equal(r.headers.get('content-range'), 'bytes */100', range);
+  }
 });

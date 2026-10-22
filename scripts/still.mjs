@@ -32,7 +32,8 @@ import { decodeView } from '../wall/permalink.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 const TYPES = { '.html': 'text/html', '.css': 'text/css', '.mjs': 'text/javascript', '.js': 'text/javascript', '.json': 'application/json',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif' };
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif',
+  '.mp4': 'video/mp4', '.webm': 'video/webm' };
 const USAGE = `usage: node scripts/still.mjs --collection <file or URL> [--view '<link keys>'] [--size 1600x900] [--scale 2] [--out still.png]
   [--title '<headline>'] [--label lit='<words>'] [--label rest|across|up|depth|group.<name>='<words>'] [--no-figure]
   [--timeout 60000] [--allow-undrawn] [--allow-low-contrast]`;
@@ -82,8 +83,22 @@ export async function serve(collectionDir, port = 0) {
       : collectionDir && pathname.startsWith('/__collection/') ? inside(collectionDir, pathname.slice('/__collection'.length))
       : inside(ROOT, pathname === '/' ? '/index.html' : pathname);
     try {
-      if (!file || !(await stat(file)).isFile()) throw new Error('not found');
+      const info = file && await stat(file);
+      if (!info?.isFile()) throw new Error('not found');
       res.setHeader('content-type', TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream');
+      res.setHeader('accept-ranges', 'bytes');
+      // A video seeks by byte range; answered with the whole file instead, the
+      // browser marks it unseekable and every seek lands back at the start.
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (range && (range[1] || range[2])) {
+        const size = info.size;
+        const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+        const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+        if (start > end || start >= size) { res.writeHead(416, { 'content-range': `bytes */${size}` }); res.end(); return; }
+        res.writeHead(206, { 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+        res.end((await readFile(file)).subarray(start, end + 1));
+        return;
+      }
       res.end(await readFile(file));
     } catch { res.writeHead(404); res.end(); }
   });

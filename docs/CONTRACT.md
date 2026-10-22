@@ -58,9 +58,9 @@ are refused with the list of supported ones, and every problem is reported
 with its path in one error, up to 25. Server-only keys (`vault`, `adapters`,
 `generated`) are refused by name. `toCollection()` converts a server payload
 and reports each field it leaves out, including a server's `sheetSlots`, which
-index its private `/media/sheets` pages. `collectionImages()` lists every image
-source a document names (covers, variants, media and sheet pages) with its
-path; `scripts/validate-collection.mjs` and `scripts/build-demo.mjs` check that
+index its private `/media/sheets` pages. `collectionImages()` lists every media
+source a document names (covers, variants, media, videos and sheet pages) with
+its path; `scripts/validate-collection.mjs` and `scripts/build-demo.mjs` check that
 files exist through it.
 
 - **Required:** `format`, `version`, `corpus.id` and `clips` (1 to 50,000).
@@ -74,6 +74,13 @@ files exist through it.
 - **Links:** `sourceUrl` is http(s) only. **Images:** `cover`, `detailCover`,
   `coverVariants[].src` and `media[].src` may be http(s), `data:image/` or
   `blob:`. Relative URLs resolve against the document's URL, as CSS URLs do.
+- **Video:** `video` (optional) is one http(s) or `blob:` URL, never `data:`.
+  The 3D views (the wall, Stacks, the floating space) and the aisle play it,
+  muted and looping, over the clip's cover, which stays the poster and the
+  only picture in the flat wall. The detail pane plays it with controls. Give
+  the clip a `cover` and `props.dims` of the video's own size: the cover is
+  what shows before the first frame and whenever a video is paused for the
+  play budget (the nearest 24 in view play), and the dims shape its tile.
 - **Attributes** go in `props`: strings, finite numbers, booleans or arrays of
   them. A props key that names a clip field (`title`, `source` …) is refused,
   because `valuesOf()` reads the clip's own field first.
