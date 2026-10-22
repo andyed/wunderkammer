@@ -110,6 +110,24 @@ test('front orders a cloud: it implies arrange=cloud, round-trips, and is refuse
   assert.throws(() => validateView({ ...v, float: { ...v.float, front: '' } }), /Invalid or unsupported view link/);
 });
 
+test('facing and cap shape a sphere: they imply arrange=sphere, round-trip, and are refused anywhere else', () => {
+  const v = applyViewIntent(base + '&view=float&facing=in&cap=60', specimen());
+  assert.equal(v.float.arrangement, 'sphere'); assert.deepEqual(v.float.sphere, { facing: 'in', cap: 60 });
+  assert.deepEqual(decodeView(encodeView(v)).float.sphere, { facing: 'in', cap: 60 });
+  const live = targetedViewURL(v, base).searchParams;
+  assert.deepEqual(['arrange', 'facing', 'cap'].map(k => live.get(k)), ['sphere', 'in', '60']);
+  // Either alone; the other keeps its default in the view.
+  assert.deepEqual(applyViewIntent(base + '&arrange=sphere&cap=0', specimen()).float.sphere, { cap: 0 });
+  assert.equal(applyViewIntent(base + '&view=float&arrange=sphere', specimen()).float.sphere, undefined, 'a plain sphere carries no options');
+  for (const [query, message] of [['facing=sideways', /facing must be one of out, in/], ['cap=121', /cap must be whole degrees from 0 to 120/],
+    ['cap=-5', /cap must be whole degrees/], ['cap=12.5', /cap must be whole degrees/], ['cap=', /cap must be whole degrees/], ['cap=1e2', /cap must be whole degrees/],
+    ['arrange=oklch&facing=in', /facing and cap apply only to arrange=sphere/], ['across=year&cap=30', /facing and cap apply only to arrange=sphere/],
+    ['front=captured&facing=out', /front applies only to arrange=cloud|facing and cap apply only to arrange=sphere/]])
+    assert.throws(() => applyViewIntent(`${base}&${query}`, specimen()), message, query);
+  for (const sphere of [{ facing: 'up' }, { cap: 200 }, { cap: 30, spin: 2 }, null])
+    assert.throws(() => validateView({ ...v, float: { ...v.float, sphere } }), /Invalid or unsupported view link/, JSON.stringify(sphere));
+});
+
 test('view=warehouse is an arrival in the aisle: the view it leaves is the aisle, and a saved view never replays it', () => {
   const v = applyViewIntent(base + '&view=warehouse&group=decade&spread=0.4', specimen());
   assert.equal(v.presentation.mode, 'aisle'); assert.equal(v.aisle.spread, .4); assert.equal(v.aisle.fitted, true);

@@ -92,6 +92,7 @@ export class VideoTiles {
     this.frozen = false;        // capture: nothing plays on its own
     this.geometry = new THREE.PlaneGeometry(1, 1);
     this._c = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._n = new THREE.Vector3();
+    this._f = new THREE.Vector3(); this._d = new THREE.Vector3();
     this._frustum = new THREE.Frustum(); this._pv = new THREE.Matrix4(); this._sphere = new THREE.Sphere();
     this._frame = 0;
   }
@@ -172,6 +173,10 @@ export class VideoTiles {
       if (i >= this.placement.count || this.placement.place(i, this._c, this._q, this._n) < 0.99) continue;
       this._sphere.set(this._c, Math.hypot(this._n.x, this._n.y) / 2);
       if (!this._frustum.intersectsSphere(this._sphere)) continue;
+      // Tiles draw front faces only, as do these quads: a tile showing the
+      // camera its back (the far side of the floating space's sphere) is not
+      // drawn, so it spends no decoder from the budget.
+      if (this._f.set(0, 0, 1).applyQuaternion(this._q).dot(this._d.subVectors(this._c, cam)) >= 0) continue;
       seen.push([this._c.distanceToSquared(cam), i]);
       places.set(i, [this._c.clone(), this._q.clone(), this._n.clone()]);
     }

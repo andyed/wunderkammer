@@ -389,6 +389,112 @@ test('float Axes choices survive exact and live links; a link naming an axis the
   }
 });
 
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
+/** The way a card that faces the camera points: from the point the camera orbits toward the camera. */
+const towardCamera = scene => unit(scene.state.position.map((v, i) => v - scene.state.target[i]));
+/** Settled, and the last frame drawn: billboarding happens in the frame, after Fit has moved the camera. */
+const drawn = p => settled(p).then(() => p.waitForFunction(() => window.__cwFloat.stillPending().length === 0, null, { timeout: 15000 }));
+test('float Sphere lays every card on the surface, out or in; pointer and arrows reach only faces the camera sees; leaving turns cards back to the camera', async () => {
+  const p = await open('?view=float&arrange=sphere&rail=0'); let fresh; try {
+    let { scene, view } = await debug(p);
+    assert.equal(scene.arrangement, 'sphere'); assert.equal(scene.sphere.facing, 'out'); assert.equal(scene.sphere.cap, 0);
+    assert.equal(view.float.sphere, undefined, 'the default sphere adds nothing to the link');
+    assert.equal(await p.locator('.float-sphere').isVisible(), true); assert.equal(await p.locator('.float-axes').isVisible(), false);
+    const onSphere = Object.keys(scene.targets).filter(id => id !== key('nopalette')), { radius } = scene.sphere;
+    for (const id of onSphere) {
+      near([Math.hypot(...scene.targets[id])], [radius], 0.05, `${id} is on the sphere`);
+      assert.ok(dot(scene.normals[id], unit(scene.targets[id])) > 0.999, `${id} faces out`);
+    }
+    // Latitude is lightness by band (tests/float-sphere.test.mjs); white and black are in the top and bottom bands.
+    assert.ok(scene.targets[key('ffffff')][1] > 0 && scene.targets[key('000000')][1] < 0, 'white in the upper half, black in the lower');
+    assert.ok(scene.targets[key('nopalette')][1] < -radius, 'an item without a palette waits below the sphere');
+    assert.ok(scene.labels.includes('No palette · 1') && scene.labels.some(l => / · lightest$/.test(l)) && scene.labels.some(l => /^around · OKLCH hue from \d+°/.test(l)));
+    // Fit looks from the front: the near half shows its faces, the far half its backs, which are not drawn.
+    const shown = onSphere.filter(id => scene.facing[id]), backs = onSphere.filter(id => !scene.facing[id]);
+    assert.ok(shown.length >= 5 && backs.length >= 5, `${shown.length} faces shown, ${backs.length} turned away`);
+    for (const id of onSphere) if (scene.normals[id][2] < 0) assert.equal(scene.facing[id], false, `${id} on the far side is turned away`);
+    assert.ok(scene.pickTargets.length && scene.pickTargets.every(t => scene.facing[t.key]), 'no turned-away card is a click target');
+    // A click where a turned-away card's centre projects reaches a card in front of it, or nothing; never it.
+    const behind = backs.sort((a, b) => Math.hypot(...scene.screen[a].slice(0, 2)) - Math.hypot(...scene.screen[b].slice(0, 2)))[0];
+    await clickItem(p, scene, behind); await p.waitForTimeout(200);
+    assert.notEqual((await debug(p)).scene.selection, behind, 'a click passes over a card that shows its back');
+    if (await p.locator('#detail.open').count()) { await p.keyboard.press('Escape'); await p.waitForSelector('#detail.open', { state: 'hidden' }); }
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('Home'); await settled(p);
+    // A click on a card that faces the camera flies to it along its face and opens it.
+    ({ scene } = await debug(p));
+    const front = scene.pickTargets.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y))[0].key;
+    await clickItem(p, scene, front); await p.waitForSelector('#detail.open'); await settled(p);
+    ({ scene, view } = await debug(p));
+    assert.equal(view.ui.focus, front); assert.equal(scene.selection, front);
+    assert.ok(dot(scene.normals[front], unit(scene.state.position.map((v, i) => v - scene.positions[front][i]))) > 0.9, 'the camera lands in front of the card face');
+    await p.keyboard.press('Escape'); await p.waitForSelector('#detail.open', { state: 'hidden' });
+    // Arrows choose only cards whose faces the camera sees.
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('Home'); await settled(p);
+    for (const arrow of ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp']) {
+      await p.keyboard.press(arrow); await settled(p); ({ scene } = await debug(p));
+      if (!scene.selection) continue;
+      const camera = scene.state.position, at = scene.positions[scene.selection];
+      assert.ok(dot(scene.normals[scene.selection], camera.map((v, i) => v - at[i])) > 0, `${arrow} chose a card facing the camera`);
+    }
+    assert.ok(scene.selection, 'the arrows reached a card');
+
+    // Inward: a bowl. Every card faces the centre; Fit sees the inside of the far half.
+    await p.keyboard.press('Home'); await settled(p);
+    await p.selectOption('.float-sphere select[aria-label="Which way the cards face"]', 'in'); await settled(p);
+    ({ scene, view } = await debug(p));
+    assert.deepEqual(view.float.sphere, { facing: 'in', cap: 0 });
+    for (const id of onSphere) assert.ok(dot(scene.normals[id], unit(scene.targets[id])) < -0.999, `${id} faces in`);
+    // The far half shows its inside to the camera; the near half, but for a band by the rim, its backs.
+    for (const id of onSphere) {
+      const z = scene.targets[id][2] / radius;
+      if (z < 0) assert.equal(scene.facing[id], true, `${id} on the far side shows its face`);
+      if (z > 0.5) assert.equal(scene.facing[id], false, `${id} on the near side shows its back`);
+    }
+    // An opening toward the camera: no card within 60° of the view axis.
+    await p.selectOption('.float-sphere select[aria-label="Opening toward the camera"]', '60'); await settled(p);
+    ({ scene, view } = await debug(p));
+    assert.deepEqual(view.float.sphere, { facing: 'in', cap: 60 });
+    for (const id of onSphere) assert.ok(scene.targets[id][2] / Math.hypot(...scene.targets[id]) <= 0.5 + 1e-3, `${id} is outside the opening`);
+    // The exact link carries the sphere's options; the live link names them.
+    await p.waitForFunction(() => location.hash.includes('s=')); await p.waitForTimeout(450);
+    fresh = await open(p.url()); const r = (await debug(fresh)).scene;
+    assert.deepEqual([r.sphere.facing, r.sphere.cap], ['in', 60]); assert.deepEqual(r.targets, scene.targets, 'the same seats after a fresh load');
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await p.locator('#copy-live-view').click();
+    const live = new URL(await p.evaluate(() => navigator.clipboard.readText()));
+    assert.deepEqual(['arrange', 'facing', 'cap'].map(k => live.searchParams.get(k)), ['sphere', 'in', '60']);
+    // Leaving the sphere, every card faces the camera again.
+    await p.locator('.float-arrange input[value=axes]').check(); await drawn(p); ({ scene } = await debug(p));
+    assert.equal(await p.locator('.float-sphere').isVisible(), false);
+    for (const id of Object.keys(scene.normals)) assert.ok(dot(scene.normals[id], towardCamera(scene)) > 0.999, `${id} faces the camera in Axes`);
+  } finally { await fresh?.close(); await p.close(); }
+  // With motion, cards turn onto the surface and back off it as they travel, in one render loop.
+  const m = await open('?view=float&arrange=oklab&rail=0', { motion: true }); try {
+    const mid = async () => m.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.wunderkammerFloatDebug().scene))))));
+    await m.evaluate(() => { window.__frames = 0; const count = () => { window.__frames++; requestAnimationFrame(count); }; requestAnimationFrame(count); window.__renders0 = window.__cwFloat.renderCount; });
+    await m.locator('.float-arrange input[value=sphere]').check();
+    let s = await mid();
+    assert.ok(s.moving > 0, 'the change to the sphere animates');
+    const turning = id => Math.abs(dot(s.normals[id], towardCamera(s))) < 0.999 && Math.abs(dot(s.normals[id], unit(s.targets[id]))) < 0.999;
+    assert.ok(Object.keys(s.normals).some(turning), 'a card is part way between facing the camera and lying on the sphere');
+    await settled(m); s = (await debug(m)).scene;
+    for (const id of Object.keys(s.targets).filter(id => id !== key('nopalette'))) assert.ok(dot(s.normals[id], unit(s.targets[id])) > 0.999, `${id} came to lie on the sphere`);
+    const { frames, renders } = await m.evaluate(() => ({ frames: window.__frames, renders: window.__cwFloat.renderCount - window.__renders0 }));
+    assert.ok(renders <= frames + 2, `${renders} renders in ${frames} animation frames`);
+    await m.locator('.float-arrange input[value=hsl]').check();
+    s = await mid();
+    assert.ok(s.moving > 0 && Object.keys(s.normals).some(turning), 'leaving, cards turn on the way rather than snapping to the camera');
+    await drawn(m); s = (await debug(m)).scene;
+    for (const id of Object.keys(s.normals)) assert.ok(dot(s.normals[id], towardCamera(s)) > 0.999, `${id} turned to the camera`);
+  } finally { await m.close(); }
+  const bad = await browser.newPage(); try {
+    bad.on('pageerror', e => errors.push(e.message));
+    await bad.goto(`${origin}/?view=float&arrange=sphere&cap=200`); await bad.waitForSelector('#link-status:not([hidden])');
+    assert.match(await bad.locator('#link-message').textContent(), /cap must be whole degrees from 0 to 120/);
+  } finally { await bad.close(); }
+});
+
 test('the 3D button opens the floating space in Axes; Stacks hands over to the stacks and back; old links still open the stacks', async () => {
   const p = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }); let fresh; try {
     p.on('pageerror', e => errors.push(e.message));
@@ -404,7 +510,7 @@ test('the 3D button opens the floating space in Axes; Stacks hands over to the s
     assert.deepEqual(s.scene.axes, { across: 'captured', up: 'lightness', depth: 'hue' }, 'the collection\'s time, then lightness and hue');
     assert.equal(await button.getAttribute('aria-pressed'), 'true');
     // The menu leads with the default and ends with the stacks.
-    assert.deepEqual(await p.locator('.float-arrange input').evaluateAll(inputs => inputs.map(i => i.value)), ['axes', 'oklab', 'oklch', 'hsl', 'az', 'stacks']);
+    assert.deepEqual(await p.locator('.float-arrange input').evaluateAll(inputs => inputs.map(i => i.value)), ['axes', 'oklab', 'oklch', 'hsl', 'sphere', 'az', 'stacks']);
     assert.equal(await p.locator('.float-arrange input:checked').inputValue(), 'axes');
 
     // Stacks hands over to the stacks renderer, which keeps the menu in a strip below it.
@@ -475,12 +581,17 @@ test('float phone layout keeps every control inside the viewport and reachable',
       const b = await select.boundingBox(); assert.ok(b.x >= 0 && b.x + b.width <= 390 && b.height >= 44, 'axis menus are inside the viewport and at least 44 px tall');
     }
     const axesBar = await p.locator('.float-toolbar').boundingBox(); assert.ok(axesBar.y + axesBar.height <= 844 && axesBar.y > 844 / 2, 'the toolbar with axis menus leaves the upper half of the stage');
+    await p.locator('.float-arrange label:has(input[value=sphere])').tap(); await settled(p);
+    for (const select of await p.locator('.float-sphere select').all()) {
+      const b = await select.boundingBox(); assert.ok(b.x >= 0 && b.x + b.width <= 390 && b.height >= 44, 'sphere menus are inside the viewport and at least 44 px tall');
+    }
+    await p.locator('.float-arrange label:has(input[value=axes])').tap(); await settled(p);
     // Fit frames the labels without shrinking the space to make wide ones fit the narrow stage.
     const xs = Object.values((await debug(p)).scene.screen).map(([x]) => x);
     assert.ok(Math.max(...xs) - Math.min(...xs) >= 1, `the space spans at least half the phone's width (${(Math.max(...xs) - Math.min(...xs)).toFixed(2)} of 2)`);
     await p.locator('.float-arrange label:has(input[value=az])').tap(); await settled(p);
     assert.equal((await debug(p)).scene.arrangement, 'az');
-    assert.equal(await p.locator('.float-toolbar select').count(), 3, 'on a phone the toolbar holds the three axis menus and no item dropdown');
+    assert.equal(await p.locator('.float-toolbar select').count(), 5, 'on a phone the toolbar holds the three axis menus, the sphere\'s two and no item dropdown');
     await clickItem(p, (await debug(p)).scene, key('00ffff')); await p.waitForSelector('#detail.open');
     assert.equal((await debug(p)).view.ui.focus, key('00ffff'), 'a tap reaches an item on a phone');
   } finally { await p.close(); }

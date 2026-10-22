@@ -34,6 +34,9 @@ different view of the same collection:
 - **[The colour space](https://andyed.github.io/clipwall-demo/?view=float&arrange=oklch)**: every frame floats at
   its dominant colour, with hue around the ring and lightness up. Click one
   to fly to it.
+- **[The colour globe](https://andyed.github.io/clipwall-demo/?view=float&arrange=sphere&facing=in&cap=60)**: every frame on
+  a sphere, the lightest at the top and hue around, opened toward you as a
+  bowl. Without `facing=in&cap=60` it is a globe seen from outside.
 - **[Stacks](https://andyed.github.io/clipwall-demo/?view=3d&group=year)**: each year as a stack you can
   open and spread. Stacks is the last arrangement under 3D.
 
@@ -94,7 +97,8 @@ axis takes a dimension of its own: the lightness, chroma or hue of the
 colour, or an attribute such as capture date, year or a facet. It starts with
 the collection's time across, lightness up and hue in depth, which the wall's
 groups do not show. The other arrangements place an image by its dominant
-colour (OKLab, OKLCH or HSL) or its title (A–Z), and Stacks piles each group.
+colour (OKLab, OKLCH or HSL, or on a sphere with lightness up and hue around)
+or its title (A–Z), and Stacks piles each group.
 With a search or facets set, the images outside the scope dim in place and
 nothing moves. Click an image to fly to it and open it.
 
