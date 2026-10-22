@@ -33,7 +33,7 @@ files will.
 ## What keeps the old name
 
 - **`urn:clipwall:` item identities.** Saved piles and permalinks are keyed on
-  them, and the published demo carries 289 of them. Renaming them would change
+  them, and the published demo carries 301 of them. Renaming them would change
   every item's identity, so they stay as an internal namespace.
 - The private repository, its history, and the local instance configurations.
 - The `clipwall-demo` repository until the public demo moves.

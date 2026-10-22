@@ -191,7 +191,8 @@ a few large images, and point each clip at its cell:
 
 The Psychodeli example (`examples/psychodeli/collection.json`) names 16 pages
 on the public demo site (`https://andyed.github.io/clipwall-demo/sheets/`)
-and keeps its 289 per-file covers there as the fallback. The pages are not in
+and keeps its 289 per-file covers there as the fallback. Its 12 video loops
+have no cells: their posters load as files. The pages are not in
 this repository. Until they are published there, the example loads the
 per-file covers. Its numbers are in [PERF.md](PERF.md#collection-sprite-sheets).
 

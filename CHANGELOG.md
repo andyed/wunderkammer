@@ -28,6 +28,10 @@ and ignores the other two.
     normals, for scripts that place cards themselves. `faceQuaternion` and
     `sphereRadius` come with it.
   - Three mutations (`scripts/check-mutations.mjs`), each caught.
+- **The demo plays video.** The Psychodeli example adds 12 loops recorded in
+  Psychodeli+ (480 px, about 4 s, 8.8 MB in all) to its 289 frames. Its
+  comparison is scoped to stills (`kind: image`), so both observations keep
+  their figures.
 - **Video items.** A clip may name a `video`. The 3D wall, Stacks, the
   floating space and the aisle play it in place of its cover, muted and
   looping; the detail pane plays it with controls.

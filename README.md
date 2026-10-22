@@ -13,8 +13,9 @@ attach claims about a comparison, each pointing at the exact items behind it,
 and can read back what the person selected as exact evidence. It runs from
 static files with no server.
 
-**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 289 frames from the Psychodeli
-visualizer, served as static files from GitHub Pages. Each link opens a
+**[Open the live demo →](https://andyed.github.io/clipwall-demo/)** 289 frames and 12 video loops from
+the Psychodeli visualizer, served as static files from GitHub Pages. The loops
+play on their tiles in 3D and the hallway, and in the detail pane. Each link opens a
 different view of the same collection:
 
 - **[The wall](https://andyed.github.io/clipwall-demo/)**: every frame, grouped by capture month. The overview
@@ -163,7 +164,9 @@ wall's link and the warehouse's ("Biscuit. Lots of Biscuit."). [APPLE_PHOTOS.md]
 has the options.
 
 The example's 289 images are low-resolution screenshots from the Psychodeli
-visualizer, served from the public demo site with CORS. The collection
+visualizer, served from the public demo site with CORS. Its 12 video loops are
+recordings from Psychodeli+ (480 px, about 4 s each, 8.8 MB in all), served
+the same way; each names its poster as its `cover`. The collection
 document names 16 sprite-sheet pages there, of which the overview needs
 three, and keeps each image's own file as the fallback. The repository holds
 only the document.
