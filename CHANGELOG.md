@@ -75,6 +75,11 @@ and ignores the other two.
   stack is open, as their labels already were, and return when it closes. A
   scope change made in between still applies. Three mutations
   (`scripts/check-mutations.mjs`), each caught.
+- **Every tile in an open stack carries its label.** Where near tiles are
+  drawn from cards (Chrome 157 and later) they show a title band, and the 14
+  cards nearest the camera, which are real elements, hid theirs until hover.
+  Same-sized neighbours disagreed about having a label. Those cards now show
+  the band too; the editor link still appears on hover or selection.
 
 ## 0.3.0 — 2026-10-20
 

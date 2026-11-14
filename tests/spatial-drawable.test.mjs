@@ -390,3 +390,45 @@ test('A9 — find stays off while the cards are still repainting, and arms once 
   await page.evaluate(() => clearInterval(window.restyle));
   await page.waitForFunction(() => view._findArmed === true, null, { timeout: 4000 });
 });
+
+test('A10 — a pool card shows its title band while tiles are drawn from cards, and only then', async (t) => {
+  if (gate(t)) return;
+  const read = (page) => page.evaluate(() => {
+    const card = [...document.querySelectorAll('.sp-card')].find((el) => el.querySelector('.sp-body'));
+    const style = (sel) => card?.querySelector(sel) ? getComputedStyle(card.querySelector(sel)) : null;
+    return {
+      cards: document.querySelectorAll('.sp-card .sp-body').length,
+      hovered: card?.matches(':hover') ?? null, selected: card?.getAttribute('aria-selected'),
+      body: style('.sp-body')?.visibility ?? null, edit: style('.sp-edit')?.display ?? null,
+      hostClass: document.querySelector('#host').classList.contains('sp-cards'),
+    };
+  });
+
+  const page = await fixture(t);
+  await page.mouse.move(2, 2);                       // off every card
+  const on = await read(page);
+  assert.ok(on.cards > 0, 'the fixture has promoted pool cards');
+  assert.equal(on.hovered, false);
+  assert.equal(on.hostClass, true, 'the host says its tiles come from cards');
+  assert.equal(on.body, 'visible', 'an unhovered pool card shows its title band');
+  assert.equal(on.edit, 'none', 'and keeps the editor link for hover or selection');
+  await page.evaluate(() => view.nav.select(view.hybrid.live.keys().next().value));
+  const selected = await page.evaluate(() => {
+    const card = document.querySelector('.sp-card[aria-selected="true"]');
+    return card ? getComputedStyle(card.querySelector('.sp-edit')).display : null;
+  });
+  assert.notEqual(selected, null, 'a pool card is selected');
+  assert.notEqual(selected, 'none', 'the selected card shows its editor link');
+
+  // The control: with tiles drawn from plain covers, the band is still a disclosure.
+  const plain = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  t.after(() => plain.close());
+  await plain.addInitScript(() => { window.__cwDrawable = false; });
+  await plain.goto(`${origin}/tests/fixtures/spatial-view.html?initial=full`);
+  await plain.waitForFunction(() => window.fixtureReady);
+  await plain.mouse.move(2, 2);
+  const off = await read(plain);
+  assert.ok(off.cards > 0);
+  assert.equal(off.hostClass, false);
+  assert.equal(off.body, 'hidden', 'without cards behind the tiles, an unhovered pool card hides its band');
+});

@@ -263,6 +263,7 @@ export class SpatialView {
             ? (this.piles.spreadPile >= 0 ? this.piles.piles[this.piles.spreadPile].indices
               : this.piles.piles.flatMap((_, i) => this.piles.faceOf(i))) : [];
           for (const i of readable) this.field.atlases.request(i, 'near', now);
+          if (this.cardHost && this.field.atlases.sourcePathBlank) this.host.classList.remove('sp-cards');
           const endPass = perf.begin('spatial/pass');
           this.field.update(this.camera, now);
           this.hybrid.update(this.camera);
@@ -392,6 +393,10 @@ export class SpatialView {
       this._cardWork = null;
       void this._armFind(this.cardHost, work);
     }
+    // Tiles drawn from cards wear their title band, so the pool's cards show
+    // theirs too (spatial.css). Off again if the card path turns out blank
+    // and the tiles fall back to plain covers (see the frame loop).
+    this.host.classList.toggle('sp-cards', !!this.cardHost);
 
     this.field = new TileField({
       scene: this.scene,
