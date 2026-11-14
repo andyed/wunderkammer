@@ -445,6 +445,41 @@ test('an open stack hides the other stacks, and closing it brings back exactly t
   assert.ok(await otherColourPixels(page, own) > 1000, 'the other stacks are back on screen');
 });
 
+test('a big stack opened from far back still draws its tiles from the near tier', async t => {
+  const page = await fixture(t);
+  await survey(page);
+  // The largest stack: fitted into this pane, the camera has to sit further
+  // back than the near tier's fixed reach.
+  await page.evaluate(() => {
+    const sizes = view.piles.piles.map(p => p.indices.length);
+    view._activate(view.piles.faceOf(sizes.indexOf(Math.max(...sizes)))[0]);
+  });
+  await page.waitForFunction(() => view.piles.spreadPile >= 0 && view.field.moving === 0 && !view._cameraMotion);
+  await page.waitForFunction(() => view.field.atlases._inflight === 0
+    && view.field.atlases._nearQueue.length === 0 && view.field.atlases._farQueue.length === 0);
+  await page.waitForTimeout(400);
+  const open = await page.evaluate(() => {
+    const f = view.field, cam = view.camera, V = cam.position.constructor;
+    const focal = view.host.clientHeight / (2 * Math.tan(cam.fov / 2 * Math.PI / 180));
+    const members = view.piles.piles[view.piles.spreadPile].indices;
+    let nearest = Infinity, large = 0, largeNear = 0, largeDrawn = 0;
+    for (const i of members) {
+      const d = f.worldCentre(i, new V()).distanceTo(cam.position);
+      nearest = Math.min(nearest, d);
+      // Drawn clearly larger than the 64 px a far tile holds, and not a DOM card.
+      if (view.hybrid.live.has(i) || Math.max(f.sizes[i * 2], f.sizes[i * 2 + 1]) * focal / d < 80) continue;
+      large++;
+      const slot = f.atlases.nearSlot[i];
+      if (f.aTier.array[i] === 1 && slot >= 0) { largeNear++; if (f.atlases.near.slotCoverage(slot) > 0) largeDrawn++; }
+    }
+    return { members: members.length, nearest: Math.round(nearest), large, largeNear, largeDrawn };
+  });
+  assert.ok(open.nearest > 3200, `the camera is beyond the fixed near reach (nearest tile ${open.nearest} units away)`);
+  assert.ok(open.large > 10, `the stack has tiles drawn larger than a far tile holds (${open.large})`);
+  assert.equal(open.largeNear, open.large, 'every such tile is on the near tier');
+  assert.equal(open.largeDrawn, open.large, 'and its near slot holds its pixels');
+});
+
 test('touch opens a stack and DOM promotion preserves the image rectangle', async t => {
   const page = await browser.newPage({ viewport: { width: 1000, height: 850 }, hasTouch: true });
   const errors = []; page.on('pageerror', e => errors.push(e.message));

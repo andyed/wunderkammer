@@ -122,6 +122,11 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
   },
   {
+    name: 'an open stack far from the camera falls back to far tiles', file: 'wall/spatial/spatial-view.mjs',
+    from: 'Math.max(this._nearReach, longest * focal / FAR_TILE_PX)', to: 'this._nearReach',
+    test: 'tests/spatial-view.test.mjs', pattern: 'a big stack opened from far back',
+  },
+  {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
     from: 'if (wasOpen) this._applyVisibility();', to: '',
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
