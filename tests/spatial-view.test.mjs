@@ -480,6 +480,62 @@ test('a big stack opened from far back still draws its tiles from the near tier'
   assert.equal(open.largeDrawn, open.large, 'and its near slot holds its pixels');
 });
 
+test('an open stack answers once for its labels, so no row is labelled beside one that is not', async t => {
+  const page = await fixture(t);
+  await survey(page);
+  await page.evaluate(() => {
+    const sizes = view.piles.piles.map(p => p.indices.length);
+    view._activate(view.piles.faceOf(sizes.indexOf(Math.max(...sizes)))[0]);
+  });
+  await page.waitForFunction(() => view.piles.spreadPile >= 0 && view.field.moving === 0 && !view._cameraMotion);
+  // Each member's title size on screen is k / depth. The rows of a stack
+  // differ a little in height, so k does too.
+  const read = () => page.evaluate(() => {
+    const f = view.field, cam = view.camera, V = cam.position.constructor;
+    const focal = view.host.clientHeight / (2 * Math.tan(cam.fov / 2 * Math.PI / 180));
+    const look = cam.getWorldDirection(new V()), at = new V();
+    const members = view.piles.piles[view.piles.spreadPile].indices;
+    const px = members.map(i => {
+      f.worldCentre(i, at);
+      return 15 * Math.min(f.sizes[i * 2] / 340, f.sizes[i * 2 + 1] / 255) * focal / at.sub(cam.position).dot(look);
+    });
+    const depth = f.worldCentre(members[0], at).sub(cam.position).dot(look);
+    return { px, depth, labelled: members.map(i => view._labelled[i]), open: view.piles.spreadPile >= 0 };
+  });
+  // Dolly along the camera's own axis until the stack's median title is `px` tall.
+  const dolly = async (target, pick) => {
+    const now = await read();
+    const sorted = [...now.px].sort((a, b) => a - b);
+    const by = now.depth * (pick(sorted) / target - 1);
+    await page.evaluate(delta => {
+      const back = view.camera.getWorldDirection(new view.basePos.constructor()).multiplyScalar(-delta);
+      view.basePos.add(back); view.lookTarget.add(back); view.invalidate();
+    }, by);
+    await page.waitForTimeout(400);
+    return read();
+  };
+  const first = await read();
+  const lo = Math.min(...first.px), hi = Math.max(...first.px);
+  assert.ok(hi / lo > 1.02, `the stack's members differ in size on screen (${lo.toFixed(2)} to ${hi.toFixed(2)} px)`);
+  const median = sorted => sorted[sorted.length >> 1];
+
+  // Far back: every title unreadable.
+  const far = await dolly(3, sorted => sorted.at(-1));
+  assert.ok(far.open, 'the stack is still open');
+  assert.ok(far.labelled.every(v => v === 0), 'far back, no member is labelled');
+
+  // The cutoff falls between the median member and the largest: tile by tile
+  // the large ones would be labelled, and the stack says no for all of them.
+  const below = await dolly(7, sorted => (median(sorted) + sorted.at(-1)) / 2);
+  const big = below.px.filter(v => v >= 7).length;
+  assert.ok(big > 0 && big < below.px.length / 2, `some members alone would be big enough (${big} of ${below.px.length})`);
+  assert.ok(below.labelled.every(v => v === 0), 'the stack is not labelled, none of it');
+
+  // Closer, with the median member just readable: the whole stack is labelled.
+  const above = await dolly(7.3, median);
+  assert.ok(above.labelled.every(v => v === 1), 'the stack is labelled, all of it');
+});
+
 test('touch opens a stack and DOM promotion preserves the image rectangle', async t => {
   const page = await browser.newPage({ viewport: { width: 1000, height: 850 }, hasTouch: true });
   const errors = []; page.on('pageerror', e => errors.push(e.message));

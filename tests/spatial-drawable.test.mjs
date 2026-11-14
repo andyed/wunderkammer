@@ -467,3 +467,51 @@ test('A11 — a sheet-covered near tile is drawn from its card once the cover is
     assert.equal(card.body, 'visible', 'a sheet-covered pool card shows its band like the tiles');
   }
 });
+
+for (const [name, query] of [['a file', 'initial=full'], ['a sheet cell', 'initial=full&covers=sheets']]) {
+  test(`A12 — a tile too small to read its title drops the band and takes it back (cover from ${name})`, async (t) => {
+    if (gate(t)) return;
+    // Semantic zoom: the band is drawn while the title reaches 7 CSS px on
+    // screen. The same tile is read at three camera distances in a row, with
+    // the pool cards beside it, because the complaint this answers was tiles
+    // of one size disagreeing about their label.
+    const page = await fixture(t, query);
+    if (query.includes('sheets')) await page.waitForFunction(() => view._cardCovered.has(1), null, { timeout: 10000 });
+    await page.evaluate(() => view.field.atlases.request(1, 'near'));
+    await page.waitForFunction(() => view.field.atlases.nearSlot[1] >= 0, null, { timeout: 5000 });
+    await page.mouse.move(2, 2);                       // off every card
+    const at = async (z, labelled) => {
+      // Straight down the camera's own axis, so every tile on the plane is at one depth.
+      await page.evaluate((depth) => { view.basePos.set(view.lookTarget.x, view.lookTarget.y, depth); view.invalidate(); }, z);
+      await page.waitForFunction((want) => view._labelled[1] === want && view._relabel.size === 0, labelled, { timeout: 5000 });
+      await page.waitForTimeout(500);
+      const cards = await page.evaluate(() => [...document.querySelectorAll('.sp-card')]
+        .filter((el) => el.querySelector('.sp-body'))
+        .map((el) => ({ small: el.classList.contains('sp-small'), body: getComputedStyle(el.querySelector('.sp-body')).visibility })));
+      const titlePx = await page.evaluate(() => {
+        const focal = view.host.clientHeight / (2 * Math.tan(view.camera.fov / 2 * Math.PI / 180));
+        return 15 * Math.min(view.field.sizes[2] / 340, view.field.sizes[3] / 255) * focal / view.basePos.z;
+      });
+      return { band: await titleBand(page, 1), cards, titlePx };
+    };
+    const banded = (state, where) => {
+      assert.ok(state.titlePx >= 7, `${where}: the title is readable (${state.titlePx.toFixed(1)} px)`);
+      assert.ok(state.band.dark > 20 && state.band.light > 20,
+        `${where}: the tile carries its band (dark ${state.band.dark}, light ${state.band.light})`);
+      assert.ok(state.cards.length > 0, `${where}: there are pool cards`);
+      for (const card of state.cards) assert.deepEqual(card, { small: false, body: 'visible' }, `${where}: a pool card shows its band`);
+    };
+
+    banded(await at(1200, 1), 'near');
+
+    const small = await at(2800, 0);
+    assert.ok(small.titlePx < 6.3, `far: the title is too small to read (${small.titlePx.toFixed(1)} px)`);
+    assert.equal(small.band.blankPath, false);
+    assert.ok(small.band.slot >= 0 && small.band.opaque > 0, 'far: the tile is still a near tile with pixels');
+    assert.ok(small.band.dark < 5 && small.band.light < 5,
+      `far: the tile is the bare cover, no band (dark ${small.band.dark}, light ${small.band.light})`);
+    for (const card of small.cards) assert.deepEqual(card, { small: true, body: 'hidden' }, 'far: a pool card keeps its band for hover');
+
+    banded(await at(1200, 1), 'near again');
+  });
+}

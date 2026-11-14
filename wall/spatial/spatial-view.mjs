@@ -44,6 +44,17 @@ const FIND_WORK_TIMEOUT_MS = 15000;
 const NEAR_DISTANCE = 3200;
 /** The edge of a far-tier tile in its atlas (AtlasPair's `farPx`). */
 const FAR_TILE_PX = 64;
+// A card is authored at this size, with a 15 px title (spatial.css .sp-t).
+const CARD_W = 340, CARD_H = 255, CARD_TITLE_PX = 15;
+// Semantic zoom for the title band: a tile wears it only while that title
+// reaches this many CSS px on screen. Below it the band is a smear across the
+// picture, so the tile is the bare cover and the title waits for hover.
+const LABEL_MIN_TITLE_PX = 7;
+// A tile already labelled keeps its band down to this fraction of the
+// cutoff, so one sitting on the line does not flicker as the camera drifts.
+const LABEL_KEEP = 0.9;
+// Tiles redrawn per frame when they cross the cutoff. A capture is the cost.
+const RELABEL_PER_FRAME = 24;
 
 
 
@@ -269,9 +280,11 @@ export class SpatialView {
           for (const i of readable) this.field.atlases.request(i, 'near', now);
           if (this.cardHost && this.field.atlases.sourcePathBlank) this.host.classList.remove('sp-cards');
           this._reachOpenStack(h);
+          this._labelPass(h);
           const endPass = perf.begin('spatial/pass');
           this.field.update(this.camera, now);
           this.hybrid.update(this.camera);
+          this._labelPool();
           this.hybrid.sort(this.camera);
           this.videos?.update(this.camera);
           endPass();
@@ -379,14 +392,19 @@ export class SpatialView {
     const drawable = (window.__cwDrawable ?? drawableSupported()) && !this.host.hidden;
     // Sheet-covered cards whose cover is in and painted (_adoptCovered).
     this._cardCovered = new Set();
+    // Which items are big enough on screen to wear their title band
+    // (_labelPass), and the ones whose near tile is waiting to be redrawn.
+    this._labelled = new Uint8Array(Math.max(1, clips.length));
+    this._relabel = new Set();
+    this._stackLabelled = 0;
     if (drawable && clips.length) {
       // Covers a card will still receive after build() returns (_buildCard).
       this._cardWork = [];
       this.cardHost = new CardHost({
         container: this.host,
         count: clips.length,
-        width: 340,
-        height: 255,
+        width: CARD_W,
+        height: CARD_H,
         // NOT `sp-card`: that class is the DOM-overlay pool, and both the
         // tests and the CSS3D layer select on it. A drawable card is never an
         // overlay. It shares the visual rules via a grouped selector instead.
@@ -430,26 +448,15 @@ export class SpatialView {
       // of a collection's full-size level (~45 Mpx for the Psychodeli example,
       // over the decode budget, so pages evicted each other and tiles ran out
       // of retries), and the closest ones become DOM cards with the full cell.
-      // With a card host, a sheet-covered near tile is the bare cell only until
-      // its card has the cover (_adoptCovered); then it is drawn from the card
-      // like any other, title band included. The card decoded that cell when
-      // it was built, so this costs a capture and no further decode. The far
-      // tier stays the cell: at that size a band is noise, and the label goes.
+      // With a card host, a near tile big enough to read is drawn from its
+      // card, title band included; see _nearSource for the rest. The far tier
+      // stays the cell or the file: at that size the label goes.
       resolveSource: this.cardHost || spriteCovers.available
         ? (i, tier) => {
-          const sprite = spriteCovers.has(clips[i]);
-          if (this.cardHost && tier === 'near' && !this.host.hidden && (!sprite || this._cardCovered.has(i))) {
-            let shot;
-            this._capturing = true;
-            try { shot = this.cardHost?.capture(i) ?? null; }
-            finally { queueMicrotask(() => { this._capturing = false; }); }
-            // A sheet cover has no file for the image path: fall back to its cell.
-            if (shot || !sprite) return shot;
-          }
-          if (!sprite) return null;
+          if (tier === 'near') return this._nearSource(i);
           // No cell (its page failed): null takes the image path to the clip's file.
-          const need = tier === 'near' ? 160 : 64;
-          return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;
+          return spriteCovers.has(clips[i]) && spriteCovers.serves(clips[i], 64)
+            ? spriteCovers.source(clips[i], 64) ?? RETRY : null;
         }
         : null,
     });
@@ -526,6 +533,121 @@ export class SpatialView {
 
 
   /**
+   * What an item's near tile is drawn from: a source to draw now, RETRY, or
+   * null for the image path to the clip's file.
+   *
+   * With a card host, an item big enough to read (_labelPass) is its card,
+   * title band and all; a sheet-covered one only once the card has its cover
+   * (_adoptCovered), because a capture before then is a band under an empty
+   * hero. An item too small to read is the bare cover: the cell for a
+   * sheet-covered item, as without a card host, and otherwise the image the
+   * card already holds, which is decoded and needs no request.
+   *
+   * `_capturing` brackets our own drawElementImage calls: a capture repaints
+   * the card, and a repaint is indistinguishable from a find at the event
+   * level.
+   */
+  _nearSource(i) {
+    const clip = this.clips[i];
+    const sprite = spriteCovers.has(clip);
+    if (this.cardHost && !this.host.hidden) {
+      if (this._labelled[i] && (!sprite || this._cardCovered.has(i))) {
+        let shot;
+        this._capturing = true;
+        try { shot = this.cardHost.capture(i) ?? null; }
+        finally { queueMicrotask(() => { this._capturing = false; }); }
+        // A sheet cover has no file for the image path: fall back to its cell.
+        if (shot || !sprite) return shot;
+      } else if (!sprite) {
+        return this._cardImage(i);
+      }
+    }
+    if (!sprite) return null;
+    // The near tier asks for 160 px, not its 256 px slot (see resolveSource).
+    return spriteCovers.serves(clip, 160) ? spriteCovers.source(clip, 160) ?? RETRY : null;
+  }
+
+  /**
+   * The cover a card holds, if it can be drawn into the atlas: loaded, and
+   * same-origin, since anything else would taint the atlas canvas. Null sends
+   * the tile down the image path, which asks for the file with CORS.
+   */
+  _cardImage(i) {
+    const img = this.cardHost?.elementFor(i)?.querySelector('img.sp-thumb');
+    if (!img?.complete || !img.naturalWidth) return null;
+    const src = img.currentSrc || img.src;
+    if (/^(blob|data):/i.test(src)) return img;
+    try { return new URL(src, location.href).origin === location.origin ? img : null; }
+    catch { return null; }
+  }
+
+  /**
+   * Decide which items are big enough on screen to wear their title band, and
+   * redraw the near tiles that just crossed the line.
+   *
+   * The measure is the title's height in CSS px: the card is fitted to the
+   * tile, so the tighter of the tile's two axes sets it. An open stack gets
+   * ONE answer, from its median member: its rows differ in height by a few
+   * pixels, and deciding tile by tile labelled some rows and not others.
+   * Elsewhere each item answers for itself, so the near ones are labelled and
+   * the ones behind them are not.
+   */
+  _labelPass(paneHeight) {
+    const f = this.field;
+    const n = Math.min(f.count, this.clips.length, this._labelled.length);
+    const cam = this.camera, eye = cam.position;
+    const focal = paneHeight / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)));
+    const look = cam.getWorldDirection(this._lookDir ??= new THREE.Vector3());
+    const at = this._tileAt ??= new THREE.Vector3();
+    const titlePx = (i) => {
+      f.worldCentre(i, at);
+      const depth = (at.x - eye.x) * look.x + (at.y - eye.y) * look.y + (at.z - eye.z) * look.z;
+      if (!(depth > 0)) return 0;
+      return CARD_TITLE_PX * Math.min(f.sizes[i * 2] / CARD_W, f.sizes[i * 2 + 1] / CARD_H) * focal / depth;
+    };
+    const decide = (was, px) => (px >= LABEL_MIN_TITLE_PX * (was ? LABEL_KEEP : 1) ? 1 : 0);
+    const set = (i, on) => {
+      if (this._labelled[i] === on) return;
+      this._labelled[i] = on;
+      this._relabel.add(i);
+    };
+
+    const open = this.mode === 'piles' && this.piles.spreadPile >= 0 && this._spreadMembers;
+    if (open) {
+      const px = [];
+      for (const i of open) if (i < n) px.push(titlePx(i));
+      px.sort((a, b) => a - b);
+      const on = decide(this._stackLabelled, px[px.length >> 1] ?? 0);
+      this._stackLabelled = on;
+      for (const i of open) if (i < n) set(i, on);
+    } else {
+      this._stackLabelled = 0;
+      for (let i = 0; i < n; i++) if (f.isActive(i)) set(i, decide(this._labelled[i], titlePx(i)));
+    }
+
+    if (!this.cardHost) { this._relabel.clear(); return; }
+    // In place, so a tile never shows an empty slot between its two pictures.
+    const tiles = f.atlases;
+    let left = RELABEL_PER_FRAME;
+    for (const i of this._relabel) {
+      if (left <= 0) break;
+      this._relabel.delete(i);
+      const slot = tiles.nearSlot[i];
+      if (slot < 0) continue;                 // drawn in its new state when it is asked for
+      left--;
+      const source = this._nearSource(i);
+      if (source && source !== RETRY && tiles.near.draw(slot, source)) tiles.onTileReady?.(i, 'near');
+      else tiles.releaseNear(i);              // the queue draws it, by whatever path is left
+    }
+    if (this._relabel.size) this._dirty = true;
+  }
+
+  /** The pool's cards follow the same answer as the tiles around them. */
+  _labelPool() {
+    for (const [i, entry] of this.hybrid.live) entry.el?.classList.toggle('sp-small', !this._labelled[i]);
+  }
+
+  /**
    * Switch a sheet-covered item's near tile from the bare cell to its card,
    * the first time the card is painted with its cover in.
    *
@@ -542,8 +664,7 @@ export class SpatialView {
       if (!img?.complete || !img.naturalWidth) continue;
       this._cardCovered.add(i);
       // Redraw a tile already holding the cell; one not near yet asks later.
-      if (tiles.nearSlot[i] >= 0) { tiles.releaseNear(i); tiles.request(i, 'near'); }
-      this._dirty = true;
+      if (this._labelled[i] && tiles.nearSlot[i] >= 0) { this._relabel.add(i); this._dirty = true; }
     }
   }
 
