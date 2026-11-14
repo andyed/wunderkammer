@@ -53,6 +53,13 @@ and ignores the other two.
     so loops run at their true speed however long a frame takes to shoot.
     `--videos` sets how many play at once (64 by default); `--no-caption`
     leaves out the show's caption, for a plate that gets its words in an edit.
+- **Drawable cards are on in Chrome 157.** Chrome 157 ships HTML-in-canvas
+  without a flag, so the spatial view there draws its near tiles from live
+  cards. The wall's code did not change. `tests/spatial-drawable.test.mjs`
+  passes 8 of 8 on stable 157 and on Canary 160, and the README no longer
+  lists it as failing. The hit-testing probe that held back retiring the DOM
+  card pool passes on both builds when the card host sits above the WebGL
+  canvas: [HTML_IN_CANVAS_RESULTS.md](docs/HTML_IN_CANVAS_RESULTS.md#7-p08-re-run-2026-11-13).
 
 ## 0.3.0 — 2026-10-20
 
