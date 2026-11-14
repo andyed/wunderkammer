@@ -270,6 +270,9 @@ items; that is a format limit, not a recommendation. The measurements are in
 
 ## Design
 
+- [Live HTML design workbench specification](docs/LIVE_HTML_WORKBENCH.md): local
+  interactive variants, revision-bound feedback, Muriel and Scrutinizer integration.
+
 - [Philosophy](docs/PHILOSOPHY.md): useful motion, trustworthy context.
 - [Product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md),
   [precedents](docs/PRECEDENTS.md).

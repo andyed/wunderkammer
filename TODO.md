@@ -1,5 +1,10 @@
 # TODO
 
+- **Live HTML design workbench (specified; not implemented).** Start with the
+  two-application capability spike in [the spec](docs/LIVE_HTML_WORKBENCH.md),
+  then local side-by-side previews and revision-bound agent feedback.
+  Keep this separate from the spatial HTML-in-Canvas Phase 3 renderer work.
+
 - **Showcase: the collection flows through the visible slots (backlog).**
   Parked by Andy, 2026-10-18, when its ▶ button left the header: "nice idea,
   can go in backlog".
