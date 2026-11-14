@@ -368,6 +368,83 @@ test('spatial stack opens to readable items, zoom and drag are deliberate, and r
   assert.ok(await coverage(page) > 0.36);
 });
 
+/** Pixels in the pane showing a fixture cover colour other than `own` (group g is alpha, beta or gamma by g % 3). */
+async function otherColourPixels(page, own = null) {
+  const png = await page.locator('#host').screenshot();
+  return page.evaluate(async ([data, skip]) => {
+    const img = new Image(); img.src = `data:image/png;base64,${data}`; await img.decode();
+    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    const is = {
+      alpha: (r, g, b) => r > 180 && g < 90 && b < 90,      // #ed2525
+      beta: (r, g, b) => g > 150 && r < 100 && b < 120,     // #20e040
+      gamma: (r, g, b) => b > 180 && r < 90 && g < 130,     // #2449ef
+    };
+    const others = Object.keys(is).filter(name => name !== skip).map(name => is[name]);
+    let count = 0;
+    for (let i = 0; i < d.length; i += 4) if (others.some(test => test(d[i], d[i + 1], d[i + 2]))) count++;
+    return count;
+  }, [png.toString('base64'), own]);
+}
+
+test('an open stack hides the other stacks, and closing it brings back exactly the scope', async t => {
+  const page = await fixture(t);
+  await survey(page);
+  // Open whichever stack the keyboard lands on.
+  await page.locator('#sp-css3d').focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => view.piles.spreadPile >= 0 && view.field.moving === 0 && !view._cameraMotion);
+  await page.waitForTimeout(300);
+  const open = await page.evaluate(() => {
+    const members = new Set(view.piles.piles[view.piles.spreadPile].indices);
+    let drawnOutside = 0, drawnInside = 0;
+    for (let i = 0; i < view.field.count; i++) {
+      if (!view.field.isActive(i)) continue;
+      if (members.has(i)) drawnInside++; else drawnOutside++;
+    }
+    // What a click would reach, on an 8 px grid across the pane.
+    const r = view.host.getBoundingClientRect();
+    let strays = 0;
+    for (let y = 4; y < r.height; y += 8) for (let x = 4; x < r.width; x += 8) {
+      const hit = view.field.pickAt(x / r.width * 2 - 1, -(y / r.height) * 2 + 1, view.camera);
+      if (hit >= 0 && !members.has(hit)) strays++;
+    }
+    return { spread: view.piles.spreadPile, members: members.size, drawnInside, drawnOutside, strays };
+  });
+  const own = ['alpha', 'beta', 'gamma'][open.spread % 3];
+  assert.equal(open.drawnInside, open.members, 'every member of the open stack is drawn');
+  assert.equal(open.drawnOutside, 0, 'no tile of another stack is drawn');
+  assert.equal(open.strays, 0, 'and none can be clicked through a gap');
+  assert.equal(await otherColourPixels(page, own), 0, 'no pixel of a differently coloured stack shows in the pane');
+
+  // A scope change while the stack is open still applies, and survives closing it.
+  const kept = await page.evaluate(() => {
+    const all = view.clips.map((_, i) => i);
+    const members = view.piles.piles[view.piles.spreadPile].indices;
+    const other = view.piles.piles[(view.piles.spreadPile + 1) % view.piles.piles.length].indices[0];
+    const dropped = new Set([members[1], members[2], other]);
+    view._setMembership(all.filter(i => !dropped.has(i)));
+    return { total: all.length, dropped: [...dropped],
+      droppedDrawn: [...dropped].filter(i => view.field.isActive(i)).length,
+      membersDrawn: members.filter(i => view.field.isActive(i)).length, members: members.length };
+  });
+  assert.equal(kept.droppedDrawn, 0, 'an item taken out of scope is hidden even in the open stack');
+  assert.equal(kept.membersDrawn, kept.members - 2, 'the rest of the open stack stays');
+
+  await page.locator('.sp-back').click();
+  await page.waitForFunction(() => view.piles.spreadPile < 0 && !view._cameraMotion && view.field.moving === 0);
+  await page.waitForTimeout(300);
+  const closed = await page.evaluate(dropped => {
+    let drawn = 0;
+    for (let i = 0; i < view.field.count; i++) if (view.field.isActive(i)) drawn++;
+    return { drawn, droppedDrawn: dropped.filter(i => view.field.isActive(i)).length };
+  }, kept.dropped);
+  assert.equal(closed.drawn, kept.total - 3, 'closing the stack brings back everything in scope');
+  assert.equal(closed.droppedDrawn, 0, 'and nothing that was taken out of it');
+  assert.ok(await otherColourPixels(page, own) > 1000, 'the other stacks are back on screen');
+});
+
 test('touch opens a stack and DOM promotion preserves the image rectangle', async t => {
   const page = await browser.newPage({ viewport: { width: 1000, height: 850 }, hasTouch: true });
   const errors = []; page.on('pageerror', e => errors.push(e.message));

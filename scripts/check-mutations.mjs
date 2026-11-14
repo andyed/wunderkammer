@@ -116,6 +116,22 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'spatial overview fills the pane',
   },
   {
+    name: 'an open stack leaves the other stacks drawn under it', file: 'wall/spatial/spatial-view.mjs',
+    from: '    this._spreadMembers = new Set(pile.indices);\n    this._applyVisibility();',
+    to: '    this._spreadMembers = new Set(pile.indices);',
+    test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
+  },
+  {
+    name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
+    from: 'if (wasOpen) this._applyVisibility();', to: '',
+    test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
+  },
+  {
+    name: 'an open stack shows items that are out of scope', file: 'wall/spatial/spatial-view.mjs',
+    from: '(!scope || scope.has(i)) && (!open || open.has(i))', to: 'open ? open.has(i) : (!scope || scope.has(i))',
+    test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
+  },
+  {
     name: 'fixed-width overview collapse', file: 'wall/wall.mjs',
     // Anchored on the main layout call: the same option now also appears earlier,
     // in the background plane's layout, which this test does not measure.

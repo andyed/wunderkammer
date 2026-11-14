@@ -68,6 +68,13 @@ and ignores the other two.
   have landed and the cards have gone 400 ms without a repaint. Two tests in
   `tests/spatial-drawable.test.mjs` cover it; each fails with its half of the
   change removed.
+- **An open stack hides the other stacks.** A stack opens on a plane in front
+  of the rest, and the rest used to stay drawn underneath: they showed through
+  the gaps between the open stack's tiles, and a click on one of those slivers
+  closed the stack being read and opened another. They are now hidden while a
+  stack is open, as their labels already were, and return when it closes. A
+  scope change made in between still applies. Three mutations
+  (`scripts/check-mutations.mjs`), each caught.
 
 ## 0.3.0 — 2026-10-20
 

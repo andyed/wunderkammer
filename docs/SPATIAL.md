@@ -31,7 +31,9 @@ including stack depth, rather than a fixed camera position. Saved stack anchors
 are retained; automatic repacking applies to newly generated arrangements.
 
 Click or press Enter on a stack to spread its members into a fitted, justified
-composition. Activate an exposed item to open its detail panel. **All stacks**
+composition. While a stack is open the other stacks are not drawn, so
+nothing shows through the gaps of the open one or takes a click there; they
+return in place when it closes. Activate an exposed item to open its detail panel. **All stacks**
 or Escape returns to the stacks; Escape first closes an open detail panel.
 Scroll/drag pans, Command/Ctrl-scroll (trackpad pinch) zooms, and the shared
 +/−/Fit controls operate on the active view. A fitted overview adapts to window

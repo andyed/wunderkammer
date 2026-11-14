@@ -756,11 +756,31 @@ export class SpatialView {
     this._show();
   }
 
+  /**
+   * Draw what is in scope and, while a stack is open, only that stack.
+   *
+   * An open stack is laid out on its own plane in front of the others, which
+   * stay where they stand. Left drawn, they show through every gap in the open
+   * tray and take the clicks that land there, which closes the stack being
+   * read. Their labels are already hidden while one is open (_labels); this
+   * hides the tiles the same way a scope change does, so they keep their
+   * placement and their atlas slots and return as they were.
+   */
+  _applyVisibility() {
+    const scope = this._inScope;
+    const open = this.mode === 'piles' && this.piles?.spreadPile >= 0 ? this._spreadMembers : null;
+    for (let i = 0; i < this.field.count && i < this.clips.length; i++) {
+      this.field.setActive(i, (!scope || scope.has(i)) && (!open || open.has(i)));
+    }
+    this._dirty = true;
+  }
+
   /** Which corpus indices are in scope. Everything else is hidden in place. */
   _setMembership(indices) {
     this.active = indices;
     const inScope = new Set(indices);
-    for (let i = 0; i < this.field.count && i < this.clips.length; i++) this.field.setActive(i, inScope.has(i));
+    this._inScope = inScope;
+    this._applyVisibility();
     if (this.nav && this.nav.selection >= 0 && !inScope.has(this.nav.selection)) {
       // A filtered-out selection is no selection.
       this.hybrid.setFocus(-1);
@@ -840,6 +860,7 @@ export class SpatialView {
     });
     if (!animate || this._reducedMotion()) for (const i of pile.indices) this.field.settle(i);
     this._spreadMembers = new Set(pile.indices);
+    this._applyVisibility();
     this._spreadExtent = { x: pile.u, top: pile.v + result.height / 2 };
     // A shallow, non-interactive rim keeps the open tray legible as a place.
     // It never takes a card's hit target or changes collection membership.
@@ -885,7 +906,9 @@ export class SpatialView {
     const affected = [...pile.indices, ...owners.flatMap(({ p }) => p.exclusive || p.indices)];
     const starts = animate && !this._reducedMotion() ? new Map([...new Set(affected)].map(i => [i, this._placement(i)])) : null;
     if (pile?.exclusive) pile.indices = pile.exclusive; // give shared members back to their own piles
+    const wasOpen = this.piles.spreadPile === index;
     this.piles.collapse(index, true);
+    if (wasOpen) this._applyVisibility();   // the other stacks come back as this one closes
     // Shared members the spread borrowed were moved; their owning piles re-place them.
     for (const { i } of owners) this._collapsePile(i);
     // A stack has a stable cover footprint. Contain banners/portraits within
