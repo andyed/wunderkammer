@@ -161,6 +161,11 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack answers once for its labels',
   },
   {
+    name: 'proxy hands the wall an SVG that taints its tile atlas', file: 'lib/proxy-image.mjs',
+    from: "return 'SVG with foreignObject taints a canvas';", to: 'return null;',
+    test: 'tests/proxy-image.test.mjs', pattern: 'an SVG with a foreignObject is refused',
+  },
+  {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
     from: 'if (wasOpen) this._applyVisibility();', to: '',
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
