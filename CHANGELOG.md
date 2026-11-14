@@ -85,6 +85,14 @@ and ignores the other two.
   drawn from the card too, so a sheet-covered collection is labelled the same
   way. Far tiles stay the bare cell: at that size the label goes. Two
   mutations (`scripts/check-mutations.mjs`), each caught.
+- **Labels follow size.** A tile wears its title band only while the title
+  reaches 7 CSS px on screen; below that the band was a smear across the
+  picture, and the tile is now the bare cover with the title on hover. The
+  pool's cards follow the same rule, and tiles that cross the line are
+  redrawn in place. An open stack answers once, from its median member, so
+  rows a few pixels apart in height never disagree. Chrome 157 and later;
+  elsewhere titles were already on hover only. Four mutations
+  (`MUTATION_FILTER='label cutoff'`), each caught.
 - **A big stack stays sharp when it opens from far back.** A tile got its
   256 px near slot only within a fixed distance of the camera. A large stack
   fitted into a small pane sits beyond it, and its tiles were 64 px far tiles

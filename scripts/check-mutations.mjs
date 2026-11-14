@@ -137,6 +137,29 @@ const cases = [
     to: "      this._cardCovered.add(i);",
     test: 'tests/spatial-drawable.test.mjs', pattern: 'a sheet-covered near tile is drawn from its card',
   },
+  // Semantic zoom for title bands (SpatialView._labelPass): MUTATION_FILTER='label cutoff'
+  {
+    name: 'label cutoff: a title too small to read keeps its band', file: 'wall/spatial/spatial-view.mjs',
+    from: "const decide = (was, px) => (px >= LABEL_MIN_TITLE_PX * (was ? LABEL_KEEP : 1) ? 1 : 0);",
+    to: 'const decide = () => 1;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a tile too small to read its title',
+  },
+  {
+    name: 'label cutoff: a tile that crossed the label cutoff is not redrawn', file: 'wall/spatial/spatial-view.mjs',
+    from: "      this._labelled[i] = on;\n      this._relabel.add(i);", to: '      this._labelled[i] = on;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a tile too small to read its title',
+  },
+  {
+    name: 'label cutoff: a pool card keeps its band when the tiles around it drop theirs', file: 'wall/spatial/spatial-view.mjs',
+    from: "entry.el?.classList.toggle('sp-small', !this._labelled[i])", to: "entry.el?.classList.toggle('sp-small', false)",
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a tile too small to read its title',
+  },
+  {
+    name: 'label cutoff: an open stack labels its larger rows and not the rest', file: 'wall/spatial/spatial-view.mjs',
+    from: '      for (const i of open) if (i < n) set(i, on);',
+    to: '      for (const i of open) if (i < n) set(i, decide(this._labelled[i], titlePx(i)));',
+    test: 'tests/spatial-view.test.mjs', pattern: 'an open stack answers once for its labels',
+  },
   {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
     from: 'if (wasOpen) this._applyVisibility();', to: '',

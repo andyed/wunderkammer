@@ -133,6 +133,10 @@ canvas.card-host {
  * disclosure, on hover or selection, which keeps the band the height of a
  * tile's. Same #0d1017 ground and 15.19:1 / 8.54:1 inks as above. A
  * sheet-covered item's near tile is drawn from its card as well, once the
- * cover is in (SpatialView._adoptCovered). */
-.sp-host.sp-cards .sp-card .sp-body { visibility: visible; }
-.sp-host.sp-cards .sp-card:not(:hover):not([aria-selected="true"]) .sp-edit { display: none; }
+ * cover is in (SpatialView._adoptCovered).
+ *
+ * Not while the card is too small on screen to read its title (.sp-small,
+ * SpatialView._labelPass): the tiles around it drop the band at that size,
+ * and the card goes back to showing it on hover or selection. */
+.sp-host.sp-cards .sp-card:not(.sp-small) .sp-body { visibility: visible; }
+.sp-host.sp-cards .sp-card:not(.sp-small):not(:hover):not([aria-selected="true"]) .sp-edit { display: none; }
