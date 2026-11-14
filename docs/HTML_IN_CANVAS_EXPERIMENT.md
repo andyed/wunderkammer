@@ -6,7 +6,11 @@ be wrong. The amendments are inline below, each marked
 **[amended after Phase 0]**; the evidence is in
 [HTML_IN_CANVAS_RESULTS.md](HTML_IN_CANVAS_RESULTS.md) and, with the
 measurement tables, in `muriel/render_assets/html-in-canvas-probe/RESULTS.md`.
-Status: **Phase 0 done, Phase 1 in progress.** This is a bounded experiment,
+**Amended 2026-11-13** after P0.8 was run again on Chrome 157 and 160, where it
+passes; those amendments are marked **[amended 2026-11-13]** and the evidence
+is [section 7 of the results](HTML_IN_CANVAS_RESULTS.md#7-p08-re-run-2026-11-13).
+Status: **Phases 0, 1 and 2 done. Phase 3 is unblocked at the API and has no
+spec yet.** This is a bounded experiment,
 not a release feature. It is written for an agent that has not seen either
 repo; every path is absolute and every gate has a pass/fail you can record.
 
@@ -71,6 +75,12 @@ Other standing rules, from `wunderkammer/docs/SPATIAL.md` § Invariants and
   `layoutSubtree`, `requestPaint`, `onpaint`, `updateElementGeometry`,
   `clearElementGeometry`, `onelementgeometryupdate`, `getElementTransform`,
   `captureElementImage`. The paint event's element list is **`e.changedElements`**.
+- **[amended 2026-11-13]** Chrome stable **157.0.8103.52** ships the API with
+  no flag: `drawElementImage`, `requestPaint`, `updateElementGeometry`,
+  `getElementTransform` and `GPUQueue.drawElementImageToTexture` are all
+  present. `layoutSubtree` is not; `content="drawable"` is the only opt-in.
+  `WebGL2RenderingContext` has no `texElementImage2D`. The drawable-card path
+  is therefore on for anyone opening the spatial view in Chrome 157 or later.
 - Wunderkammer instances (`wunderkammer/docs/HANDOFF.md`): research wall on 4173,
   **Psychodeli Atlas on 4174** (`.local/psychodeli-atlas/wunderkammer.config.json`,
   406 same-origin images; use this one), Music Atlas on 4175. Check listeners
@@ -156,6 +166,12 @@ From the explainer, unverified until Phase 0:
    wrong: clipping to the destination made the measured bounding box exactly
    right while the content inside stayed a magnified crop. The probe was
    measuring its own clip.
+
+   **[amended 2026-11-13]** This held on Chrome 152 and 155. On 157 and 160,
+   `ctx.setTransform(m)` followed by `ctx.drawElementImage(el, 0, 0)` draws the
+   whole element under `m`: a 340 × 255 px card at half size measured
+   170 × 128 px at the offset asked for. Capture-then-blit still works and the
+   shipped path is unchanged.
 4. Painting is **main-thread and JavaScript-driven.** The `paint` event fires
    after intersection-observer steps with the list of changed drawables;
    `requestPaint()` asks for one. Nothing repaints on its own. This is fine for
@@ -172,6 +188,16 @@ From the explainer, unverified until Phase 0:
    a real click at the host's screen rect reached neither the card nor the
    canvas. `getElementTransform(card)` throws `Overload resolution failed`, so
    at least one signature here is not the obvious one. Phase 3 stays blocked.
+
+   **[amended 2026-11-13 — RESOLVED on Chrome 157 and 160.]** A real click
+   reaches the card when the host is above the WebGL canvas, including at
+   `opacity: 0.01` with the host `pointer-events: none` and the card
+   `pointer-events: auto`, where a miss falls through to the canvas beneath.
+   Beneath the canvas, where `.card-host` sits today, nothing reaches it. On a
+   2D host a draw moves the hit area to the drawn rect by itself;
+   `canvas.updateElementGeometry(el, { canvasTransform })` moves it without a
+   draw; the last of the two wins. `getElementTransform(el, m)` ignores `m` on
+   a 2D host and returns the last draw's matrix.
 
 ## Architecture of the experiment
 
@@ -216,7 +242,8 @@ exactly `[317]`.
 
 - The 14-card `HybridField` pool, promotion, demotion, `aria-activedescendant`,
   and `field.pickAt()` raycast hit testing. Phase 2 does not retire them.
-  Retiring the pool is Phase 3 and is gated on P0.8.
+  Retiring the pool is Phase 3 and is gated on P0.8, which passed on re-run
+  (2026-11-13).
 - `TileAtlas.draw()`, `AtlasPair.request()`, the queues, LRU eviction, the
   far-tier 4096-slot cap, `flush()`.
 - Everything in `wall/wall.mjs`.
@@ -225,7 +252,8 @@ exactly `[317]`.
 
 Probe lives at `muriel/render_assets/html-in-canvas-probe/` (branch
 `feat/html-in-canvas-probe`), results in its `RESULTS.md` / `RESULTS.json`.
-P0.1–P0.7 PASS; P0.8 FAIL, which blocks Phase 3 only. The original instructions
+P0.1–P0.7 PASS; P0.8 FAIL on Chrome 152 and 155, PASS on 157 and 160 when run
+again on 2026-11-13. The original instructions
 are kept below for provenance.
 
 
@@ -344,6 +372,9 @@ export class CardHost {
 
 Placement CSS (put in `spatial.css`, class `card-host`) is whichever P0.5
 placement passed. Include `pointer-events: none` unless P0.8 passed.
+**[amended 2026-11-13]** P0.8 has passed, but only for a host above the WebGL
+canvas. The shipped `.card-host` sits beneath it and keeps
+`pointer-events: none` until Phase 3 moves it.
 
 ### Tests (muriel)
 
@@ -435,6 +466,22 @@ hit-test geometry for near-tier cards each frame and moving focus to the
 persistent cards. This dissolves the P1 gates "accessible focus under DOM-pool
 pressure" and "Tab exit" in `HYBRID_HARDENING.md`. Write a separate spec
 first; it touches `navigate.js` and every consumer of `elementFor()`.
+
+**[amended 2026-11-13]** P0.8 passed on re-run, so the gate above is met. The
+Phase 3 spec starts from these measured rules:
+
+- The card host goes above the WebGL canvas, the size of the view, at
+  `opacity: 0.01`, with the host `pointer-events: none` and only reachable
+  cards `pointer-events: auto`.
+- Write each near card's rect with
+  `canvas.updateElementGeometry(card, { canvasTransform })` after that frame's
+  capture draws. A draw resets the hit area to where it drew.
+- Do not set a CSS transform from `getElementTransform` on a 2D host.
+
+And from these gaps, none of them tested: whether the stacked host keeps its
+paint records at view size, the per-frame cost at about 256 near cards, a
+tilted tile's 3D transform, Tab order, hover, text selection, and any headed
+run.
 
 ## What this experiment does not do
 

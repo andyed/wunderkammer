@@ -312,9 +312,10 @@ node scripts/check-public.mjs     # the public-tree gate
 npm run test:mutations            # proves selected checks fail when their protection is removed
 ```
 
-One browser test, Canary A2 in `tests/spatial-drawable.test.mjs`, fails. It
-covers an experimental HTML-in-canvas path behind a flag. CI runs the gate
-until it is fixed.
+`tests/spatial-drawable.test.mjs` covers the HTML-in-canvas path, where the
+spatial view draws its near tiles from live cards. It needs a Chrome that has
+the API, which stable has from 157. It looks for Chrome Canary, or the binary
+named by `CHROME_CANARY`, and skips when there is none. CI runs the gate.
 
 ## License
 
