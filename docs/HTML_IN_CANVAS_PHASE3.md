@@ -160,6 +160,22 @@ the controls reached three live cards; a pan at Fit did not move the camera.
 The live pass took 0.2 to 0.5 ms of script for 30 to 64 cards. Its find
 handler has not been run against Chrome's real find bar.
 
+### M9. Repaints that are not finds
+
+A `paint` event that names some cards and not all of them is the only signal a
+find match gives. Three other things were seen to produce the same event:
+
+- **A cover that lands late.** A sprite-sheet cell reaches its `<img>` after
+  its page decodes, long after the card was built. Loading the Psychodeli
+  example's Stacks view produced 6 to 9 partial repaints in the first 2.4 s.
+  With find armed straight after `CardHost.settled()`, 3 of 3 loads ended with
+  an item selected and the camera moved. `SpatialView._armFind` now waits for
+  those covers and for 400 ms without a repaint: 0 of 3.
+- **Hover, focus and selection** on a card that takes pointer events (M5).
+- **A screenshot.** Playwright's `page.screenshot()` repainted a subset of the
+  cards (316 of 406 in one run) and the handler read it as a find. A probe on
+  the card path must not take a screenshot until its measurement is done.
+
 ## Not measured
 
 Each of these is a gate in Phase 3.0. None may be assumed.
@@ -292,6 +308,8 @@ Today a `paint` event that names some cards, and not all of them, is a find.
 With live cards the browser also repaints a card for hover, focus and
 selection, and possibly for our own writes. The rule becomes:
 
+- Arm only as `_armFind` does today: after the covers a card receives late
+  have landed, and after 400 ms without a repaint (M9).
 - Keep the frame number of the last write to each card.
 - A `paint` set is a find only if it holds a card that is neither live nor
   written in the last 3 frames, and it is not the whole corpus.

@@ -60,6 +60,14 @@ and ignores the other two.
   lists it as failing. The hit-testing probe that held back retiring the DOM
   card pool passes on both builds when the card host sits above the WebGL
   canvas: [HTML_IN_CANVAS_RESULTS.md](docs/HTML_IN_CANVAS_RESULTS.md#7-p08-re-run-2026-11-13).
+- **The Stacks view no longer moves by itself as covers arrive.** In Chrome
+  157 and later, a collection whose covers are sprite-sheet cells selected an
+  item and moved the camera while loading, with nobody at the keyboard: each
+  arriving page repainted some cards, and a partial repaint is how a
+  find-in-page match is recognised. Find is now armed only after those covers
+  have landed and the cards have gone 400 ms without a repaint. Two tests in
+  `tests/spatial-drawable.test.mjs` cover it; each fails with its half of the
+  change removed.
 
 ## 0.3.0 — 2026-10-20
 
