@@ -178,6 +178,11 @@ and is ignored, which covers both the bar opening and our own capture pass;
 handler stays disarmed until `CardHost.settled()` because a hero `<img>`
 landing repaints its card indistinguishably.
 
+(2026-11-13: `settled()` only sees an `<img>` that is already loading. A cover
+shipped as a sprite-sheet cell gets its `src` later, so the handler armed
+early and each arriving page read as a find. `SpatialView._armFind` now also
+waits for those covers and for 400 ms without a repaint.)
+
 ### Tests
 
 | | |

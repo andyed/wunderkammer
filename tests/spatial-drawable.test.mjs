@@ -13,6 +13,23 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { access } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { crc32, deflateSync } from 'node:zlib';
+
+/** A flat-colour PNG, for a sprite-sheet page the fixture server can hold back. */
+function png(width, height, [r, g, b]) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0); body.copy(out, 4); out.writeUInt32BE(crc32(body), body.length + 4);
+    return out;
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(width, 0); head.writeUInt32BE(height, 4); head.set([8, 2, 0, 0, 0], 8);   // 8-bit RGB
+  const row = Buffer.alloc(1 + width * 3);
+  for (let x = 0; x < width; x++) row.set([r, g, b], 1 + x * 3);
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head),
+    chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))), chunk('IEND', Buffer.alloc(0))]);
+}
 
 const root = new URL('../', import.meta.url);
 const colors = { alpha: '#ed2525', beta: '#20e040', gamma: '#2449ef', delta: '#ecd322' };
@@ -30,6 +47,13 @@ before(async () => {
     if (image) {
       res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${colors[image[1]]}"/></svg>`);
+      return;
+    }
+    const sheet = path.match(/^\/fixtures\/sheet-(a|b)\.png$/);
+    if (sheet) {
+      const delay = Number(new URL(req.url, 'http://fixture.test').searchParams.get('delay')) || 0;
+      const body = sheet[1] === 'a' ? png(256, 192, [237, 37, 37]) : png(512, 192, [32, 224, 64]);
+      setTimeout(() => { res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(body); }, delay);
       return;
     }
     if (!/^\/(wall\/|tests\/fixtures\/)/.test(path)) { res.writeHead(404); res.end(); return; }
@@ -59,12 +83,12 @@ after(async () => {
   await new Promise((resolve) => server?.close(resolve));
 });
 
-async function fixture(t) {
+async function fixture(t, query = 'initial=full') {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   t.after(async () => { await page.close(); assert.deepEqual(errors, [], 'no page errors'); });
-  await page.goto(`${origin}/tests/fixtures/spatial-view.html?initial=full`);
+  await page.goto(`${origin}/tests/fixtures/spatial-view.html?${query}`);
   await page.waitForFunction(() => window.fixtureReady);
   const supported = await page.evaluate(() =>
     typeof CanvasRenderingContext2D.prototype.drawElementImage === 'function');
@@ -297,4 +321,72 @@ test('A7 — the resource cost of one card per clip is recorded', async (t) => {
   assert.ok(cost.drawables === 3 && cost.domNodes > 0);
   console.log('[A7] drawable cards %d, DOM nodes %d, JS heap %s MB',
     cost.drawables, cost.domNodes, cost.heapMB ?? 'n/a');
+});
+
+test('A8 — covers that land after the cards are built are not read as a find', async (t) => {
+  if (gate(t)) return;
+  const page = await fixture(t, 'initial=full&covers=sheets');
+  // Record every paint set from before the first page arrives (900 ms).
+  const before = await page.evaluate(() => {
+    window.paintSets = [];
+    view.cardHost.onPaint((indices) => window.paintSets.push(indices.slice()));
+    return { basePos: view.basePos.toArray(), covered: document.querySelectorAll('.sp-dcard img[src]').length };
+  });
+  assert.equal(before.covered, 0, 'no card has its cover yet: the pages are still held');
+
+  // Nobody touches the page while both pages arrive, at 900 and 1800 ms.
+  await page.waitForFunction(() => document.querySelectorAll('.sp-dcard img[src^="blob:"]').length === 3, null, { timeout: 8000 });
+  await page.waitForTimeout(600);
+  const after = await page.evaluate(() => ({
+    paintSets: window.paintSets, clips: view.clips.length,
+    lastFind: view._lastFind, lastFindKey: view._lastFindKey,
+    selection: view.nav?.selection, basePos: view.basePos.toArray(),
+  }));
+
+  // The control that gives the rest its meaning: the covers did repaint some
+  // cards and not all of them, which is the shape a find match has.
+  assert.ok(after.paintSets.some((set) => set.length > 0 && set.length < after.clips),
+    `a cover arrival repainted a partial set of cards; saw ${JSON.stringify(after.paintSets)}`);
+  assert.equal(after.lastFind, -1, 'no find was recorded');
+  assert.equal(after.lastFindKey, '');
+  assert.equal(after.selection, -1, 'nothing was selected');
+  assert.deepEqual(after.basePos, before.basePos, 'the camera did not move');
+
+  // And find still works once the cards have settled.
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 8000 });
+  await page.evaluate(() => {
+    const host = document.querySelector('canvas.card-host');
+    const ev = new Event('paint');
+    Object.defineProperty(ev, 'changedElements', { value: [host.querySelectorAll('[drawable]')[1]] });
+    host.dispatchEvent(ev);
+  });
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => view._lastFind), 1, 'a find after settling selects its match');
+});
+
+test('A9 — find stays off while the cards are still repainting, and arms once they stop', async (t) => {
+  if (gate(t)) return;
+  const page = await fixture(t);
+  // A repaint nobody listed: restyle one card every 150 ms, from the moment
+  // the fixture is up. The browser reports each one as a paint naming that
+  // card alone, which is exactly what a one-card find match looks like.
+  await page.evaluate(() => {
+    window.paintSets = [];
+    view.cardHost.onPaint((indices) => window.paintSets.push(indices.slice()));
+    const card = document.querySelectorAll('.sp-dcard')[1];
+    let on = false;
+    window.restyle = setInterval(() => { on = !on; card.style.outline = on ? '2px solid #ffd166' : ''; }, 150);
+  });
+  await page.waitForTimeout(2000);
+  const during = await page.evaluate(() => ({
+    armed: view._findArmed, lastFind: view._lastFind, selection: view.nav?.selection,
+    partial: window.paintSets.filter((set) => set.length === 1 && set[0] === 1).length,
+  }));
+  assert.ok(during.partial >= 3, `the restyle repainted card 1 by itself; saw ${during.partial} such paints`);
+  assert.equal(during.armed, false, 'find is not armed while cards keep repainting');
+  assert.equal(during.lastFind, -1, 'and no repaint was recorded as a find');
+  assert.equal(during.selection, -1);
+
+  await page.evaluate(() => clearInterval(window.restyle));
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 4000 });
 });

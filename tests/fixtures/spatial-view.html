@@ -24,6 +24,7 @@
 </script>
 <script type="module">
   import { SpatialView } from '/wall/spatial/spatial-view.mjs';
+  import { spriteCovers } from '/wall/sprite-covers.mjs';
   const clips = ['Alpha', 'Beta', 'Gamma'].map((title, i) => ({
     id: String(i), title, url: `https://example.test/${title.toLowerCase()}`,
     cover: `/fixtures/${title.toLowerCase()}.svg`, source: 'Fixture',
@@ -71,7 +72,21 @@
     view.clips[0].cover = '/fixtures/beta.svg';
     show(view.clips);
   };
-  const initial = new URLSearchParams(location.search).get('initial');
+  const params = new URLSearchParams(location.search);
+  const initial = params.get('initial');
+  if (params.get('covers') === 'sheets') {
+    // Covers shipped as sprite-sheet cells, with no file of their own. The
+    // server holds each page back, so a card's <img> gets its src long after
+    // the card was built: Alpha's page first, then the page Beta and Gamma share.
+    const sheets = [
+      { src: '/fixtures/sheet-a.png?delay=900', edge: 256, width: 256, height: 192 },
+      { src: '/fixtures/sheet-b.png?delay=1800', edge: 256, width: 512, height: 192 },
+    ];
+    const cells = [[0, 0, 0, 256, 192], [1, 0, 0, 256, 192], [1, 256, 0, 256, 192]];
+    const sheetClips = clips.map(({ cover, ...clip }, i) => ({ ...clip, sheetSlots: [cells[i]] }));
+    spriteCovers.setCorpus(sheets, sheetClips);
+    show(sheetClips);
+  } else
   show(initial === 'empty' ? [] : initial === 'narrow' ? [clips[2]] : clips);
   window.fixtureReady = true;
 </script>

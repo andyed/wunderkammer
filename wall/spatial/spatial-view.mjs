@@ -34,6 +34,13 @@ import { spreadScale, HOVER_PX } from '../similarity-layout.mjs';
 import { perf } from '../instrument.mjs';
 import { VideoTiles, fieldPlacement } from '../video-tiles.mjs';
 
+/** How long the cards must go without a repaint before find is armed. Covers
+ * arrive in bursts a second or more apart on a cold cache, and those are
+ * waited for by name; this is the margin for a repaint nobody listed. */
+const FIND_QUIET_MS = 400;
+/** The longest find stays off waiting for covers whose page never answers. */
+const FIND_WORK_TIMEOUT_MS = 15000;
+
 
 
 /** Same fallback as layout.mjs — a clip with no usable dims is assumed 4:3. */
@@ -365,6 +372,8 @@ export class SpatialView {
     // setClips) and this guard covers the constructor's first, empty build.
     const drawable = (window.__cwDrawable ?? drawableSupported()) && !this.host.hidden;
     if (drawable && clips.length) {
+      // Covers a card will still receive after build() returns (_buildCard).
+      this._cardWork = [];
       this.cardHost = new CardHost({
         container: this.host,
         count: clips.length,
@@ -379,11 +388,9 @@ export class SpatialView {
         // have no CORS headers.
         build: (i, el) => this._buildCard(i, el, { proxyHero: true }),
       });
-      // `settled()` waits for the hero images, which is when the find
-      // handler below can be armed: an <img> finishing load repaints its card
-      // and is indistinguishable from a find match at the event level.
-      const host = this.cardHost;
-      host.settled().then(() => { if (this.cardHost === host) this._findArmed = true; });
+      const work = this._cardWork;
+      this._cardWork = null;
+      void this._armFind(this.cardHost, work);
     }
 
     this.field = new TileField({
@@ -476,6 +483,7 @@ export class SpatialView {
     // this moves the camera and the selection, never `state.filtered`.
     if (this.cardHost) {
       this._unsubscribePaint = this.cardHost.onPaint((indices) => {
+        this._cardPaintAt = performance.now();
         if (!this._findArmed || this._capturing) return;
         if (!indices.length || indices.length === this.clips.length) return;
         const key = indices.join(',');
@@ -493,6 +501,36 @@ export class SpatialView {
   }
 
 
+
+  /**
+   * Arm the find handler once the cards have stopped changing by themselves.
+   *
+   * A `paint` event that names some cards is the only signal a find-in-page
+   * match gives, and anything else that repaints a card looks the same. So the
+   * handler stays disarmed until this view is done changing its own cards:
+   *
+   *   1. the covers a card receives after it is built. A sprite-sheet cell
+   *      reaches its <img> when its page has decoded, long after
+   *      `CardHost.settled()` looked for images still loading and found none.
+   *      Armed that early, every arriving page read as a find: the camera
+   *      moved and an item was selected with nobody at the keyboard.
+   *   2. `settled()`, for the images that have a src by then.
+   *   3. FIND_QUIET_MS without a repaint, for whatever the first two missed.
+   *
+   * A host whose cards never stop repainting never arms. Find then does
+   * nothing, which is the right way round: it cannot be told from the noise.
+   */
+  async _armFind(host, work = []) {
+    const current = () => this.cardHost === host;
+    const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    // Bounded: a page that never answers must not hold find off for good.
+    await Promise.race([Promise.allSettled(work), pause(FIND_WORK_TIMEOUT_MS)]);
+    if (!current()) return;
+    await host.settled();
+    this._cardPaintAt = performance.now();
+    while (current() && performance.now() - this._cardPaintAt < FIND_QUIET_MS) await pause(100);
+    if (current()) this._findArmed = true;
+  }
 
   /* ------------------------------------------------------------ cards --- */
 
@@ -525,7 +563,18 @@ export class SpatialView {
       if (sprite) {
         // A pooled card can be rebuilt for another item before the cell
         // arrives; only an <img> still in its card takes it.
-        void spriteCovers.coverUrl(clip, 340 * Math.min(2, window.devicePixelRatio || 1), file).then(url => { if (url && img.parentNode === el) img.src = url; });
+        const landed = spriteCovers.coverUrl(clip, 340 * Math.min(2, window.devicePixelRatio || 1), file).then(url => {
+          if (!url || img.parentNode !== el) return null;
+          img.src = url;
+          // Resolves once the cell is in the card, shown or broken.
+          return new Promise(done => {
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+          });
+        });
+        // A drawable card repaints when this lands, and a repaint is how a
+        // find match announces itself; _armFind waits for it.
+        if (proxyHero) this._cardWork?.push(landed.catch(() => null)); else void landed;
       } else img.src = file;
       img.alt = '';
       img.draggable = false;
