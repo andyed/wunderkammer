@@ -16,12 +16,15 @@ const UPSTREAM = process.env.MURIEL_ROOT
   // A muriel checkout beside this repository; set MURIEL_ROOT for any other layout.
   || path.resolve(HERE, '../../../../muriel/render_assets/_lib');
 const PULL = process.argv.includes('--pull');
+// Upstream files this wall has no use for. `demo-nav.css` is the wayfinding bar
+// of muriel's own standalone demos.
+const NOT_VENDORED = new Set(['demo-nav.css']);
 
 const digest = async (p) => createHash('sha1').update(await readFile(p)).digest('hex').slice(0, 12);
 
 let upstreamFiles;
 try {
-  upstreamFiles = (await readdir(UPSTREAM)).filter((f) => /\.(js|css)$/.test(f));
+  upstreamFiles = (await readdir(UPSTREAM)).filter((f) => /\.(js|css)$/.test(f) && !NOT_VENDORED.has(f));
 } catch {
   console.error(`upstream not found: ${UPSTREAM}`);
   console.error('Set MURIEL_ROOT, or accept the vendored copy as-is.');

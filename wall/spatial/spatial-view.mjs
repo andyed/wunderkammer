@@ -26,7 +26,7 @@ import { HybridField } from './lib/hybrid.js';
 import { PileLayout } from './lib/piles.js';
 import { FieldNavigator } from './lib/navigate.js';
 import { CardHost, supported as drawableSupported } from './lib/cards.js';
-import { RETRY } from './lib/atlas.js';
+import { RETRY, taintsCanvas } from './lib/atlas.js';
 import { spriteCovers } from '../sprite-covers.mjs';
 import { RowMotion } from './lib/motion.js';
 import { groupBy, layout, SIMILARITY, isSimilarity } from '../layout.mjs';
@@ -586,20 +586,29 @@ export class SpatialView {
     const sprite = spriteCovers.has(clip);
     if (this.cardHost && !this.host.hidden) {
       if (this._labelled[i] && (!sprite || this._cardCovered.has(i))) {
-        let shot;
-        this._capturing = true;
-        this._capturedAt.set(i, performance.now());
-        try { shot = this.cardHost.capture(i) ?? null; }
-        finally { queueMicrotask(() => { this._capturing = false; }); }
+        const shot = this._capture(i);
         // A sheet cover has no file for the image path: fall back to its cell.
         if (shot || !sprite) return shot;
       } else if (!sprite) {
-        return this._cardImage(i);
+        const img = this._cardImage(i);
+        // A cover the atlas would refuse (an SVG with a foreignObject taints
+        // it) is shown through its card, which captures clean, band and all.
+        // The alternative is a hole where every other tile has a picture.
+        if (img && taintsCanvas(img)) return this._capture(i);
+        return img;
       }
     }
     if (!sprite) return null;
     // The near tier asks for 160 px, not its 256 px slot (see resolveSource).
     return spriteCovers.serves(clip, 160) ? spriteCovers.source(clip, 160) ?? RETRY : null;
+  }
+
+  /** One card drawn into the host's bitmap, marked so its echo is not a find. */
+  _capture(i) {
+    this._capturing = true;
+    this._capturedAt.set(i, performance.now());
+    try { return this.cardHost.capture(i) ?? null; }
+    finally { queueMicrotask(() => { this._capturing = false; }); }
   }
 
   /**

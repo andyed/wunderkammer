@@ -90,8 +90,11 @@ and ignores the other two.
   harvested page with such a cover tainted the tile atlas, every later
   texture upload threw, and the view stopped responding 30 to 60 s after
   load. `/api/proxy` now refuses that SVG (415) and the item goes without a
-  picture. The same file as a local cover or in a static collection is still
-  drawn by the atlas loader. One mutation, caught.
+  picture. A local cover or one in a static collection never passes the
+  proxy, so the tile atlas now checks each image itself and refuses one that
+  would taint it. With drawable cards the item's near tile is drawn from its
+  card instead; its far tile, and both tiles in a browser without drawable
+  cards, stay empty. Five mutations, all caught.
 - **Find-in-page ignores cards repainting for their own reasons.** A repaint
   of some cards is the only signal a find match gives, and three other things
   produce it: an animated cover (every frame), a cover still loading or just

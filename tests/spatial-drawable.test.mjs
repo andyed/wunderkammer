@@ -61,6 +61,15 @@ before(async () => {
       setTimeout(() => { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }); res.end(body); }, delay);
       return;
     }
+    if (path === '/fixtures/foreign.svg') {
+      // Same-origin, and still not origin-clean: Chrome and Safari taint a
+      // canvas for any SVG image that holds a foreignObject. Mermaid and
+      // draw.io exports do.
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      res.end('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#20e040"/>'
+        + '<foreignObject x="20" y="20" width="200" height="60"><div xmlns="http://www.w3.org/1999/xhtml">label</div></foreignObject></svg>');
+      return;
+    }
     const sheet = path.match(/^\/fixtures\/sheet-(a|b)\.png$/);
     if (sheet) {
       const delay = Number(new URL(req.url, 'http://fixture.test').searchParams.get('delay')) || 0;
@@ -666,3 +675,77 @@ for (const [name, query] of [['a file', 'initial=full'], ['a sheet cell', 'initi
     banded(await at(1200, 1), 'near again');
   });
 }
+
+const readable = (page) => page.evaluate(() => {
+  const read = (atlas) => { try { atlas.ctx.getImageData(0, 0, 1, 1); return true; } catch (error) { return error.name; } };
+  return { near: read(view.field.atlases.near), far: read(view.field.atlases.far) };
+});
+const fixtureTaints = (page) => page.evaluate(async () => {
+  const img = new Image(); img.src = '/fixtures/foreign.svg'; await img.decode();
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 4;
+  const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, 4, 4);
+  try { ctx.getImageData(0, 0, 1, 1); return false; } catch { return true; }
+});
+
+test('A17 — a local cover that taints a canvas leaves both atlases usable and is shown through its card', async (t) => {
+  if (gate(t)) return;
+  // The view stopped responding once such a cover reached an atlas: the canvas
+  // was tainted for good and every texture upload after it threw. A page error
+  // fails this test through fixture(), so a stopped frame loop cannot pass.
+  const page = await fixture(t, 'initial=full&foreign=1');
+  assert.equal(await fixtureTaints(page), true, 'the fixture cover taints a canvas in this browser, or the rest proves nothing');
+  for (const i of [0, 1]) await page.evaluate((k) => view.field.atlases.request(k, 'near'), i);
+  await page.waitForFunction(() => view.field.atlases.nearSlot[1] >= 0, null, { timeout: 5000 });
+  await page.mouse.move(2, 2);
+  const at = async (z, labelled) => {
+    await page.evaluate((depth) => { view.basePos.set(view.lookTarget.x, view.lookTarget.y, depth); view.invalidate(); }, z);
+    await page.waitForFunction((want) => view._labelled[1] === want && view._relabel.size === 0, labelled, { timeout: 5000 });
+    await page.waitForTimeout(500);
+    return { band: await titleBand(page, 1), other: await titleBand(page, 0), atlases: await readable(page) };
+  };
+  const shown = (state, where) => {
+    assert.deepEqual(state.atlases, { near: true, far: true }, `${where}: both atlases can still be read`);
+    assert.ok(state.band.slot >= 0 && state.band.opaque > 0, `${where}: the tainting cover's item still has a near tile with pixels`);
+    assert.ok(state.band.dark > 20 && state.band.light > 20,
+      `${where}: that tile is its card, band included (dark ${state.band.dark}, light ${state.band.light})`);
+  };
+
+  shown(await at(1200, 1), 'near');
+  const small = await at(2800, 0);
+  shown(small, 'far');
+  assert.ok(small.other.slot >= 0 && small.other.dark < 5 && small.other.light < 5,
+    `far: an ordinary cover beside it is bare, as the cutoff asks (dark ${small.other.dark}, light ${small.other.light})`);
+  shown(await at(1200, 1), 'near again');
+
+  // The far tier has no card to fall back on: that one tile fails, alone.
+  const far = await page.evaluate(() => ({ slots: Array.from(view.field.atlases.farSlot), failed: [...view.field.atlases._failed] }));
+  assert.equal(far.slots[1], -1, 'the tainting cover holds no far slot');
+  assert.ok(far.failed.includes('far:1'), 'and is recorded as failed there');
+  assert.ok(far.slots.every((slot, i) => i === 1 || slot >= 0), `every other item has its far tile (${far.slots})`);
+
+  // Still drawing: a camera move reaches the camera.
+  const before = await page.evaluate(() => view.camera.position.z);
+  await page.evaluate(() => { view.basePos.z = 1600; view.invalidate(); });
+  await page.waitForFunction((z) => Math.abs(view.camera.position.z - z) > 50, before, { timeout: 3000 });
+});
+
+test('A17b — without drawable cards the tainting cover fails its own tiles and nothing else', async (t) => {
+  if (gate(t)) return;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  t.after(async () => { await page.close(); assert.deepEqual(errors, [], 'no page errors'); });
+  await page.addInitScript(() => { window.__cwDrawable = false; });
+  await page.goto(`${origin}/tests/fixtures/spatial-view.html?initial=full&foreign=1`);
+  await page.waitForFunction(() => window.fixtureReady);
+  assert.equal(await fixtureTaints(page), true, 'the fixture cover taints a canvas in this browser');
+  for (const i of [0, 1, 2]) await page.evaluate((k) => view.field.atlases.request(k, 'near'), i);
+  await page.waitForFunction(() => { const a = view.field.atlases; return a._inflight === 0 && a._nearQueue.length === 0 && a._farQueue.length === 0; }, null, { timeout: 8000 });
+  await page.waitForTimeout(400);
+  assert.deepEqual(await readable(page), { near: true, far: true }, 'both atlases can still be read');
+  const state = await page.evaluate(() => ({ near: Array.from(view.field.atlases.nearSlot), far: Array.from(view.field.atlases.farSlot), failed: [...view.field.atlases._failed].sort() }));
+  assert.deepEqual(state.failed, ['far:1', 'near:1'], 'only the tainting cover failed');
+  assert.equal(state.near[1], -1); assert.equal(state.far[1], -1);
+  assert.ok(state.near[0] >= 0 && state.near[2] >= 0, `the covers beside it have near tiles (${state.near})`);
+  assert.ok(state.far.every((slot, i) => i === 1 || slot >= 0), `and every other item has its far tile (${state.far})`);
+});
