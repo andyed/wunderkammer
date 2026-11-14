@@ -127,10 +127,15 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'a big stack opened from far back',
   },
   {
-    name: 'a sheet-covered pool card is the only labelled tile in its row', file: 'wall/spatial/spatial.css',
-    from: '.sp-host.sp-cards .sp-card:not(.sp-sprite) .sp-body { visibility: visible; }',
-    to: '.sp-host.sp-cards .sp-card .sp-body { visibility: visible; }',
-    test: 'tests/spatial-drawable.test.mjs', pattern: 'a pool card whose tile is a sheet cell',
+    name: 'a sheet-covered near tile stays the bare cell beside labelled pool cards', file: 'wall/spatial/spatial-view.mjs',
+    from: "(!sprite || this._cardCovered.has(i))", to: '!sprite',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a sheet-covered near tile is drawn from its card',
+  },
+  {
+    name: 'a sheet-covered card is captured before its cover is in', file: 'wall/spatial/spatial-view.mjs',
+    from: "      if (!img?.complete || !img.naturalWidth) continue;\n      this._cardCovered.add(i);",
+    to: "      this._cardCovered.add(i);",
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a sheet-covered near tile is drawn from its card',
   },
   {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',

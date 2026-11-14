@@ -377,6 +377,8 @@ export class SpatialView {
     // permanently. The normal path is safe (wall.mjs unhides before calling
     // setClips) and this guard covers the constructor's first, empty build.
     const drawable = (window.__cwDrawable ?? drawableSupported()) && !this.host.hidden;
+    // Sheet-covered cards whose cover is in and painted (_adoptCovered).
+    this._cardCovered = new Set();
     if (drawable && clips.length) {
       // Covers a card will still receive after build() returns (_buildCard).
       this._cardWork = [];
@@ -428,17 +430,26 @@ export class SpatialView {
       // of a collection's full-size level (~45 Mpx for the Psychodeli example,
       // over the decode budget, so pages evicted each other and tiles ran out
       // of retries), and the closest ones become DOM cards with the full cell.
+      // With a card host, a sheet-covered near tile is the bare cell only until
+      // its card has the cover (_adoptCovered); then it is drawn from the card
+      // like any other, title band included. The card decoded that cell when
+      // it was built, so this costs a capture and no further decode. The far
+      // tier stays the cell: at that size a band is noise, and the label goes.
       resolveSource: this.cardHost || spriteCovers.available
         ? (i, tier) => {
-          if (spriteCovers.has(clips[i])) {
-            // No cell (its page failed): null takes the image path to the clip's file.
-            const need = tier === 'near' ? 160 : 64;
-            return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;
+          const sprite = spriteCovers.has(clips[i]);
+          if (this.cardHost && tier === 'near' && !this.host.hidden && (!sprite || this._cardCovered.has(i))) {
+            let shot;
+            this._capturing = true;
+            try { shot = this.cardHost?.capture(i) ?? null; }
+            finally { queueMicrotask(() => { this._capturing = false; }); }
+            // A sheet cover has no file for the image path: fall back to its cell.
+            if (shot || !sprite) return shot;
           }
-          if (!this.cardHost || tier !== 'near' || this.host.hidden) return null;
-          this._capturing = true;
-          try { return this.cardHost?.capture(i) ?? null; }
-          finally { queueMicrotask(() => { this._capturing = false; }); }
+          if (!sprite) return null;
+          // No cell (its page failed): null takes the image path to the clip's file.
+          const need = tier === 'near' ? 160 : 64;
+          return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;
         }
         : null,
     });
@@ -495,6 +506,7 @@ export class SpatialView {
     if (this.cardHost) {
       this._unsubscribePaint = this.cardHost.onPaint((indices) => {
         this._cardPaintAt = performance.now();
+        this._adoptCovered(indices);
         if (!this._findArmed || this._capturing) return;
         if (!indices.length || indices.length === this.clips.length) return;
         const key = indices.join(',');
@@ -512,6 +524,28 @@ export class SpatialView {
   }
 
 
+
+  /**
+   * Switch a sheet-covered item's near tile from the bare cell to its card,
+   * the first time the card is painted with its cover in.
+   *
+   * The card gets its cover some time after it is built (_buildCard), and a
+   * capture taken before then is a band under an empty hero. The paint that
+   * follows the cover is the signal the card is whole.
+   */
+  _adoptCovered(indices) {
+    const tiles = this.field?.atlases;
+    if (!tiles || !this.cardHost) return;
+    for (const i of indices) {
+      if (this._cardCovered.has(i) || !spriteCovers.has(this.clips[i])) continue;
+      const img = this.cardHost.elementFor(i)?.querySelector('img.sp-thumb');
+      if (!img?.complete || !img.naturalWidth) continue;
+      this._cardCovered.add(i);
+      // Redraw a tile already holding the cell; one not near yet asks later.
+      if (tiles.nearSlot[i] >= 0) { tiles.releaseNear(i); tiles.request(i, 'near'); }
+      this._dirty = true;
+    }
+  }
 
   /**
    * Arm the find handler once the cards have stopped changing by themselves.
@@ -550,10 +584,6 @@ export class SpatialView {
     if (!clip) return;
 
     const sprite = spriteCovers.has(clip);
-    // A sheet-covered item's tile is its cell, drawn without a title band
-    // (resolveSource), so its pool card keeps the band for hover as well.
-    // toggle, not add: a pooled card is rebuilt for other items.
-    el.classList.toggle('sp-sprite', sprite);
     const src = sourceFor(clip, 340) || '';   // the card is authored 340 px wide
     // A video plays in the DOM card too, over its cover as the poster. Not in a
     // drawable card: a capture is one still frame, and the field's own video

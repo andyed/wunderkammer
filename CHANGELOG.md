@@ -80,9 +80,11 @@ and ignores the other two.
   and the 14 cards nearest the camera, which are real elements, hid theirs
   until hover. Same-sized neighbours disagreed about having a label. Those
   cards now show the band too; the editor link still appears on hover or
-  selection. An item whose cover is a sprite-sheet cell draws its tile from
-  the sheet, with no band, so its card keeps the band for hover as before.
-  One mutation (`scripts/check-mutations.mjs`), caught.
+  selection. An item whose cover is a sprite-sheet cell drew its near tile
+  from the sheet, with no band; once its card has the cover, the near tile is
+  drawn from the card too, so a sheet-covered collection is labelled the same
+  way. Far tiles stay the bare cell: at that size the label goes. Two
+  mutations (`scripts/check-mutations.mjs`), each caught.
 - **A big stack stays sharp when it opens from far back.** A tile got its
   256 px near slot only within a fixed distance of the camera. A large stack
   fitted into a small pane sits beyond it, and its tiles were 64 px far tiles

@@ -433,36 +433,37 @@ test('A10 — a pool card shows its title band while tiles are drawn from cards,
   assert.equal(off.body, 'hidden', 'without cards behind the tiles, an unhovered pool card hides its band');
 });
 
-test('A11 — a pool card whose tile is a sheet cell keeps its band for hover', async (t) => {
+test('A11 — a sheet-covered near tile is drawn from its card once the cover is in', async (t) => {
   if (gate(t)) return;
-  // Sheet-covered items draw their tiles from the sheet, with no title band
-  // (resolveSource), even though a card host exists. Their pool cards must not
-  // be the only labelled tiles in the row.
+  // A sheet cover reaches its card long after the card is built (the pages are
+  // held 900 and 1800 ms). Until then the near tile is the bare cell; after,
+  // it is the card: the cover on top and the title band under it. A band over
+  // an empty hero would mean the capture was taken before the cover.
   const page = await fixture(t, 'initial=full&covers=sheets');
-  await page.waitForFunction(() => document.querySelectorAll('.sp-card img[src]').length > 0, null, { timeout: 10000 });
-  await page.mouse.move(2, 2);                       // off every card
-  const read = () => page.evaluate(() => [...document.querySelectorAll('.sp-card')]
+  await page.evaluate(() => view.field.atlases.request(1, 'near'));   // Beta, on the later page
+  await page.waitForFunction(() => view._cardCovered.has(1), null, { timeout: 10000 });
+  await page.waitForFunction(() => view.field.atlases.nearSlot[1] >= 0, null, { timeout: 5000 });
+  await page.waitForTimeout(600);
+  const band = await titleBand(page, 1);
+  assert.equal(band.blankPath, false, 'the element path did not fall back to images');
+  assert.ok(band.dark > 20, `the card ground is present (dark px ${band.dark})`);
+  assert.ok(band.light > 20, `the title ink is present (light px ${band.light})`);
+  const hero = await page.evaluate(() => {
+    const atlas = view.field.atlases.near, slot = view.field.atlases.nearSlot[1];
+    const { x, y, w, h } = atlas.slotRect(slot);
+    const fitH = atlas.fits[slot * 2 + 1] * h;
+    return [...atlas.ctx.getImageData(Math.round(x + w / 2), Math.round(y + (h - fitH) / 2 + fitH * 0.25), 1, 1).data];
+  });
+  assert.ok(hero[3] > 0 && hero[1] > 150 && hero[0] < 100, `the cover is in the tile, the sheet's green (${hero})`);
+
+  // The pool cards agree with the tiles around them: band on, unhovered.
+  await page.mouse.move(2, 2);
+  const cards = await page.evaluate(() => [...document.querySelectorAll('.sp-card')]
     .filter((el) => el.querySelector('.sp-body'))
-    .map((el) => ({
-      sprite: el.classList.contains('sp-sprite'), hovered: el.matches(':hover'),
-      body: getComputedStyle(el.querySelector('.sp-body')).visibility,
-    })));
-  const cards = await read();
+    .map((el) => ({ hovered: el.matches(':hover'), body: getComputedStyle(el.querySelector('.sp-body')).visibility })));
   assert.ok(cards.length > 0, 'the fixture has promoted pool cards');
-  assert.equal(await page.evaluate(() => document.querySelector('#host').classList.contains('sp-cards')), true,
-    'a card host exists, so the host class is on');
   for (const card of cards) {
     assert.equal(card.hovered, false);
-    assert.equal(card.sprite, true, 'a sheet-covered item marks its pool card');
-    assert.equal(card.body, 'hidden', 'and that card hides its band until hover, like the tiles around it');
+    assert.equal(card.body, 'visible', 'a sheet-covered pool card shows its band like the tiles');
   }
-  // Hover still discloses it.
-  const box = await page.evaluate(() => {
-    const r = [...document.querySelectorAll('.sp-card')].find((el) => el.querySelector('.sp-body')).getBoundingClientRect();
-    return { x: r.x + r.width / 2, y: r.y + r.height / 3 };
-  });
-  await page.mouse.move(box.x, box.y);
-  await page.waitForFunction(() => [...document.querySelectorAll('.sp-card')].some((el) => el.matches(':hover')));
-  const hovered = (await read()).find((card) => card.hovered);
-  assert.equal(hovered.body, 'visible', 'the hovered card shows its band');
 });
