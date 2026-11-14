@@ -40,6 +40,10 @@ import { VideoTiles, fieldPlacement } from '../video-tiles.mjs';
 const FIND_QUIET_MS = 400;
 /** The longest find stays off waiting for covers whose page never answers. */
 const FIND_WORK_TIMEOUT_MS = 15000;
+/** How far from the camera a tile gets a near-tier slot, in world units. */
+const NEAR_DISTANCE = 3200;
+/** The edge of a far-tier tile in its atlas (AtlasPair's `farPx`). */
+const FAR_TILE_PX = 64;
 
 
 
@@ -263,6 +267,8 @@ export class SpatialView {
             ? (this.piles.spreadPile >= 0 ? this.piles.piles[this.piles.spreadPile].indices
               : this.piles.piles.flatMap((_, i) => this.piles.faceOf(i))) : [];
           for (const i of readable) this.field.atlases.request(i, 'near', now);
+          if (this.cardHost && this.field.atlases.sourcePathBlank) this.host.classList.remove('sp-cards');
+          this._reachOpenStack(h);
           const endPass = perf.begin('spatial/pass');
           this.field.update(this.camera, now);
           this.hybrid.update(this.camera);
@@ -392,13 +398,18 @@ export class SpatialView {
       this._cardWork = null;
       void this._armFind(this.cardHost, work);
     }
+    // Tiles drawn from cards wear their title band, so the pool's cards show
+    // theirs too (spatial.css). Off again if the card path turns out blank
+    // and the tiles fall back to plain covers (see the frame loop).
+    this.host.classList.toggle('sp-cards', !!this.cardHost);
 
+    this._nearReach = null;
     this.field = new TileField({
       scene: this.scene,
       // The atlas requires nonzero backing dimensions. An empty filter still
       // has zero active instances, so it cannot render or navigate a phantom.
       count: Math.max(1, clips.length),
-      nearDistance: 3200,
+      nearDistance: NEAR_DISTANCE,
       nearSlots: 256,
       resolve: (i, tier) => {
         const src = sourceFor(clips[i], tier === 'near' ? 256 : 64);
@@ -754,6 +765,35 @@ export class SpatialView {
     if (replace || !this._indexOf) this._indexOf = new Map(all.map((clip, i) => [clip, i]));
     this._setMembership(corpus ? clips.map(clip => this._indexOf.get(clip)).filter(i => i !== undefined) : all.map((_, i) => i));
     this._show();
+  }
+
+  /**
+   * While a stack is open, let the near tier reach all of it.
+   *
+   * The lib grants a near slot by world distance, which stands in for "large
+   * on screen" only while the camera is close. A big stack opened in a small
+   * pane is fitted from further back than that, and every one of its tiles
+   * was then a 64 px far tile drawn two or three times that size: soft, and
+   * without the title band a tile drawn from its card carries. So while a
+   * stack is open the reach is extended to where its largest tile is still
+   * drawn larger than a far tile holds. Only that stack is drawn then
+   * (_applyVisibility), so the near pool is not spent on anything else.
+   *
+   * The field's own reach is put back when the stack closes and is never
+   * touched otherwise: it is a setting others may change.
+   */
+  _reachOpenStack(paneHeight) {
+    const open = this.mode === 'piles' && this.piles.spreadPile >= 0 && this._spreadMembers;
+    if (!open) {
+      if (this._nearReach != null) { this.field.nearDistance = this._nearReach; this._nearReach = null; }
+      return;
+    }
+    this._nearReach ??= this.field.nearDistance;
+    const focal = paneHeight / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
+    const sizes = this.field.sizes;
+    let longest = 0;
+    for (const i of open) longest = Math.max(longest, sizes[i * 2], sizes[i * 2 + 1]);
+    this.field.nearDistance = Math.max(this._nearReach, longest * focal / FAR_TILE_PX);
   }
 
   /**

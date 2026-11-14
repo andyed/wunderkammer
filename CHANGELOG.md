@@ -75,6 +75,17 @@ and ignores the other two.
   stack is open, as their labels already were, and return when it closes. A
   scope change made in between still applies. Three mutations
   (`scripts/check-mutations.mjs`), each caught.
+- **Every tile in an open stack carries its label.** Where near tiles are
+  drawn from cards (Chrome 157 and later) they show a title band, and the 14
+  cards nearest the camera, which are real elements, hid theirs until hover.
+  Same-sized neighbours disagreed about having a label. Those cards now show
+  the band too; the editor link still appears on hover or selection.
+- **A big stack stays sharp when it opens from far back.** A tile got its
+  256 px near slot only within a fixed distance of the camera. A large stack
+  fitted into a small pane sits beyond it, and its tiles were 64 px far tiles
+  drawn two or three times that size, without the title band. While a stack is
+  open the near tier now reaches as far as its tiles are drawn larger than a
+  far tile holds. One mutation (`scripts/check-mutations.mjs`), caught.
 
 ## 0.3.0 — 2026-10-20
 
