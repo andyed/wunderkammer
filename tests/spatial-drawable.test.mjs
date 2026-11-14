@@ -749,3 +749,55 @@ test('A17b — without drawable cards the tainting cover fails its own tiles and
   assert.ok(state.near[0] >= 0 && state.near[2] >= 0, `the covers beside it have near tiles (${state.near})`);
   assert.ok(state.far.every((slot, i) => i === 1 || slot >= 0), `and every other item has its far tile (${state.far})`);
 });
+
+test('A18 — a card that repaints after its cover completes and before its load event is not a find', async (t) => {
+  if (gate(t)) return;
+  // `img.complete` turns true before the load event runs, and the card can
+  // repaint in between. The gap is a frame or so and comes up in about one
+  // late arrival in eight, so this holds it open: the load event is stopped
+  // on its way down to the image, then delivered by hand.
+  const page = await fixture(t);
+  await page.waitForFunction(() => view._findArmed === true && view._trialsOpen() === 0, null, { timeout: 9000 });
+  await paintOf(page, [1]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 1, 'the card answers find to begin with');
+  await paintOf(page, [0]);
+  await page.waitForTimeout(3600);   // past the capture echo and any trial the find itself started
+  const before = await page.evaluate(() => ({
+    lastFind: view._lastFind, trials: view._trialsOpen(),
+    sinceCapture: performance.now() - (view._capturedAt.get(1) ?? -Infinity),
+  }));
+  assert.equal(before.lastFind, 0);
+  assert.equal(before.trials, 0, 'no card is on trial');
+  assert.ok(before.sinceCapture > 3000, `card 1 was not captured recently (${Math.round(before.sinceCapture)} ms), so only its cover can excuse it`);
+
+  await page.evaluate(() => {
+    const img = document.querySelectorAll('.sp-dcard img')[1];
+    window.held = 0;
+    window.hold = (event) => { if (event.target === img) { window.held++; event.stopImmediatePropagation(); } };
+    document.addEventListener('load', window.hold, true);
+    img.src = '/fixtures/gamma.svg?again=1';
+  });
+  await page.waitForFunction(() => window.held === 1, null, { timeout: 5000 });
+  await page.waitForTimeout(400);    // room for the card to repaint with its new picture
+  const gap = await page.evaluate(() => {
+    const img = document.querySelectorAll('.sp-dcard img')[1];
+    return { complete: img.complete && img.naturalWidth > 0, trial: view._trial.has(1), lastFind: view._lastFind };
+  });
+  assert.equal(gap.complete, true, 'the picture is complete');
+  assert.equal(gap.trial, false, 'and the wall has not had its load event: this is the gap');
+  assert.equal(gap.lastFind, 0, 'the card repainting with it was not read as a find');
+  await paintOf(page, [1]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, 0, 'nor is another repaint in the gap');
+
+  await page.evaluate(() => {
+    document.removeEventListener('load', window.hold, true);
+    document.querySelectorAll('.sp-dcard img')[1].dispatchEvent(new Event('load'));
+  });
+  assert.equal(await page.evaluate(() => view._trial.has(1)), true, 'once its load arrives, the card is on trial like any late cover');
+  await page.waitForTimeout(3300);
+  await paintOf(page, [1]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 1, 'and answers again after its trial');
+});

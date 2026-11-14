@@ -165,6 +165,11 @@ const cases = [
     from: "return 'SVG with foreignObject taints a canvas';", to: 'return null;',
     test: 'tests/proxy-image.test.mjs', pattern: 'an SVG with a foreignObject is refused',
   },
+  {
+    name: 'restless: a card repainting before its cover\'s load event answers find', file: 'wall/spatial/spatial-view.mjs',
+    from: "return !!img && !!img.getAttribute('src') && this._coverSeen.get(i) !== img.src;", to: 'return !!img && !img.complete;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'after its cover completes and before its load event',
+  },
   // A cover that taints a canvas (an SVG with a foreignObject): MUTATION_FILTER='taint:'
   {
     name: 'taint: the atlas draws an image that taints it', file: 'wall/spatial/lib/atlas.js',
@@ -199,7 +204,7 @@ const cases = [
   },
   {
     name: 'restless: a card answers find while its cover is still loading', file: 'wall/spatial/spatial-view.mjs',
-    from: 'if (img && !img.complete) continue;', to: '',
+    from: 'if (this._coverPending(i)) continue;', to: '',
     test: 'tests/spatial-drawable.test.mjs', pattern: 'a still cover that arrives late is not a find',
   },
   {

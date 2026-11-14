@@ -102,8 +102,11 @@ and ignores the other two.
   Each moved the camera with nobody at the keyboard. An animating card is
   now left out of find, a card does not answer while its cover loads or for
   3 s after, nor for 3 s after a capture. Find arms once the answering cards
-  are quiet, where a wall with an animated cover used never to arm. Five
-  mutations (`MUTATION_FILTER='restless:'`), each caught.
+  are quiet, where a wall with an animated cover used never to arm. A cover
+  counts as loading until its load event has been handled, not until the
+  image reports complete: the card can repaint in between, and about one
+  late cover in eight was read as a match. Six mutations
+  (`MUTATION_FILTER='restless:'`), each caught.
 - **Labels follow size.** A tile wears its title band only while the title
   reaches 7 CSS px on screen; below that the band was a smear across the
   picture, and the tile is now the bare cover with the title on hover. The
