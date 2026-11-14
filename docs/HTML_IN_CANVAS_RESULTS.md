@@ -358,3 +358,8 @@ Not settled:
   matrix or an affine approximation. Not tested.
 - Headless only: no headed run, no trackpad, no hover, no text selection, no
   Tab order.
+
+Later the same day a second set of probes measured the view-sized host, live
+draws at scale, per-frame cost, hover, text selection and Tab order. Those
+tables are in [HTML_IN_CANVAS_PHASE3.md](HTML_IN_CANVAS_PHASE3.md#measured),
+the Phase 3 spec.
