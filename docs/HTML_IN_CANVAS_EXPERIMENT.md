@@ -468,7 +468,13 @@ pressure" and "Tab exit" in `HYBRID_HARDENING.md`. Write a separate spec
 first; it touches `navigate.js` and every consumer of `elementFor()`.
 
 **[amended 2026-11-13]** P0.8 passed on re-run, so the gate above is met. The
-Phase 3 spec starts from these measured rules:
+separate spec is [HTML_IN_CANVAS_PHASE3.md](HTML_IN_CANVAS_PHASE3.md). It does
+not take the route sketched here. It makes the host visible and draws the
+cards being read onto it, which moves each hit area by itself; the rules below
+are the measurements it began from, and its "Measured" section supersedes the
+gaps listed after them.
+
+The rules measured in the P0.8 re-run:
 
 - The card host goes above the WebGL canvas, the size of the view, at
   `opacity: 0.01`, with the host `pointer-events: none` and only reachable
