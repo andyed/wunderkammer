@@ -40,6 +40,26 @@ import { VideoTiles, fieldPlacement } from '../video-tiles.mjs';
 const FIND_QUIET_MS = 400;
 /** The longest find stays off waiting for covers whose page never answers. */
 const FIND_WORK_TIMEOUT_MS = 15000;
+// A card that repaints by itself is not answering a find. An animated cover
+// (GIF, APNG, an animated SVG) repaints its card on every frame, and nothing
+// on the paint event tells that from a match. A card that repaints this many
+// times, each within RESTLESS_GAP_MS of the last, is animating: it is left
+// out of find for the life of the field. Measured on a 544-item wall: an
+// animated PNG repainted its card 20 times a second, two GIFs 1 to 4 times.
+const RESTLESS_PAINTS = 5;
+const RESTLESS_GAP_MS = 3000;
+// Only a paint of a few cards counts toward that. While a wall loads, the
+// browser repaints nearly every card together, over and over (543 of 544, a
+// dozen times in two seconds), and counting those marked the whole wall
+// restless. In paints of up to this many cards, 535 of the 544 appeared at
+// most once, 6 twice, and the three animated ones 13 to 481 times.
+const RESTLESS_SET = 8;
+// A capture is followed by a repaint of the captured card when its cover had
+// not been decoded yet: drawing the card decodes the image, and the card is
+// painted again with it. On the 544-item wall those came 0.8 to 1.4 s after a
+// camera move, 19 to 33 cards at a time, long after the capture call returned.
+// A card does not answer a find for this long after we captured it.
+const CAPTURE_ECHO_MS = 3000;
 /** How far from the camera a tile gets a near-tier slot, in world units. */
 const NEAR_DISTANCE = 3200;
 /** The edge of a far-tier tile in its atlas (AtlasPair's `farPx`). */
@@ -374,6 +394,15 @@ export class SpatialView {
     this._lastFind = -1;
     this._lastFindKey = '';
     this._findArmed = false;
+    // Cards that repaint by themselves (_answering), the run of repaints that
+    // gets a card there, cards on trial after their cover lands, each drawable
+    // card's cover, and when we last captured each card.
+    this._restless = new Set();
+    this._streaks = new Map();
+    this._trial = new Map();
+    this._cardImgs = new Map();
+    this._capturedAt = new Map();
+    this._cardGen = (this._cardGen ?? 0) + 1;
     this._unsubscribePaint?.();
     this._unsubscribePaint = null;
 
@@ -511,11 +540,16 @@ export class SpatialView {
     // than flying to a guessed single match. Scope is untouched either way:
     // this moves the camera and the selection, never `state.filtered`.
     if (this.cardHost) {
-      this._unsubscribePaint = this.cardHost.onPaint((indices) => {
-        this._cardPaintAt = performance.now();
-        this._adoptCovered(indices);
-        if (!this._findArmed || this._capturing) return;
-        if (!indices.length || indices.length === this.clips.length) return;
+      this._unsubscribePaint = this.cardHost.onPaint((painted) => {
+        const now = performance.now();
+        this._adoptCovered(painted);
+        const whole = !painted.length || painted.length === this.clips.length;
+        // The cards that could be answering a find; one repainting for a
+        // reason of its own is not.
+        const indices = whole ? painted : this._answering(painted, now);
+        if (!indices.length) return;
+        this._cardPaintAt = now;
+        if (!this._findArmed || this._capturing || whole) return;
         const key = indices.join(',');
         if (key === this._lastFindKey) return;
         this._lastFindKey = key;
@@ -554,6 +588,7 @@ export class SpatialView {
       if (this._labelled[i] && (!sprite || this._cardCovered.has(i))) {
         let shot;
         this._capturing = true;
+        this._capturedAt.set(i, performance.now());
         try { shot = this.cardHost.capture(i) ?? null; }
         finally { queueMicrotask(() => { this._capturing = false; }); }
         // A sheet cover has no file for the image path: fall back to its cell.
@@ -669,6 +704,65 @@ export class SpatialView {
   }
 
   /**
+   * The cards in a paint that may be answering a find: the painted ones, minus
+   * those repainting for a reason of their own.
+   *
+   * - A card whose cover is still loading: the image paints as it arrives.
+   * - A card on trial. Its cover has just landed (_coverLanded), which repaints
+   *   it, and an animated cover goes on repainting; each repaint extends the
+   *   trial. A cover that stays still leaves trial RESTLESS_GAP_MS later.
+   * - A restless card: RESTLESS_PAINTS repaints in a row, each within
+   *   RESTLESS_GAP_MS of the last. It is animating, and stays out for good.
+   * - A card we captured within CAPTURE_ECHO_MS: the capture decoded its
+   *   cover, and the card is repainting with it.
+   *
+   * Runs are counted for a card on trial, and for every card before find is
+   * armed, when nothing can be a find. They are not counted for the rest once
+   * it is armed: a match being typed repaints its cards as fast as an
+   * animation does, and those must keep answering. Our own captures repaint
+   * cards too and are not counted, nor is a paint of more than RESTLESS_SET
+   * cards: that is the browser repainting the wall, not a card animating.
+   */
+  _answering(painted, now) {
+    const counted = !this._capturing && painted.length <= RESTLESS_SET;
+    const out = [];
+    for (const i of painted) {
+      if (this._restless.has(i)) continue;
+      const img = this._cardImgs.get(i);
+      if (img && !img.complete) continue;
+      if (now - (this._capturedAt.get(i) ?? -Infinity) < CAPTURE_ECHO_MS) continue;
+      let onTrial = this._trial.has(i);
+      if (onTrial && now > this._trial.get(i)) { this._trial.delete(i); this._streaks.delete(i); onTrial = false; }
+      if (onTrial || !this._findArmed) {
+        if (counted) {
+          const run = this._streaks.get(i);
+          const n = run && now - run.last <= RESTLESS_GAP_MS ? run.n + 1 : 1;
+          if (n >= RESTLESS_PAINTS) {
+            this._restless.add(i); this._streaks.delete(i); this._trial.delete(i);
+            continue;
+          }
+          this._streaks.set(i, { n, last: now });
+          if (onTrial) this._trial.set(i, now + RESTLESS_GAP_MS);
+        }
+        if (onTrial) continue;
+      }
+      out.push(i);
+    }
+    return out;
+  }
+
+  /** How many cards are on trial now. Finished trials are closed on the way. */
+  _trialsOpen(now = performance.now()) {
+    for (const [i, until] of this._trial) if (now > until) { this._trial.delete(i); this._streaks.delete(i); }
+    return this._trial.size;
+  }
+
+  /** A card's cover has loaded: the card goes on trial, armed or not. */
+  _coverLanded(i) {
+    if (!this._restless.has(i)) this._trial.set(i, performance.now() + RESTLESS_GAP_MS);
+  }
+
+  /**
    * Arm the find handler once the cards have stopped changing by themselves.
    *
    * A `paint` event that names some cards is the only signal a find-in-page
@@ -683,8 +777,10 @@ export class SpatialView {
    *   2. `settled()`, for the images that have a src by then.
    *   3. FIND_QUIET_MS without a repaint, for whatever the first two missed.
    *
-   * A host whose cards never stop repainting never arms. Find then does
-   * nothing, which is the right way round: it cannot be told from the noise.
+   * A card that never stops repainting (an animated cover) does not hold this
+   * up: it is marked restless and left out, of the wait and of find
+   * (_answering). Before that, such a wall either never armed, or armed in a
+   * chance gap and then read every frame of the animation as a match.
    */
   async _armFind(host, work = []) {
     const current = () => this.cardHost === host;
@@ -694,7 +790,9 @@ export class SpatialView {
     if (!current()) return;
     await host.settled();
     this._cardPaintAt = performance.now();
-    while (current() && performance.now() - this._cardPaintAt < FIND_QUIET_MS) await pause(100);
+    // Quiet, and nobody still on trial: armed means every card whose cover is
+    // in will answer. A cover that lands later is tried on its own.
+    while (current() && (performance.now() - this._cardPaintAt < FIND_QUIET_MS || this._trialsOpen() > 0)) await pause(100);
     if (current()) this._findArmed = true;
   }
 
@@ -726,6 +824,15 @@ export class SpatialView {
       // is not: cross-origin content inside one is dropped from the snapshot,
       // leaving the hero blank while the rest of the card draws.
       const file = src && (proxyHero ? proxied(src) : src);
+      if (proxyHero) {
+        // A cover repaints its card as it arrives and when it lands, and an
+        // animated one never stops. _answering keeps the card out of find
+        // while the cover is loading and on trial once it is in. Listening
+        // before the source is set covers a sheet cell, which is set later.
+        const gen = this._cardGen;
+        this._cardImgs.set(i, img);
+        img.addEventListener('load', () => { if (gen === this._cardGen) this._coverLanded(i); }, { once: true });
+      }
       if (sprite) {
         // A pooled card can be rebuilt for another item before the cell
         // arrives; only an <img> still in its card takes it.

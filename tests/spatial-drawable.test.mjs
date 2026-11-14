@@ -45,8 +45,20 @@ before(async () => {
     const path = new URL(req.url, 'http://fixture.test').pathname;
     const image = path.match(/^\/fixtures\/(alpha|beta|gamma|delta)\.svg$/);
     if (image) {
-      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${colors[image[1]]}"/></svg>`);
+      const held = Number(new URL(req.url, 'http://fixture.test').searchParams.get('delay')) || 0;
+      setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+        res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="${colors[image[1]]}"/></svg>`);
+      }, held);
+      return;
+    }
+    if (path === '/fixtures/pulse.svg') {
+      // A cover that animates by itself, as a GIF or an animated PNG does: its
+      // card repaints on every frame with nobody asking. Optionally held back.
+      const delay = Number(new URL(req.url, 'http://fixture.test').searchParams.get('delay')) || 0;
+      const body = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#20e040">'
+        + '<animate attributeName="fill" values="#20e040;#ecd322;#20e040" dur="0.4s" repeatCount="indefinite"/></rect></svg>';
+      setTimeout(() => { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }); res.end(body); }, delay);
       return;
     }
     const sheet = path.match(/^\/fixtures\/sheet-(a|b)\.png$/);
@@ -83,12 +95,13 @@ after(async () => {
   await new Promise((resolve) => server?.close(resolve));
 });
 
-async function fixture(t, query = 'initial=full') {
+async function fixture(t, query = 'initial=full', { waitUntil = 'load' } = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   t.after(async () => { await page.close(); assert.deepEqual(errors, [], 'no page errors'); });
-  await page.goto(`${origin}/tests/fixtures/spatial-view.html?${query}`);
+  // 'load' waits for every image in the page, a held-back cover included.
+  await page.goto(`${origin}/tests/fixtures/spatial-view.html?${query}`, { waitUntil });
   await page.waitForFunction(() => window.fixtureReady);
   const supported = await page.evaluate(() =>
     typeof CanvasRenderingContext2D.prototype.drawElementImage === 'function');
@@ -364,12 +377,26 @@ test('A8 — covers that land after the cards are built are not read as a find',
   assert.equal(await page.evaluate(() => view._lastFind), 1, 'a find after settling selects its match');
 });
 
-test('A9 — find stays off while the cards are still repainting, and arms once they stop', async (t) => {
+// What a find match looks like to the page: a paint naming exactly those cards.
+const paintOf = (page, cards) => page.evaluate((which) => {
+  const host = document.querySelector('canvas.card-host');
+  const all = [...host.querySelectorAll('[drawable]')];
+  const ev = new Event('paint');
+  Object.defineProperty(ev, 'changedElements', { value: which.map((i) => all[i]) });
+  host.dispatchEvent(ev);
+}, cards);
+const pose = (page) => page.evaluate(() => ({
+  armed: view._findArmed, lastFind: view._lastFind, selection: view.nav?.selection,
+  basePos: view.basePos.toArray().map(Math.round).join(' '), restless: [...view._restless],
+}));
+
+test('A9 — a card that keeps repainting by itself is set aside: find arms without it and it never answers', async (t) => {
   if (gate(t)) return;
   const page = await fixture(t);
-  // A repaint nobody listed: restyle one card every 150 ms, from the moment
+  // A repaint nobody asked for: restyle one card every 150 ms, from the moment
   // the fixture is up. The browser reports each one as a paint naming that
-  // card alone, which is exactly what a one-card find match looks like.
+  // card alone, which is exactly what a one-card find match looks like, and
+  // what every frame of an animated cover looks like.
   await page.evaluate(() => {
     window.paintSets = [];
     view.cardHost.onPaint((indices) => window.paintSets.push(indices.slice()));
@@ -377,18 +404,142 @@ test('A9 — find stays off while the cards are still repainting, and arms once 
     let on = false;
     window.restyle = setInterval(() => { on = !on; card.style.outline = on ? '2px solid #ffd166' : ''; }, 150);
   });
-  await page.waitForTimeout(2000);
-  const during = await page.evaluate(() => ({
-    armed: view._findArmed, lastFind: view._lastFind, selection: view.nav?.selection,
-    partial: window.paintSets.filter((set) => set.length === 1 && set[0] === 1).length,
-  }));
-  assert.ok(during.partial >= 3, `the restyle repainted card 1 by itself; saw ${during.partial} such paints`);
-  assert.equal(during.armed, false, 'find is not armed while cards keep repainting');
-  assert.equal(during.lastFind, -1, 'and no repaint was recorded as a find');
-  assert.equal(during.selection, -1);
+  t.after(() => page.evaluate(() => clearInterval(window.restyle)).catch(() => {}));
+  // It used to hold find off for as long as it went on. Now find arms around it.
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 6000 });
+  const armed = await pose(page);
+  assert.deepEqual(armed.restless, [1], 'the repainting card is marked restless, and only that one');
+  assert.equal(armed.lastFind, -1, 'no repaint was recorded as a find on the way');
 
-  await page.evaluate(() => clearInterval(window.restyle));
-  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 4000 });
+  // Armed, and the card is still repainting: two more seconds of it move nothing.
+  await page.evaluate(() => { window.paintSets.length = 0; });
+  await page.waitForTimeout(2000);
+  const during = await pose(page);
+  const alone = await page.evaluate(() => window.paintSets.filter((set) => set.length === 1 && set[0] === 1).length);
+  assert.ok(alone >= 5, `card 1 went on repainting by itself; saw ${alone} such paints`);
+  assert.equal(during.lastFind, -1, 'none of them was read as a find');
+  assert.equal(during.selection, -1);
+  assert.equal(during.basePos, armed.basePos, 'and the camera did not move');
+
+  // The other cards still answer, and a match set that includes the restless card fits the rest.
+  await paintOf(page, [1, 2]);
+  await page.waitForTimeout(300);
+  const found = await pose(page);
+  assert.equal(found.lastFind, 2, 'a match on another card is found');
+  assert.equal(found.selection, 2);
+  assert.notEqual(found.basePos, armed.basePos, 'and the camera goes to it');
+});
+
+test('A13 — an animated cover that arrives after find is armed moves nothing', async (t) => {
+  if (gate(t)) return;
+  // Beta's cover is held back 6.5 s, past the 4 s the card host waits for
+  // images, so find is armed by the time it lands. Then it animates: every
+  // frame repaints the card. A late cover is on trial from the moment it
+  // loads; one that keeps repainting never answers.
+  const page = await fixture(t, 'initial=full&pulse=6500', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => {
+    window.paintSets = [];
+    view.cardHost.onPaint((indices) => window.paintSets.push(indices.slice()));
+  });
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 6000 });
+  const armed = await pose(page);
+  assert.equal(await page.evaluate(() => document.querySelectorAll('.sp-dcard img')[1].complete), false, 'armed before the late cover is in');
+
+  await page.waitForFunction(() => { const img = document.querySelectorAll('.sp-dcard img')[1]; return img.complete && img.naturalWidth > 0; }, null, { timeout: 9000 });
+  await page.evaluate(() => { window.paintSets.length = 0; });
+  await page.waitForTimeout(3000);
+  const after = await pose(page);
+  const alone = await page.evaluate(() => window.paintSets.filter((set) => set.includes(1)).length);
+  assert.ok(alone >= 5, `the cover animates: its card repainted ${alone} times in 3 s`);
+  assert.equal(after.lastFind, -1, 'no frame of it was read as a find');
+  assert.equal(after.selection, -1);
+  assert.equal(after.basePos, armed.basePos, 'the camera did not move');
+  assert.deepEqual(after.restless, [1], 'and the card ends up restless');
+
+  await paintOf(page, [0]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 0, 'a real match elsewhere is still found');
+});
+
+test('A15 — a still cover that arrives late is not a find, and its card answers again afterwards', async (t) => {
+  if (gate(t)) return;
+  // Beta's cover is held back 6.5 s, so find is armed first. A card paints as
+  // its cover arrives and again when it lands; neither is a match.
+  const page = await fixture(t, 'initial=full&late=6500', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 6000 });
+  const armed = await pose(page);
+  const loaded = () => page.evaluate(() => { const img = document.querySelectorAll('.sp-dcard img')[1]; return img.complete && img.naturalWidth > 0; });
+  assert.equal(await loaded(), false, 'armed before the late cover is in');
+
+  // Still loading: a paint of that card is the image arriving, not a match.
+  await paintOf(page, [1]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, -1, 'a card whose cover is still loading does not answer');
+
+  await page.waitForFunction(() => { const img = document.querySelectorAll('.sp-dcard img')[1]; return img.complete && img.naturalWidth > 0; }, null, { timeout: 9000 });
+  await page.waitForTimeout(600);
+  const landed = await pose(page);
+  assert.equal(landed.lastFind, -1, 'the cover landing was not read as a find');
+  assert.equal(landed.basePos, armed.basePos, 'and the camera did not move');
+  assert.deepEqual(landed.restless, [], 'a still cover leaves its card in good standing');
+
+  // Off trial a few seconds later, the card answers like any other.
+  await page.waitForTimeout(3200);
+  await paintOf(page, [1]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 1, 'after its trial the card is found again');
+});
+
+test('A16 — a card repainting just after we captured it is not a find', async (t) => {
+  if (gate(t)) return;
+  // Capturing a card whose cover is not decoded yet decodes it, and the card
+  // repaints with it a moment later, well after the capture call returned.
+  const page = await fixture(t);
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 8000 });
+  // The wall captures Beta for its near tile, as it does when the camera brings it close.
+  const captured = await page.evaluate(() => { view._labelled[1] = 1; return view._nearSource(1) != null; });
+  assert.equal(captured, true, 'the card was captured');
+  await page.waitForTimeout(400);
+  await paintOf(page, [1]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, -1, 'its repaint 0.4 s later is the capture, not a match');
+  // Another card, not captured, answers in the meantime.
+  await paintOf(page, [2]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, 2, 'a card we did not capture is found');
+  await page.waitForTimeout(3000);
+  await paintOf(page, [1]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, 1, 'three seconds on, the captured card answers again');
+});
+
+test('A14 — the browser repainting many cards together marks none of them restless', async (t) => {
+  if (gate(t)) return;
+  // While a wall loads, the browser repaints nearly every card at once, many
+  // times over. Each card is in every one of those paints, exactly as an
+  // animated card is in its own. Only a paint of a few cards is an animation.
+  const page = await fixture(t);
+  await page.waitForFunction(() => view._findArmed === true, null, { timeout: 8000 });
+  const result = await page.evaluate(() => {
+    const host = document.querySelector('canvas.card-host');
+    const cards = [...host.querySelectorAll('[drawable]')];
+    const paint = (which) => {
+      const ev = new Event('paint');
+      Object.defineProperty(ev, 'changedElements', { value: which.map((i) => cards[i]) });
+      host.dispatchEvent(ev);
+    };
+    // Watched as before arming, when every card is. Synchronous, so nothing arms in between.
+    view._findArmed = false;
+    // Ten cards' worth in one paint (the fixture has three, so they repeat), eight times.
+    for (let n = 0; n < 8; n++) paint([0, 2, 0, 2, 0, 2, 0, 2, 0, 2]);
+    const afterMany = [...view._restless];
+    for (let n = 0; n < 8; n++) paint([0]);
+    const afterAlone = [...view._restless];
+    view._findArmed = true;
+    return { afterMany, afterAlone };
+  });
+  assert.deepEqual(result.afterMany, [], 'cards repainted together, however often, are not restless');
+  assert.deepEqual(result.afterAlone, [0], 'the control: a card repainting alone that often is');
 });
 
 test('A10 — a pool card shows its title band while tiles are drawn from cards, and only then', async (t) => {

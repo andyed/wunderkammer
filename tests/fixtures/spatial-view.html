@@ -74,6 +74,10 @@
   };
   const params = new URLSearchParams(location.search);
   const initial = params.get('initial');
+  // An animated cover on Beta, held back by the server for `pulse` ms.
+  if (params.get('pulse') != null) clips[1].cover = `/fixtures/pulse.svg?delay=${Number(params.get('pulse')) || 0}`;
+  // A still cover on Beta that arrives late.
+  if (params.get('late') != null) clips[1].cover = `/fixtures/beta.svg?delay=${Number(params.get('late')) || 0}`;
   if (params.get('covers') === 'sheets') {
     // Covers shipped as sprite-sheet cells, with no file of their own. The
     // server holds each page back, so a card's <img> gets its src long after
