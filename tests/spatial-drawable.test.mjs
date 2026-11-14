@@ -432,3 +432,37 @@ test('A10 — a pool card shows its title band while tiles are drawn from cards,
   assert.equal(off.hostClass, false);
   assert.equal(off.body, 'hidden', 'without cards behind the tiles, an unhovered pool card hides its band');
 });
+
+test('A11 — a pool card whose tile is a sheet cell keeps its band for hover', async (t) => {
+  if (gate(t)) return;
+  // Sheet-covered items draw their tiles from the sheet, with no title band
+  // (resolveSource), even though a card host exists. Their pool cards must not
+  // be the only labelled tiles in the row.
+  const page = await fixture(t, 'initial=full&covers=sheets');
+  await page.waitForFunction(() => document.querySelectorAll('.sp-card img[src]').length > 0, null, { timeout: 10000 });
+  await page.mouse.move(2, 2);                       // off every card
+  const read = () => page.evaluate(() => [...document.querySelectorAll('.sp-card')]
+    .filter((el) => el.querySelector('.sp-body'))
+    .map((el) => ({
+      sprite: el.classList.contains('sp-sprite'), hovered: el.matches(':hover'),
+      body: getComputedStyle(el.querySelector('.sp-body')).visibility,
+    })));
+  const cards = await read();
+  assert.ok(cards.length > 0, 'the fixture has promoted pool cards');
+  assert.equal(await page.evaluate(() => document.querySelector('#host').classList.contains('sp-cards')), true,
+    'a card host exists, so the host class is on');
+  for (const card of cards) {
+    assert.equal(card.hovered, false);
+    assert.equal(card.sprite, true, 'a sheet-covered item marks its pool card');
+    assert.equal(card.body, 'hidden', 'and that card hides its band until hover, like the tiles around it');
+  }
+  // Hover still discloses it.
+  const box = await page.evaluate(() => {
+    const r = [...document.querySelectorAll('.sp-card')].find((el) => el.querySelector('.sp-body')).getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 3 };
+  });
+  await page.mouse.move(box.x, box.y);
+  await page.waitForFunction(() => [...document.querySelectorAll('.sp-card')].some((el) => el.matches(':hover')));
+  const hovered = (await read()).find((card) => card.hovered);
+  assert.equal(hovered.body, 'visible', 'the hovered card shows its band');
+});

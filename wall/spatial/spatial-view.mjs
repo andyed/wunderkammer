@@ -550,6 +550,10 @@ export class SpatialView {
     if (!clip) return;
 
     const sprite = spriteCovers.has(clip);
+    // A sheet-covered item's tile is its cell, drawn without a title band
+    // (resolveSource), so its pool card keeps the band for hover as well.
+    // toggle, not add: a pooled card is rebuilt for other items.
+    el.classList.toggle('sp-sprite', sprite);
     const src = sourceFor(clip, 340) || '';   // the card is authored 340 px wide
     // A video plays in the DOM card too, over its cover as the poster. Not in a
     // drawable card: a capture is one still frame, and the field's own video
