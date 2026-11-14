@@ -131,10 +131,8 @@ canvas.card-host {
  * hidden until hover made same-sized neighbours disagree about whether they
  * have a label, so it shows the band as well. The editor link stays a
  * disclosure, on hover or selection, which keeps the band the height of a
- * tile's. Same #0d1017 ground and 15.19:1 / 8.54:1 inks as above.
- *
- * Not for a sheet-covered item (.sp-sprite): its tile is the sheet's cell,
- * with no band, so its pool card keeps the band for hover like its
- * neighbours do. */
-.sp-host.sp-cards .sp-card:not(.sp-sprite) .sp-body { visibility: visible; }
-.sp-host.sp-cards .sp-card:not(.sp-sprite):not(:hover):not([aria-selected="true"]) .sp-edit { display: none; }
+ * tile's. Same #0d1017 ground and 15.19:1 / 8.54:1 inks as above. A
+ * sheet-covered item's near tile is drawn from its card as well, once the
+ * cover is in (SpatialView._adoptCovered). */
+.sp-host.sp-cards .sp-card .sp-body { visibility: visible; }
+.sp-host.sp-cards .sp-card:not(:hover):not([aria-selected="true"]) .sp-edit { display: none; }
