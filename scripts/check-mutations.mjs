@@ -127,6 +127,12 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'a big stack opened from far back',
   },
   {
+    name: 'a sheet-covered pool card is the only labelled tile in its row', file: 'wall/spatial/spatial.css',
+    from: '.sp-host.sp-cards .sp-card:not(.sp-sprite) .sp-body { visibility: visible; }',
+    to: '.sp-host.sp-cards .sp-card .sp-body { visibility: visible; }',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a pool card whose tile is a sheet cell',
+  },
+  {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
     from: 'if (wasOpen) this._applyVisibility();', to: '',
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',
