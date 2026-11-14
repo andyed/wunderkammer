@@ -161,6 +161,37 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack answers once for its labels',
   },
   {
+    name: 'proxy hands the wall an SVG that taints its tile atlas', file: 'lib/proxy-image.mjs',
+    from: "return 'SVG with foreignObject taints a canvas';", to: 'return null;',
+    test: 'tests/proxy-image.test.mjs', pattern: 'an SVG with a foreignObject is refused',
+  },
+  // Animated covers and find (SpatialView._answering): MUTATION_FILTER='restless:'
+  {
+    name: 'restless: a card that repaints by itself is read as a find match', file: 'wall/spatial/spatial-view.mjs',
+    from: 'const indices = whole ? painted : this._answering(painted, now);', to: 'const indices = painted;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a card that keeps repainting by itself is set aside',
+  },
+  {
+    name: 'restless: a loading wall repainting together marks every card restless', file: 'wall/spatial/spatial-view.mjs',
+    from: 'const counted = !this._capturing && painted.length <= RESTLESS_SET;', to: 'const counted = !this._capturing;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'the browser repainting many cards together',
+  },
+  {
+    name: 'restless: a card answers find while its cover is still loading', file: 'wall/spatial/spatial-view.mjs',
+    from: 'if (img && !img.complete) continue;', to: '',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a still cover that arrives late is not a find',
+  },
+  {
+    name: 'restless: a card repainting after our own capture is read as a find', file: 'wall/spatial/spatial-view.mjs',
+    from: 'if (now - (this._capturedAt.get(i) ?? -Infinity) < CAPTURE_ECHO_MS) continue;', to: '',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a card repainting just after we captured it',
+  },
+  {
+    name: 'restless: an animated cover that lands after arming answers find', file: 'wall/spatial/spatial-view.mjs',
+    from: 'if (!this._restless.has(i)) this._trial.set(i, performance.now() + RESTLESS_GAP_MS);', to: '',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'an animated cover that arrives after find is armed',
+  },
+  {
     name: 'closing a stack leaves the other stacks hidden', file: 'wall/spatial/spatial-view.mjs',
     from: 'if (wasOpen) this._applyVisibility();', to: '',
     test: 'tests/spatial-view.test.mjs', pattern: 'an open stack hides the other stacks',

@@ -24,6 +24,7 @@ import { loadInstanceConfig } from './lib/instance-config.mjs';
 import { suppressClips } from './lib/suppress.mjs';
 import { dedupeClips } from './lib/dedupe.mjs';
 import { internSheets } from './lib/sheets.mjs';
+import { canvasHazard } from './lib/proxy-image.mjs';
 
 const dnsLookup = promisify(lookup);
 
@@ -239,6 +240,10 @@ async function fetchImage(target, hops = 3) {
     if (body.length > PROXY_MAX_BYTES) {
       throw Object.assign(new Error('too large'), { status: 413 });
     }
+    // An image that would taint a tile atlas stops the whole 3D view; the
+    // item goes without a picture instead (lib/proxy-image.mjs).
+    const hazard = canvasHazard(type, body);
+    if (hazard) throw Object.assign(new Error(hazard), { status: 415 });
     return { body, type };
   }
   throw Object.assign(new Error('too many redirects'), { status: 502 });
@@ -320,6 +325,8 @@ const server = http.createServer(async (req, res) => {
     // This is still a fetch of an arbitrary URL on behalf of a page, so it is
     // deliberately narrow: http/https only, no private address space, image
     // content types only, capped size, redirects re-validated at every hop.
+    // And nothing that would taint the atlas it exists to feed: an SVG with a
+    // foreignObject is refused (lib/proxy-image.mjs).
     if (p === '/api/proxy') {
       const target = url.searchParams.get('url') || '';
       try {

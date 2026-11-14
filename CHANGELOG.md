@@ -85,6 +85,22 @@ and ignores the other two.
   drawn from the card too, so a sheet-covered collection is labelled the same
   way. Far tiles stay the bare cell: at that size the label goes. Two
   mutations (`scripts/check-mutations.mjs`), each caught.
+- **One bad cover no longer stops the 3D view.** Chrome taints a canvas when
+  it draws an SVG image containing a `foreignObject`, whatever its origin. A
+  harvested page with such a cover tainted the tile atlas, every later
+  texture upload threw, and the view stopped responding 30 to 60 s after
+  load. `/api/proxy` now refuses that SVG (415) and the item goes without a
+  picture. The same file as a local cover or in a static collection is still
+  drawn by the atlas loader. One mutation, caught.
+- **Find-in-page ignores cards repainting for their own reasons.** A repaint
+  of some cards is the only signal a find match gives, and three other things
+  produce it: an animated cover (every frame), a cover still loading or just
+  landed, and the repaint that follows the wall's own capture of a card.
+  Each moved the camera with nobody at the keyboard. An animating card is
+  now left out of find, a card does not answer while its cover loads or for
+  3 s after, nor for 3 s after a capture. Find arms once the answering cards
+  are quiet, where a wall with an animated cover used never to arm. Five
+  mutations (`MUTATION_FILTER='restless:'`), each caught.
 - **Labels follow size.** A tile wears its title band only while the title
   reaches 7 CSS px on screen; below that the band was a smear across the
   picture, and the tile is now the bare cover with the title on hover. The
