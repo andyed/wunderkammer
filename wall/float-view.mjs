@@ -24,6 +24,7 @@ import { perf } from './instrument.mjs';
 import { parseFront, isFront, orderValues, isTimeKey, isOrdered, mountainStep } from './float-space.mjs';
 import { ARRANGEMENTS, DEFAULT_ARRANGEMENT, isArrangement, arrange, AXES, AXIS_LABELS, axisDimensions, resolveAxes, validAxes, clipAttributeKeys, attributeAxis, nearestAlong, describeItem } from './float-space.mjs';
 import { DEFAULT_SPHERE, validSphere } from './float-space.mjs';
+import { contained, imageShape, statedAspect } from './float-space.mjs';
 import { arrangeMenu, STACKS } from './arrange-menu.mjs';
 import { NEUTRAL_NOUNS, counted } from './nouns.mjs';
 import { Callout, JumpBox, announcer, titleMatches as matchTitles } from './keyboard-path.mjs';
@@ -278,6 +279,11 @@ export class FloatView {
     });
     this.field.count = this.count; this.field.mesh.count = this.count;
     this.field.setRenderer(this.renderer);
+    // A loaded tile says what shape its image is (noteImageShape). The field
+    // adopts the tile first, as it did before this listener was added.
+    this.imageAspect = new Float32Array(this.count); this.aspectTier = new Uint8Array(this.count);
+    const adopt = this.field.atlases.onTileReady;
+    this.field.atlases.onTileReady = (index, tier) => { adopt?.(index, tier); this.noteImageShape(index, tier); };
     // Items with a video play it over their cover (video-tiles.mjs).
     this.videos = new VideoTiles({
       scene: this.scene, placement: fieldPlacement(this.field),
@@ -287,6 +293,7 @@ export class FloatView {
     this.dimMode = patchFragment(this.field.material) ? 'brightness' : 'hidden';
     this.resolveAxes();
     this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions()); this.unturning = false;
+    this.shapeLayout();
     const p = this.layout.positions, s = this.layout.sizes;
     for (let i = 0; i < this.count; i++) this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], this.rotationOf(i));
     this.field.layout(); this.applyLayoutDecor();
@@ -472,6 +479,7 @@ export class FloatView {
     // Every card is placed again below, a lifted one with them.
     this.stuck = -1; this.stickLine.visible = false;
     this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());
+    this.shapeLayout();
     this.syncCallout(); // a new arrangement reads the item differently
     const p = this.layout.positions, s = this.layout.sizes, still = !animate || reducedMotion();
     for (let i = 0; i < this.count; i++) {
@@ -826,6 +834,47 @@ export class FloatView {
     if (!quiet) this.invalidate();
     return true;
   }
+  /**
+   * Cards take their images' shapes. The arrangement shapes a card from
+   * `props.dims` and gives it a box; a card whose image is another shape is
+   * drawn as the largest card of the image's shape inside that box, so nothing
+   * else moves. `boxes` and `seats` keep what the arrangement gave.
+   */
+  shapeLayout() {
+    this.boxes = this.layout.sizes.slice(); this.seats = this.layout.positions.slice();
+    for (let i = 0; i < this.count; i++) this.applyShape(i);
+  }
+  /** Item `index`'s layout size (and, on the mountain, height) for the image shape known so far. True when it changed. */
+  applyShape(index) {
+    const s = this.layout.sizes, p = this.layout.positions, bw = this.boxes[index * 2], bh = this.boxes[index * 2 + 1];
+    const [w, h] = contained(bw, bh, this.imageAspect?.[index] || 0);
+    // On the mountain a card stands on the slope: a shorter one keeps its foot there.
+    const y = this.layout.mountain ? this.seats[index * 3 + 1] - (bh - h) / 2 : this.seats[index * 3 + 1];
+    if (s[index * 2] === w && s[index * 2 + 1] === h && p[index * 3 + 1] === y) return false;
+    s[index * 2] = w; s[index * 2 + 1] = h; p[index * 3 + 1] = y;
+    return true;
+  }
+  /**
+   * A tile has loaded: the atlas fitted the image inside a square slot and
+   * recorded how much of each side it fills, which is the image's shape. A near
+   * tile measures it four times as finely as a far one, so a far tile never
+   * replaces a near reading.
+   */
+  noteImageShape(index, tier) {
+    const pair = this.field?.atlases, near = tier === 'near', atlas = near ? pair?.near : pair?.far, slot = (near ? pair?.nearSlot : pair?.farSlot)?.[index];
+    if (!atlas || !(slot >= 0) || !(index >= 0 && index < this.count) || !near && this.aspectTier[index]) return;
+    const aspect = imageShape(atlas.fits[slot * 2] / atlas.fits[slot * 2 + 1], statedAspect(this.clips[index]));
+    if (!(aspect > 0) || !Number.isFinite(aspect)) return;
+    this.imageAspect[index] = aspect; this.aspectTier[index] = near ? 2 : 1;
+    if (!this.layout || !this.applyShape(index)) return;
+    const p = this.layout.positions, s = this.layout.sizes;
+    // A lifted card is lifted again at its new size.
+    if (index === this.stuck) { this.stuck = -1; this.stick(index); }
+    // At rest, the card takes its shape with its picture. While cards travel, it takes it on the way.
+    else if (this.field.moving > 0 && !reducedMotion()) this.field.moveTo(index, p[index * 3], p[index * 3 + 1], p[index * 3 + 2], s[index * 2], s[index * 2 + 1], this.rotationOf(index));
+    else { this.field.place(index, p[index * 3], p[index * 3 + 1], p[index * 3 + 2], s[index * 2], s[index * 2 + 1], this.rotationOf(index)); this.reshaped = true; }
+    this.invalidate();
+  }
   /** One tile to a new place and size: travelling, or at once under reduced motion. */
   moveTile(index, x, y, z, w, h) {
     if (reducedMotion()) { this.field.place(index, x, y, z, w, h, this.rotationOf(index)); this.field.layout(); }
@@ -988,6 +1037,7 @@ export class FloatView {
     if (flying || moving || this.dirty) {
       this.dirty = false;
       const endPass = perf.begin('float/pass');
+      if (this.reshaped) { this.reshaped = false; this.field?.layout(); }
       this.billboard();
       this.syncStick();
       this.field?.update(this.camera, now);
@@ -1145,6 +1195,8 @@ export class FloatView {
       unplaced: this.layout?.unplaced || 0, labels: this.labels.map(l => l.node.textContent),
       stuck: this.stuck >= 0 ? this.keys[this.stuck] : null, mountain: this.layout?.mountain ? { rows: this.layout.mountain.rows.map(row => row.map(i => this.keys[i])) } : null,
       sizes: f ? byKey(i => [r(f.sizes[i * 2]), r(f.sizes[i * 2 + 1])]) : {},
+      // Each item's image shape as its tile reported it (0 until one has loaded), and the box the arrangement gave its card.
+      imageAspect: this.imageAspect ? byKey(i => r(this.imageAspect[i])) : {}, boxes: this.boxes ? byKey(i => [r(this.boxes[i * 2]), r(this.boxes[i * 2 + 1])]) : {},
       axes: this.axes, axisInfo: this.layout?.axisInfo || null, sphere: this.layout?.sphere || null,
       // The way each tile's face points, as drawn now.
       normals: f ? byKey(i => this.faceNormal(i, v).toArray().map(r)) : {},

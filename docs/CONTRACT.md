@@ -81,6 +81,15 @@ files exist through it.
   the clip a `cover` and `props.dims` of the video's own size: the cover is
   what shows before the first frame and whenever a video is paused for the
   play budget (the nearest 24 in view play), and the dims shape its tile.
+- **Image size:** `props.dims` (optional) states an image's pixel size as a
+  list of one string, `["WIDTHxHEIGHT"]`. The flat wall and the floating
+  space shape a tile from it, and assume 4:3 without it. (The floating space
+  also reads a plain string; the flat wall does not yet.) In the floating
+  space a card whose loaded image turns out to be another shape (no `dims`,
+  wrong `dims`, or a ratio outside 0.3–4) is drawn at the image's shape inside
+  the place the arrangement gave it, so the image is not stretched; the
+  arrangement itself is not redone, so a row on the mountain keeps a gap
+  there. Send `dims` and the arrangement is right from the start.
 - **Attributes** go in `props`: strings, finite numbers, booleans or arrays of
   them. A props key that names a clip field (`title`, `source` …) is refused,
   because `valuesOf()` reads the clip's own field first.
