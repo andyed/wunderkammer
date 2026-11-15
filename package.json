@@ -1,6 +1,6 @@
 {
   "name": "wunderkammer",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A collection explorer for people and language models: a JSON collection document in, pan/zoom/facets/comparison out, exact evidence back.",
   "type": "module",
   "bin": {

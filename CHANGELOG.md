@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 — 2026-11-15
+
+The collection document and live links are unchanged. All 531 tests pass, and
+all 256 mutation cases are detected.
 
 - **A floating card is drawn at its image's shape.** The 3D view shaped each
   card from `props.dims`, assumed 4:3 without it, clamped the ratio to 0.3–4,
