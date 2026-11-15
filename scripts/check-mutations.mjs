@@ -1090,7 +1090,7 @@ const cases = [
   },
   {
     name: 'still: cloud, a scope change leaves the old order', file: 'wall/float-view.mjs',
-    from: "    if (this.arrangement === 'cloud' && this.field) this.relayout({ animate: false });\n    if (!this.inScopeKey(this.selection)) this.selection = null;",
+    from: "    if (isOrdered(this.arrangement) && this.field) this.relayout({ animate: false });\n    if (!this.inScopeKey(this.selection)) this.selection = null;",
     to: "    if (!this.inScopeKey(this.selection)) this.selection = null;",
     test: 'tests/still.test.mjs', pattern: 'the cloud puts the lit items in front',
   },
