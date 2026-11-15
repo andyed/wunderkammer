@@ -26,6 +26,32 @@
     zoom" block and the `ZOOM_DETAIL` switch in `wall/wall.mjs`,
     `tests/zoom-detail.test.mjs`.
 
+- **Mountain: a card keeps its image's proportions (reported, not fixed).**
+  Reported by Andy, 2026-11-15, on the Mountain view of Session
+  Cartographer's image wall: images are drawn stretched or squeezed.
+  - **Cause, read from the code and not yet measured.** A card's shape comes
+    from `aspectOf` in `wall/float-space.mjs`. It reads `props.dims`
+    (`WIDTHxHEIGHT`), falls back to 4:3 when a clip has none, and clamps the
+    ratio to 0.3–4. The tile atlas fits each image inside its slot and
+    records how much of the slot it fills (`fits` in
+    `wall/spatial/lib/atlas.js`), and the card draws exactly that part across
+    its whole face (`aFit` in `wall/spatial/lib/instanced.js`). So a clip
+    without `dims` is drawn at 4:3 whatever its image is, and a clip past
+    the clamp is drawn at the clamp. On that wall, 0 of 476 clips carried
+    `dims`.
+  - **Not only the Mountain.** Every floating arrangement sizes its cards
+    this way. The Mountain's justified rows make it the easiest place to see.
+  - **To do.** Measure first: a portrait and a wide image without `dims`,
+    the card's on-screen ratio against the image's own. Then:
+    - never stretch: once an image has loaded, take the card's ratio from
+      the image, or letterbox it inside the card, and settle what a row does
+      when a late ratio changes a card's width;
+    - choose crop or letterbox, not stretch, for a ratio past the clamp;
+    - say in [docs/CONTRACT.md](docs/CONTRACT.md) that `props.dims` shapes a
+      floating card, and what a card does without it;
+    - have Session Cartographer's collection document send `dims`; it
+      already knows each image's size.
+
 - **Showcase: the collection flows through the visible slots (backlog).**
   Parked by Andy, 2026-10-18, when its ▶ button left the header: "nice idea,
   can go in backlog".
