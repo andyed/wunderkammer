@@ -112,9 +112,19 @@ export function hsl([r, g, b]) {
 
 /** Same fallback as layout.mjs: a clip with no usable dims is assumed 4:3. */
 export function aspectOf(clip) {
-  const m = String(clip?.props?.dims?.[0] || clip?.props?.dims || '').match(/^(\d+)x(\d+)$/);
+  const stated = statedAspect(clip);
+  return stated ? Math.min(4, Math.max(0.3, stated)) : 4 / 3;
+}
+/**
+ * The width / height a clip's `props.dims` states, unclamped; 0 when it states
+ * none. `dims` is `"WIDTHxHEIGHT"`, alone or first in a list. (Indexing a
+ * string for its first entry reads one character, which is how a plain
+ * string used to be ignored.)
+ */
+export function statedAspect(clip) {
+  const dims = clip?.props?.dims, m = String((Array.isArray(dims) ? dims[0] : dims) || '').match(/^(\d+)x(\d+)$/);
   const w = Number(m?.[1]), h = Number(m?.[2]);
-  return w > 0 && h > 0 ? Math.min(4, Math.max(0.3, w / h)) : 4 / 3;
+  return w > 0 && h > 0 ? w / h : 0;
 }
 
 /** The A–Z shelf a title belongs on. */
@@ -133,6 +143,35 @@ const SHELF_ORDER = shelf => shelf === '0–9' ? -1 : shelf === '#' ? 99 : shelf
  */
 export function tileEdge(n) { return Math.min(150, Math.max(30, WORLD * 0.34 / Math.cbrt(Math.max(1, n)))); }
 const sized = (aspect, edge) => [edge * Math.sqrt(aspect), edge / Math.sqrt(aspect)];
+/**
+ * How far a card's shape may be from its image's before the card is redrawn to
+ * fit: enough to absorb arithmetic, so a card whose box already has the
+ * image's shape keeps it exactly. A tile's own imprecision is `imageShape`'s
+ * to settle, before this is asked.
+ */
+export const SHAPE_TOLERANCE = 0.01;
+/**
+ * The largest card of `aspect` (width / height) inside a `w` × `h` box. A card
+ * draws its image across its whole face, so a card of another shape stretches
+ * the image. The arrangement shapes cards from `props.dims`; this is what a
+ * card falls back to when the image turns out to be another shape: no dims
+ * (the 4:3 default), dims that are wrong, or a ratio past `aspectOf`'s clamp.
+ */
+/**
+ * How far a tile's reading of a shape may be from the stated one and still be
+ * the same image. A 10:1 image fills 6.4 of a far tile's 64 px, drawn as 6:
+ * a reading 7% out. Inside this the stated shape is the better number.
+ */
+export const READING_TOLERANCE = 0.1;
+/** The shape to draw a card at: what its tile measured, or the stated shape when the tile agrees with it. */
+export function imageShape(measured, stated) {
+  return stated > 0 && Math.abs(measured / stated - 1) <= READING_TOLERANCE ? stated : measured;
+}
+export function contained(w, h, aspect, tolerance = SHAPE_TOLERANCE) {
+  const box = w / h;
+  if (!(aspect > 0) || !Number.isFinite(aspect) || !(box > 0) || !Number.isFinite(box) || Math.abs(aspect / box - 1) <= tolerance) return [w, h];
+  return aspect > box ? [w, w / aspect] : [h * aspect, h];
+}
 const quantile = (values, p) => { const s = [...values].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) * p)] : 0; };
 
 /**

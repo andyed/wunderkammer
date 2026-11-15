@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **A floating card is drawn at its image's shape.** The 3D view shaped each
+  card from `props.dims`, assumed 4:3 without it, clamped the ratio to 0.3–4,
+  and drew the image across the whole card, so an image of another shape was
+  stretched. Once a card's tile has loaded, the card now takes the image's
+  shape inside the place the arrangement gave it; on the mountain it keeps
+  its foot on the slope. A plain-string `dims` (`"1600x900"`, not in a list)
+  now shapes a floating card too; it was read one character at a time and
+  ignored. [docs/CONTRACT.md](docs/CONTRACT.md) says what `dims` does. Six
+  mutations (`MUTATION_FILTER='shape:'`), each caught.
+
 ## 0.5.0 — 2026-11-15
 
 Live links gain `arrange=mountain`, and `front=` now goes with it as well as

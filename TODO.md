@@ -26,31 +26,24 @@
     zoom" block and the `ZOOM_DETAIL` switch in `wall/wall.mjs`,
     `tests/zoom-detail.test.mjs`.
 
-- **Mountain: a card keeps its image's proportions (reported, not fixed).**
-  Reported by Andy, 2026-11-15, on the Mountain view of Session
-  Cartographer's image wall: images are drawn stretched or squeezed.
-  - **Cause, read from the code and not yet measured.** A card's shape comes
-    from `aspectOf` in `wall/float-space.mjs`. It reads `props.dims`
-    (`WIDTHxHEIGHT`), falls back to 4:3 when a clip has none, and clamps the
-    ratio to 0.3–4. The tile atlas fits each image inside its slot and
-    records how much of the slot it fills (`fits` in
-    `wall/spatial/lib/atlas.js`), and the card draws exactly that part across
-    its whole face (`aFit` in `wall/spatial/lib/instanced.js`). So a clip
-    without `dims` is drawn at 4:3 whatever its image is, and a clip past
-    the clamp is drawn at the clamp. On that wall, 0 of 476 clips carried
-    `dims`.
-  - **Not only the Mountain.** Every floating arrangement sizes its cards
-    this way. The Mountain's justified rows make it the easiest place to see.
-  - **To do.** Measure first: a portrait and a wide image without `dims`,
-    the card's on-screen ratio against the image's own. Then:
-    - never stretch: once an image has loaded, take the card's ratio from
-      the image, or letterbox it inside the card, and settle what a row does
-      when a late ratio changes a card's width;
-    - choose crop or letterbox, not stretch, for a ratio past the clamp;
-    - say in [docs/CONTRACT.md](docs/CONTRACT.md) that `props.dims` shapes a
-      floating card, and what a card does without it;
-    - have Session Cartographer's collection document send `dims`; it
-      already knows each image's size.
+- **Card shape: what the floating-space fix left (backlog).** A floating card
+  is now drawn at its image's shape (`contained` in `wall/float-space.mjs`,
+  `shapeLayout` and `noteImageShape` in `wall/float-view.mjs`), after Andy
+  reported stretched images on the Mountain view of Session Cartographer's
+  image wall, 2026-11-15. On that wall 335 of 345 cards were off their
+  image's ratio by more than 3% before, and none after. Left:
+  - **The arrangement is not redone from measured shapes.** A card without
+    `dims` is fitted inside its 4:3 box, so a mountain row keeps gaps. Redoing
+    rows as images arrive would move cards under the pointer; a redo on the
+    next deliberate re-arrangement would not.
+  - **A plain-string `dims` is still ignored by the flat wall and the
+    similarity map.** `wall/layout.mjs` and `wall/similarity-layout.mjs` read
+    `props.dims?.[0]`, which on a string is one character, so only the list
+    form shapes their tiles. `statedAspect` in `wall/float-space.mjs` reads
+    both.
+  - **Stacks and the flat wall were not checked for the same stretch.**
+  - **A card that only ever has a far tile** is shaped from 64 px, good to
+    about 4% on that wall. A near tile corrects it.
 
 - **Showcase: the collection flows through the visible slots (backlog).**
   Parked by Andy, 2026-10-18, when its ▶ button left the header: "nice idea,

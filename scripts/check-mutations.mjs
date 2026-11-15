@@ -1230,6 +1230,38 @@ const cases = [
     from: 'const CELL = 128, SHARP_CELL = 256, SHARP_LIMIT = 400;', to: 'const CELL = 128, SHARP_CELL = 256, SHARP_LIMIT = 0;',
     test: 'tests/aisle-integration.test.mjs', pattern: 'aisle uses canonical groups',
   },
+  // A floating card takes its image's shape (wall/float-space.mjs "contained"; the view's shapeLayout): MUTATION_FILTER='shape:'
+  {
+    name: 'shape: a card of another shape keeps its box, and stretches its image', file: 'wall/float-space.mjs',
+    from: "  return aspect > box ? [w, w / aspect] : [h * aspect, h];", to: "  return [w, h];",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'contained: the largest card',
+  },
+  {
+    name: 'shape: a tile reading is taken over a stated shape it agrees with', file: 'wall/float-space.mjs',
+    from: "  return stated > 0 && Math.abs(measured / stated - 1) <= READING_TOLERANCE ? stated : measured;", to: "  return measured;",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'imageShape: a reading that agrees',
+  },
+  {
+    name: 'shape: dims given as a plain string are read one character at a time', file: 'wall/float-space.mjs',
+    from: "String((Array.isArray(dims) ? dims[0] : dims) || '')", to: "String(dims?.[0] || dims || '')",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'imageShape: a reading that agrees',
+  },
+  {
+    name: 'shape: a loaded tile does not report its image\'s shape', file: 'wall/float-view.mjs',
+    from: "adopt?.(index, tier); this.noteImageShape(index, tier); };", to: "adopt?.(index, tier); };",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'in a colour arrangement a card is drawn',
+  },
+  {
+    name: 'shape: a shorter card on the mountain hangs above the slope', file: 'wall/float-view.mjs',
+    from: "const y = this.layout.mountain ? this.seats[index * 3 + 1] - (bh - h) / 2 : this.seats[index * 3 + 1];", to: "const y = this.seats[index * 3 + 1];",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'on the mountain a card is drawn',
+  },
+  {
+    name: 'shape: a new arrangement forgets the shapes already measured', file: 'wall/float-view.mjs',
+    from: "    this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());\n    this.shapeLayout();\n    this.syncCallout();",
+    to: "    this.layout = arrange(this.clips, this.arrangement, this.arrangeOptions());\n    this.syncCallout();",
+    test: 'tests/float-card-shape.test.mjs', pattern: 'a new arrangement starts from the shapes',
+  },
   // The image warehouse (docs/AISLE.md, "The warehouse"): MUTATION_FILTER=warehouse
   {
     name: 'warehouse: the walk runs past the end of a short aisle', file: 'scripts/warehouse-video.mjs',
