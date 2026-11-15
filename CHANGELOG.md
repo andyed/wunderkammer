@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-11-15
 
 Live links gain `arrange=mountain`, and `front=` now goes with it as well as
-with `arrange=cloud`; a 0.4.0 wall refuses `arrange=mountain`.
+with `arrange=cloud`; a 0.4.0 wall refuses `arrange=mountain`. All 524 tests
+pass, and all 250 mutation cases are detected.
 
 - **Mountain.** A new arrangement in the 3D view, after Data Mountain: the
   items climb a slope in justified rows, the front of the order nearest and
