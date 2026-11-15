@@ -140,9 +140,39 @@ test('Sphere places items by lightness from the top down and by hue around, in b
   }
 });
 
-test('Sphere with no palettes at all shelves every item and still returns a layout', () => {
-  const layout = arrange([{ title: 'A' }, { title: 'B' }], 'sphere');
-  assert.equal(layout.unplaced, 2); assert.equal(layout.order.length, 2);
-  assert.ok([...layout.positions].every(Number.isFinite));
+test('Sphere with no palette on any item still seats every item on the sphere, in the order given', () => {
+  // An embedded wall over plain files has no palettes. Shelving all of them
+  // made Sphere a flat grid under the label of a sphere.
+  const plain = Array.from({ length: 60 }, (_, i) => ({ title: `Item ${String(i).padStart(2, '0')}` }));
+  for (const sphere of [undefined, { facing: 'in', cap: 60 }]) {
+    const layout = arrange(plain, 'sphere', { sphere }), n = plain.length, { radius, bands, facing, colourless } = layout.sphere;
+    assert.equal(colourless, true); assert.equal(layout.unplaced, 0, 'nothing is shelved');
+    assert.ok([...layout.positions].every(Number.isFinite));
+    for (let i = 0; i < n; i++) {
+      const p = at(layout.positions, i, 3), face = rotate(at(layout.rotations, i, 4), [0, 0, 1]);
+      assert.ok(Math.abs(Math.hypot(...p) - radius) < 1e-2, `${plain[i].title} is on the sphere`);
+      assert.ok(dot(face, p.map(v => v / radius)) * (facing === 'in' ? -1 : 1) > 0.99999, `${plain[i].title} lies on the surface, facing ${facing}`);
+    }
+    assert.ok(minGap(layout.positions) > 0, 'no two items share a seat');
+    // The order given is kept: band by band from the top, each around from the seam.
+    assert.deepEqual(layout.order, [...Array(n).keys()], 'reading order is the order given');
+    const y = i => layout.positions[i * 3 + 1];
+    const rings = [...Array(bands).keys()].map(b => layout.order.slice(Math.round(b * n / bands), Math.round((b + 1) * n / bands)));
+    assert.ok(bands >= 3, `${bands} bands`);
+    for (let b = 0; b + 1 < bands; b++) assert.ok(Math.min(...rings[b].map(y)) >= Math.max(...rings[b + 1].map(y)) - 1e-3, `band ${b} sits above band ${b + 1}`);
+    assert.deepEqual(layout.labels.map(l => l.text), [`No palette · ${n} in order, top to bottom`], 'one label says why there is no colour order');
+    assert.equal(layout.guides.length, 0, 'no lightness stubs at the poles');
+  }
+  // Two items are still a layout, and none is none.
+  const two = arrange([{ title: 'A' }, { title: 'B' }], 'sphere');
+  assert.equal(two.unplaced, 0); assert.equal(two.order.length, 2); assert.ok([...two.positions].every(Number.isFinite));
   assert.ok(arrange([], 'sphere').positions.length === 0);
+});
+
+test('Sphere with a palette on only some items keeps the rest on the shelf', () => {
+  const mixed = [{ title: 'Red', palette: ['#c02020'] }, { title: 'Blue', palette: ['#2040c0'] }, { title: 'Plain' }];
+  const layout = arrange(mixed, 'sphere');
+  assert.equal(layout.sphere.colourless, false); assert.equal(layout.unplaced, 1);
+  assert.ok(layout.positions[2 * 3 + 1] < -layout.sphere.radius, 'the item without a palette waits below');
+  assert.ok(layout.labels.some(l => l.text === 'No palette · 1'));
 });

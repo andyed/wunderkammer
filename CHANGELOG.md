@@ -17,7 +17,8 @@ and ignores the other two.
   evenly and never stack. Positions are therefore ranks: items fill latitude
   bands in lightness order, and within a band they run around in OKLCH hue
   order from the collection's emptiest hue, greys first. Items without a
-  palette wait on a shelf below. Sphere sits after HSL under Arrange by.
+  palette wait on a shelf below; a collection with no palettes at all fills
+  the sphere in the order given. Sphere sits after HSL under Arrange by.
   - The cards lie on the surface instead of turning to the camera.
     `facing=in` turns them toward the centre, a bowl you look into, and
     `cap=<degrees>` (up to 120) opens the sphere toward the camera. Two menus

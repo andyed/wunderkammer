@@ -1105,6 +1105,16 @@ const cases = [
     test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   },
   {
+    name: 'sphere: a collection with no palettes is a shelf, not a sphere', file: 'wall/float-space.mjs',
+    from: 'const colourless = n > 0 && placed.length === 0;', to: 'const colourless = false;',
+    test: 'tests/float-sphere.test.mjs', pattern: 'no palette on any item still seats every item',
+  },
+  {
+    name: 'sphere: items without a palette take seats among the coloured ones', file: 'wall/float-space.mjs',
+    from: 'const colourless = n > 0 && placed.length === 0;', to: 'const colourless = n > 0 && unplaced.length > 0;',
+    test: 'tests/float-sphere.test.mjs', pattern: 'a palette on only some items keeps the rest on the shelf',
+  },
+  {
     name: 'sphere: a link may ask for any opening', file: 'wall/float-space.mjs',
     from: 'sphere.cap >= 0 && sphere.cap <= MAX_CAP', to: 'sphere.cap >= 0',
     test: 'tests/float-sphere.test.mjs', pattern: 'validSphere takes a facing',
