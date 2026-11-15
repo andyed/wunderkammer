@@ -165,6 +165,32 @@ const cases = [
     from: "return 'SVG with foreignObject taints a canvas';", to: 'return null;',
     test: 'tests/proxy-image.test.mjs', pattern: 'an SVG with a foreignObject is refused',
   },
+  {
+    name: 'restless: a card repainting before its cover\'s load event answers find', file: 'wall/spatial/spatial-view.mjs',
+    from: "return !!img && !!img.getAttribute('src') && this._coverSeen.get(i) !== img.src;", to: 'return !!img && !img.complete;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'after its cover completes and before its load event',
+  },
+  // A cover that taints a canvas (an SVG with a foreignObject): MUTATION_FILTER='taint:'
+  {
+    name: 'taint: the atlas draws an image that taints it', file: 'wall/spatial/lib/atlas.js',
+    from: '    if (taintsCanvas(image)) return false;\n', to: '',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'without drawable cards the tainting cover fails its own tiles',
+  },
+  {
+    name: 'taint: one tainting image poisons the check for every image after it', file: 'wall/spatial/lib/atlas.js',
+    from: "    clean = false;\n    probe = null;", to: '    clean = false;',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'without drawable cards the tainting cover fails its own tiles',
+  },
+  {
+    name: 'taint: a refused draw leaves its tile holding a slot', file: 'wall/spatial/lib/atlas.js',
+    from: 'if (!atlas.draw(slot, img)) this._failJob({ index, tier, slot });\n        else if (this.onTileReady)', to: 'if (atlas.draw(slot, img) && this.onTileReady)',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'without drawable cards the tainting cover fails its own tiles',
+  },
+  {
+    name: 'taint: a tainting cover below the label cutoff is a hole, not its card', file: 'wall/spatial/spatial-view.mjs',
+    from: '        if (img && taintsCanvas(img)) return this._capture(i);\n', to: '',
+    test: 'tests/spatial-drawable.test.mjs', pattern: 'a local cover that taints a canvas leaves both atlases usable',
+  },
   // Animated covers and find (SpatialView._answering): MUTATION_FILTER='restless:'
   {
     name: 'restless: a card that repaints by itself is read as a find match', file: 'wall/spatial/spatial-view.mjs',
@@ -178,7 +204,7 @@ const cases = [
   },
   {
     name: 'restless: a card answers find while its cover is still loading', file: 'wall/spatial/spatial-view.mjs',
-    from: 'if (img && !img.complete) continue;', to: '',
+    from: 'if (this._coverPending(i)) continue;', to: '',
     test: 'tests/spatial-drawable.test.mjs', pattern: 'a still cover that arrives late is not a find',
   },
   {

@@ -77,6 +77,8 @@
   // An animated cover on Beta, held back by the server for `pulse` ms.
   if (params.get('pulse') != null) clips[1].cover = `/fixtures/pulse.svg?delay=${Number(params.get('pulse')) || 0}`;
   // A still cover on Beta that arrives late.
+  // A local cover on Beta that taints any canvas it is drawn to.
+  if (params.get('foreign') != null) clips[1].cover = '/fixtures/foreign.svg';
   if (params.get('late') != null) clips[1].cover = `/fixtures/beta.svg?delay=${Number(params.get('late')) || 0}`;
   if (params.get('covers') === 'sheets') {
     // Covers shipped as sprite-sheet cells, with no file of their own. The

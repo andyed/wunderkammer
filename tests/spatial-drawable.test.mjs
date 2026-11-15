@@ -61,6 +61,15 @@ before(async () => {
       setTimeout(() => { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }); res.end(body); }, delay);
       return;
     }
+    if (path === '/fixtures/foreign.svg') {
+      // Same-origin, and still not origin-clean: Chrome and Safari taint a
+      // canvas for any SVG image that holds a foreignObject. Mermaid and
+      // draw.io exports do.
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      res.end('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#20e040"/>'
+        + '<foreignObject x="20" y="20" width="200" height="60"><div xmlns="http://www.w3.org/1999/xhtml">label</div></foreignObject></svg>');
+      return;
+    }
     const sheet = path.match(/^\/fixtures\/sheet-(a|b)\.png$/);
     if (sheet) {
       const delay = Number(new URL(req.url, 'http://fixture.test').searchParams.get('delay')) || 0;
@@ -666,3 +675,129 @@ for (const [name, query] of [['a file', 'initial=full'], ['a sheet cell', 'initi
     banded(await at(1200, 1), 'near again');
   });
 }
+
+const readable = (page) => page.evaluate(() => {
+  const read = (atlas) => { try { atlas.ctx.getImageData(0, 0, 1, 1); return true; } catch (error) { return error.name; } };
+  return { near: read(view.field.atlases.near), far: read(view.field.atlases.far) };
+});
+const fixtureTaints = (page) => page.evaluate(async () => {
+  const img = new Image(); img.src = '/fixtures/foreign.svg'; await img.decode();
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 4;
+  const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, 4, 4);
+  try { ctx.getImageData(0, 0, 1, 1); return false; } catch { return true; }
+});
+
+test('A17 — a local cover that taints a canvas leaves both atlases usable and is shown through its card', async (t) => {
+  if (gate(t)) return;
+  // The view stopped responding once such a cover reached an atlas: the canvas
+  // was tainted for good and every texture upload after it threw. A page error
+  // fails this test through fixture(), so a stopped frame loop cannot pass.
+  const page = await fixture(t, 'initial=full&foreign=1');
+  assert.equal(await fixtureTaints(page), true, 'the fixture cover taints a canvas in this browser, or the rest proves nothing');
+  for (const i of [0, 1]) await page.evaluate((k) => view.field.atlases.request(k, 'near'), i);
+  await page.waitForFunction(() => view.field.atlases.nearSlot[1] >= 0, null, { timeout: 5000 });
+  await page.mouse.move(2, 2);
+  const at = async (z, labelled) => {
+    await page.evaluate((depth) => { view.basePos.set(view.lookTarget.x, view.lookTarget.y, depth); view.invalidate(); }, z);
+    await page.waitForFunction((want) => view._labelled[1] === want && view._relabel.size === 0, labelled, { timeout: 5000 });
+    await page.waitForTimeout(500);
+    return { band: await titleBand(page, 1), other: await titleBand(page, 0), atlases: await readable(page) };
+  };
+  const shown = (state, where) => {
+    assert.deepEqual(state.atlases, { near: true, far: true }, `${where}: both atlases can still be read`);
+    assert.ok(state.band.slot >= 0 && state.band.opaque > 0, `${where}: the tainting cover's item still has a near tile with pixels`);
+    assert.ok(state.band.dark > 20 && state.band.light > 20,
+      `${where}: that tile is its card, band included (dark ${state.band.dark}, light ${state.band.light})`);
+  };
+
+  shown(await at(1200, 1), 'near');
+  const small = await at(2800, 0);
+  shown(small, 'far');
+  assert.ok(small.other.slot >= 0 && small.other.dark < 5 && small.other.light < 5,
+    `far: an ordinary cover beside it is bare, as the cutoff asks (dark ${small.other.dark}, light ${small.other.light})`);
+  shown(await at(1200, 1), 'near again');
+
+  // The far tier has no card to fall back on: that one tile fails, alone.
+  const far = await page.evaluate(() => ({ slots: Array.from(view.field.atlases.farSlot), failed: [...view.field.atlases._failed] }));
+  assert.equal(far.slots[1], -1, 'the tainting cover holds no far slot');
+  assert.ok(far.failed.includes('far:1'), 'and is recorded as failed there');
+  assert.ok(far.slots.every((slot, i) => i === 1 || slot >= 0), `every other item has its far tile (${far.slots})`);
+
+  // Still drawing: a camera move reaches the camera.
+  const before = await page.evaluate(() => view.camera.position.z);
+  await page.evaluate(() => { view.basePos.z = 1600; view.invalidate(); });
+  await page.waitForFunction((z) => Math.abs(view.camera.position.z - z) > 50, before, { timeout: 3000 });
+});
+
+test('A17b — without drawable cards the tainting cover fails its own tiles and nothing else', async (t) => {
+  if (gate(t)) return;
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  t.after(async () => { await page.close(); assert.deepEqual(errors, [], 'no page errors'); });
+  await page.addInitScript(() => { window.__cwDrawable = false; });
+  await page.goto(`${origin}/tests/fixtures/spatial-view.html?initial=full&foreign=1`);
+  await page.waitForFunction(() => window.fixtureReady);
+  assert.equal(await fixtureTaints(page), true, 'the fixture cover taints a canvas in this browser');
+  for (const i of [0, 1, 2]) await page.evaluate((k) => view.field.atlases.request(k, 'near'), i);
+  await page.waitForFunction(() => { const a = view.field.atlases; return a._inflight === 0 && a._nearQueue.length === 0 && a._farQueue.length === 0; }, null, { timeout: 8000 });
+  await page.waitForTimeout(400);
+  assert.deepEqual(await readable(page), { near: true, far: true }, 'both atlases can still be read');
+  const state = await page.evaluate(() => ({ near: Array.from(view.field.atlases.nearSlot), far: Array.from(view.field.atlases.farSlot), failed: [...view.field.atlases._failed].sort() }));
+  assert.deepEqual(state.failed, ['far:1', 'near:1'], 'only the tainting cover failed');
+  assert.equal(state.near[1], -1); assert.equal(state.far[1], -1);
+  assert.ok(state.near[0] >= 0 && state.near[2] >= 0, `the covers beside it have near tiles (${state.near})`);
+  assert.ok(state.far.every((slot, i) => i === 1 || slot >= 0), `and every other item has its far tile (${state.far})`);
+});
+
+test('A18 — a card that repaints after its cover completes and before its load event is not a find', async (t) => {
+  if (gate(t)) return;
+  // `img.complete` turns true before the load event runs, and the card can
+  // repaint in between. The gap is a frame or so and comes up in about one
+  // late arrival in eight, so this holds it open: the load event is stopped
+  // on its way down to the image, then delivered by hand.
+  const page = await fixture(t);
+  await page.waitForFunction(() => view._findArmed === true && view._trialsOpen() === 0, null, { timeout: 9000 });
+  await paintOf(page, [1]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 1, 'the card answers find to begin with');
+  await paintOf(page, [0]);
+  await page.waitForTimeout(3600);   // past the capture echo and any trial the find itself started
+  const before = await page.evaluate(() => ({
+    lastFind: view._lastFind, trials: view._trialsOpen(),
+    sinceCapture: performance.now() - (view._capturedAt.get(1) ?? -Infinity),
+  }));
+  assert.equal(before.lastFind, 0);
+  assert.equal(before.trials, 0, 'no card is on trial');
+  assert.ok(before.sinceCapture > 3000, `card 1 was not captured recently (${Math.round(before.sinceCapture)} ms), so only its cover can excuse it`);
+
+  await page.evaluate(() => {
+    const img = document.querySelectorAll('.sp-dcard img')[1];
+    window.held = 0;
+    window.hold = (event) => { if (event.target === img) { window.held++; event.stopImmediatePropagation(); } };
+    document.addEventListener('load', window.hold, true);
+    img.src = '/fixtures/gamma.svg?again=1';
+  });
+  await page.waitForFunction(() => window.held === 1, null, { timeout: 5000 });
+  await page.waitForTimeout(400);    // room for the card to repaint with its new picture
+  const gap = await page.evaluate(() => {
+    const img = document.querySelectorAll('.sp-dcard img')[1];
+    return { complete: img.complete && img.naturalWidth > 0, trial: view._trial.has(1), lastFind: view._lastFind };
+  });
+  assert.equal(gap.complete, true, 'the picture is complete');
+  assert.equal(gap.trial, false, 'and the wall has not had its load event: this is the gap');
+  assert.equal(gap.lastFind, 0, 'the card repainting with it was not read as a find');
+  await paintOf(page, [1]);
+  await page.waitForTimeout(200);
+  assert.equal((await pose(page)).lastFind, 0, 'nor is another repaint in the gap');
+
+  await page.evaluate(() => {
+    document.removeEventListener('load', window.hold, true);
+    document.querySelectorAll('.sp-dcard img')[1].dispatchEvent(new Event('load'));
+  });
+  assert.equal(await page.evaluate(() => view._trial.has(1)), true, 'once its load arrives, the card is on trial like any late cover');
+  await page.waitForTimeout(3300);
+  await paintOf(page, [1]);
+  await page.waitForTimeout(300);
+  assert.equal((await pose(page)).lastFind, 1, 'and answers again after its trial');
+});

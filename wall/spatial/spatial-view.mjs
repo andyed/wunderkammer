@@ -26,7 +26,7 @@ import { HybridField } from './lib/hybrid.js';
 import { PileLayout } from './lib/piles.js';
 import { FieldNavigator } from './lib/navigate.js';
 import { CardHost, supported as drawableSupported } from './lib/cards.js';
-import { RETRY } from './lib/atlas.js';
+import { RETRY, taintsCanvas } from './lib/atlas.js';
 import { spriteCovers } from '../sprite-covers.mjs';
 import { RowMotion } from './lib/motion.js';
 import { groupBy, layout, SIMILARITY, isSimilarity } from '../layout.mjs';
@@ -401,6 +401,7 @@ export class SpatialView {
     this._streaks = new Map();
     this._trial = new Map();
     this._cardImgs = new Map();
+    this._coverSeen = new Map();
     this._capturedAt = new Map();
     this._cardGen = (this._cardGen ?? 0) + 1;
     this._unsubscribePaint?.();
@@ -586,20 +587,29 @@ export class SpatialView {
     const sprite = spriteCovers.has(clip);
     if (this.cardHost && !this.host.hidden) {
       if (this._labelled[i] && (!sprite || this._cardCovered.has(i))) {
-        let shot;
-        this._capturing = true;
-        this._capturedAt.set(i, performance.now());
-        try { shot = this.cardHost.capture(i) ?? null; }
-        finally { queueMicrotask(() => { this._capturing = false; }); }
+        const shot = this._capture(i);
         // A sheet cover has no file for the image path: fall back to its cell.
         if (shot || !sprite) return shot;
       } else if (!sprite) {
-        return this._cardImage(i);
+        const img = this._cardImage(i);
+        // A cover the atlas would refuse (an SVG with a foreignObject taints
+        // it) is shown through its card, which captures clean, band and all.
+        // The alternative is a hole where every other tile has a picture.
+        if (img && taintsCanvas(img)) return this._capture(i);
+        return img;
       }
     }
     if (!sprite) return null;
     // The near tier asks for 160 px, not its 256 px slot (see resolveSource).
     return spriteCovers.serves(clip, 160) ? spriteCovers.source(clip, 160) ?? RETRY : null;
+  }
+
+  /** One card drawn into the host's bitmap, marked so its echo is not a find. */
+  _capture(i) {
+    this._capturing = true;
+    this._capturedAt.set(i, performance.now());
+    try { return this.cardHost.capture(i) ?? null; }
+    finally { queueMicrotask(() => { this._capturing = false; }); }
   }
 
   /**
@@ -707,7 +717,8 @@ export class SpatialView {
    * The cards in a paint that may be answering a find: the painted ones, minus
    * those repainting for a reason of their own.
    *
-   * - A card whose cover is still loading: the image paints as it arrives.
+   * - A card whose cover is on its way (_coverPending): the image paints as
+   *   it arrives.
    * - A card on trial. Its cover has just landed (_coverLanded), which repaints
    *   it, and an animated cover goes on repainting; each repaint extends the
    *   trial. A cover that stays still leaves trial RESTLESS_GAP_MS later.
@@ -728,8 +739,7 @@ export class SpatialView {
     const out = [];
     for (const i of painted) {
       if (this._restless.has(i)) continue;
-      const img = this._cardImgs.get(i);
-      if (img && !img.complete) continue;
+      if (this._coverPending(i)) continue;
       if (now - (this._capturedAt.get(i) ?? -Infinity) < CAPTURE_ECHO_MS) continue;
       let onTrial = this._trial.has(i);
       if (onTrial && now > this._trial.get(i)) { this._trial.delete(i); this._streaks.delete(i); onTrial = false; }
@@ -755,6 +765,20 @@ export class SpatialView {
   _trialsOpen(now = performance.now()) {
     for (const [i, until] of this._trial) if (now > until) { this._trial.delete(i); this._streaks.delete(i); }
     return this._trial.size;
+  }
+
+  /**
+   * Is this card's cover on its way? True from the moment the card's image is
+   * given a URL until its load or error event has been handled here.
+   *
+   * `img.complete` cannot answer this. It turns true, and the card can
+   * repaint with the picture, before the load event runs: measured, the paint
+   * came about 20 ms ahead of `load` in 3 of 24 late arrivals, and each was
+   * read as a find match because the card was not on trial yet.
+   */
+  _coverPending(i) {
+    const img = this._cardImgs.get(i);
+    return !!img && !!img.getAttribute('src') && this._coverSeen.get(i) !== img.src;
   }
 
   /** A card's cover has loaded: the card goes on trial, armed or not. */
@@ -831,7 +855,14 @@ export class SpatialView {
         // before the source is set covers a sheet cell, which is set later.
         const gen = this._cardGen;
         this._cardImgs.set(i, img);
-        img.addEventListener('load', () => { if (gen === this._cardGen) this._coverLanded(i); }, { once: true });
+        // Not once: a card given another cover later is pending, then on
+        // trial, again.
+        img.addEventListener('load', () => {
+          if (gen !== this._cardGen) return;
+          this._coverSeen.set(i, img.src);
+          this._coverLanded(i);
+        });
+        img.addEventListener('error', () => { if (gen === this._cardGen) this._coverSeen.set(i, img.src); });
       }
       if (sprite) {
         // A pooled card can be rebuilt for another item before the cell
