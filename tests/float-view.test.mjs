@@ -510,7 +510,7 @@ test('the 3D button opens the floating space in Axes; Stacks hands over to the s
     assert.deepEqual(s.scene.axes, { across: 'captured', up: 'lightness', depth: 'hue' }, 'the collection\'s time, then lightness and hue');
     assert.equal(await button.getAttribute('aria-pressed'), 'true');
     // The menu leads with the default and ends with the stacks.
-    assert.deepEqual(await p.locator('.float-arrange input').evaluateAll(inputs => inputs.map(i => i.value)), ['axes', 'oklab', 'oklch', 'hsl', 'sphere', 'az', 'stacks']);
+    assert.deepEqual(await p.locator('.float-arrange input').evaluateAll(inputs => inputs.map(i => i.value)), ['axes', 'oklab', 'oklch', 'hsl', 'sphere', 'mountain', 'az', 'stacks']);
     assert.equal(await p.locator('.float-arrange input:checked').inputValue(), 'axes');
 
     // Stacks hands over to the stacks renderer, which keeps the menu in a strip below it.
@@ -568,6 +568,109 @@ test('the 3D button opens the floating space in Axes; Stacks hands over to the s
   const bare = await open('?view=float&rail=0'); try {
     assert.equal((await debug(bare)).scene.arrangement, 'axes');
   } finally { await bare.close(); }
+});
+
+test('float Mountain: the order climbs a slope in justified rows, front= orders it, and the menu and links carry it', async () => {
+  const p = await open('?view=float&arrange=mountain&front=-captured&rail=0'); try {
+    let { scene } = await debug(p);
+    assert.equal(scene.arrangement, 'mountain'); assert.equal(scene.state.front, '-captured');
+    assert.equal(await p.locator('.float-arrange input[value=mountain]').isChecked(), true);
+    const rows = scene.mountain.rows; assert.ok(rows.length >= 3, `${rows.length} rows`);
+    assert.equal(rows.flat().length, clips.length); assert.equal(scene.unplaced, 0);
+    // front=-captured: the earliest capture stands first in the front row, and the order never goes back in time.
+    const when = Object.fromEntries(clips.map(c => [c.url, c.captured])), order = rows.flat();
+    for (let k = 1; k < order.length; k++) assert.ok(when[order[k]] >= when[order[k - 1]], `the order runs earliest first at ${k}`);
+    // Each row behind is further from the camera, higher, and shorter on screen.
+    const z = id => scene.targets[id][2], y = id => scene.targets[id][1], h = id => scene.sizes[id][1];
+    for (let r = 1; r < rows.length; r++) { assert.ok(z(rows[r][0]) < z(rows[r - 1][0])); assert.ok(y(rows[r][0]) - h(rows[r][0]) / 2 > y(rows[r - 1][0]) - h(rows[r - 1][0]) / 2); }
+    assert.ok(h(rows[0][0]) > h(rows.at(-1)[0]), 'the front row is taller than the back one');
+    for (const [id, target] of Object.entries(scene.targets)) near(scene.positions[id], target, 0.01, `${id} is drawn where it is placed`);
+    assert.ok(scene.screen[rows[0][0]][1] < scene.screen[rows.at(-1)[0]][1], 'the back row is higher on screen');
+    // The address names it, and a fresh page from that address is the same mountain.
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await p.locator('#copy-live-view').click();
+    const live = new URL(await p.evaluate(() => navigator.clipboard.readText()));
+    assert.equal(live.searchParams.get('arrange'), 'mountain'); assert.equal(live.searchParams.get('front'), '-captured');
+    const again = await open(live.href); try { const second = (await debug(again)).scene; assert.equal(second.arrangement, 'mountain'); assert.deepEqual(second.mountain.rows, rows); } finally { await again.close(); }
+    // front= reorders it in place; the menu leaves and returns.
+    await p.evaluate(() => window.__cwFloat.setFront('captured')); await settled(p); ({ scene } = await debug(p));
+    assert.deepEqual(scene.mountain.rows.flat().map(id => when[id]), order.map(id => when[id]).reverse().sort((a, b) => b.localeCompare(a)), 'latest first now');
+    await p.locator('.float-arrange input[value=az]').check(); await settled(p); assert.equal((await debug(p)).scene.mountain, null);
+    await p.locator('.float-arrange input[value=mountain]').check(); await settled(p); assert.equal((await debug(p)).scene.arrangement, 'mountain');
+  } finally { await p.close(); }
+});
+
+for (const motion of [false, true]) test(`float Mountain hover: a card comes off the slope on a stick and stays out until another is hovered or Escape (${motion ? 'travelling' : 'reduced motion'})`, async () => {
+  const p = await open('?view=float&arrange=mountain&rail=0', { motion }); try {
+    const box = await p.locator('.float-canvas').boundingBox();
+    const hover = async id => { const { scene } = await debug(p), [x, y] = scene.screen[id]; await p.mouse.move(box.x + (x + 1) / 2 * box.width, box.y + (1 - y) / 2 * box.height, { steps: 3 }); await settled(p); return (await debug(p)).scene; };
+    let { scene } = await debug(p);
+    const rows = scene.mountain.rows, a = rows[1][1], b = rows[0][2], camera = scene.state.position;
+    assert.equal(scene.stuck, null); assert.equal(await p.evaluate(() => window.__cwFloat.stickLine.visible), false);
+    scene = await hover(a);
+    assert.equal(scene.stuck, a, 'the hovered card is out');
+    const seat = scene.targets[a], out = scene.positions[a], dist = q => Math.hypot(...q.map((v, i) => v - camera[i]));
+    assert.ok(dist(out) < dist(seat) - 1, 'it came toward the camera');
+    assert.ok(out[1] > seat[1] + 1, 'and up, so its stick shows');
+    assert.ok(Math.abs(scene.sizes[a][1] / scene.sizes[rows[1][0]][1] - 1.5) < 0.01, `and half again as large (${scene.sizes[a][1]} beside ${scene.sizes[rows[1][0]][1]})`);
+    const stick = await p.evaluate(() => { const v = window.__cwFloat, at = v.stickLine.geometry.attributes.position; return { visible: v.stickLine.visible, from: [at.getX(0), at.getY(0), at.getZ(0)], to: [at.getX(1), at.getY(1), at.getZ(1)] }; });
+    assert.equal(stick.visible, true);
+    near(stick.from, [seat[0], seat[1] - scene.sizes[rows[1][0]][1] / 2, seat[2]], 0.5, 'the stick starts at the foot of the place it left');
+    near(stick.to, [out[0], out[1] - scene.sizes[a][1] / 2, out[2]], 0.5, 'and ends at the foot of the lifted card');
+    for (const id of rows.flat()) if (id !== a) near(scene.positions[id], scene.targets[id], 0.01, `${id} stays on the slope`);
+    // The pointer moves off to empty space: the card stays out.
+    await p.mouse.move(box.x + 8, box.y + 8, { steps: 3 }); await settled(p); scene = (await debug(p)).scene;
+    assert.equal(scene.stuck, a, 'it stays out when the pointer leaves it'); near(scene.positions[a], out, 0.01, 'where it was');
+    // Another card takes its place; the first goes back to the slope at its own size.
+    scene = await hover(b);
+    assert.equal(scene.stuck, b); near(scene.positions[a], scene.targets[a], 0.01, 'the first card is back on the slope');
+    assert.ok(Math.abs(scene.sizes[a][1] - scene.sizes[rows[1][0]][1]) < 0.01, 'at its own size');
+    // Escape puts it back, and a new layout forgets it.
+    await p.locator('.float-canvas').focus(); await p.keyboard.press('Escape'); await settled(p); scene = (await debug(p)).scene;
+    assert.equal(scene.stuck, null); near(scene.positions[b], scene.targets[b], 0.01, 'Escape returns it');
+    assert.equal(await p.evaluate(() => window.__cwFloat.stickLine.visible), false);
+    await p.mouse.move(box.x + 8, box.y + 8); scene = await hover(a); assert.equal(scene.stuck, a);
+    await p.locator('.float-arrange input[value=az]').check(); await settled(p); scene = (await debug(p)).scene;
+    assert.equal(scene.stuck, null, 'leaving the mountain leaves nothing lifted');
+    // No other arrangement lifts on hover.
+    await p.mouse.move(box.x + 8, box.y + 8); scene = await hover(a); assert.equal(scene.stuck, null);
+    for (const [id, target] of Object.entries(scene.targets)) near(scene.positions[id], target, 0.01, `${id} is where A–Z puts it`);
+  } finally { await p.close(); }
+});
+
+test('float Mountain keys: arrows walk a row, PageUp and PageDown travel the slope row by row with the camera keeping its side', async () => {
+  const p = await open('?view=float&arrange=mountain&rail=0'); try {
+    let { scene } = await debug(p); const rows = scene.mountain.rows, rowOf = id => rows.findIndex(row => row.includes(id));
+    await p.locator('.float-canvas').focus();
+    await p.keyboard.press('ArrowRight'); await settled(p); ({ scene } = await debug(p));
+    const start = scene.selection; assert.ok(start, 'the first arrow takes an item');
+    const press = async key => { await p.keyboard.press(key); await settled(p); return (await debug(p)).scene; };
+    const offset = sc => sc.state.position.map((v, i) => v - sc.state.target[i]), unit = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+    // Up the slope: PageUp and ArrowUp both go to the row behind.
+    let r = rowOf(start), last = scene;
+    for (const key of ['PageUp', 'ArrowUp']) {
+      scene = await press(key);
+      assert.equal(rowOf(scene.selection), r + 1, `${key} goes to the row behind`); r += 1;
+      near(scene.state.target, scene.targets[scene.selection], 0.5, 'the camera looks at the item\'s place on the slope');
+      assert.ok(scene.state.target[2] < last.state.target[2] && scene.state.target[1] > last.state.target[1], 'it moved back and up, along the slope');
+      near(unit(offset(scene)), unit(offset(last)), 1e-3, 'from the same side as before');
+      assert.match(scene.announcement, new RegExp(`row ${r + 1} of ${rows.length}`)); assert.equal(scene.callout.where, `row ${r + 1} of ${rows.length}`);
+      last = scene;
+    }
+    // Sideways stays in the row, in order.
+    const row = rows[r], k = row.indexOf(scene.selection);
+    scene = await press(k + 1 < row.length ? 'ArrowRight' : 'ArrowLeft');
+    assert.equal(scene.selection, row[k + 1 < row.length ? k + 1 : k - 1]); assert.equal(rowOf(scene.selection), r);
+    // Back down, and off the front edge.
+    for (const key of ['PageDown', 'ArrowDown']) { scene = await press(key); assert.equal(rowOf(scene.selection), r - 1, `${key} comes to the row in front`); r -= 1; }
+    while (r > 0) { scene = await press('PageDown'); r -= 1; }
+    const held = scene.selection; scene = await press('PageDown');
+    assert.equal(scene.selection, held, 'nothing in front of the front row'); assert.match(scene.announcement, /No more items/);
+    // A card the pointer lifted does not move where the camera goes: it travels to the card's place on the slope.
+    await p.evaluate(id => { const v = window.__cwFloat; v.stick(v.indexOf.get(id)); }, rows[1][0]); await settled(p);
+    await p.evaluate(id => window.__cwFloat.keyChoose(id), rows[1][0]); await settled(p); ({ scene } = await debug(p));
+    near(scene.state.target, scene.targets[rows[1][0]], 0.5, 'the camera looks at the place, not at the lifted card');
+  } finally { await p.close(); }
 });
 
 test('float phone layout keeps every control inside the viewport and reachable', async () => {
