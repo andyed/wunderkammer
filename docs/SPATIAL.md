@@ -265,6 +265,24 @@ An item is placed by `palette[0]`, its largest median-cut colour cluster;
   ends: #010300 has saturation 1, and on a cylinder it would sit at full radius
   beside the vivid colours.
 - **A–Z** sorts by title with numeric collation and folded accents.
+- **Mountain** is a slope the order climbs, after Data Mountain (Robertson
+  et al., UIST 1998). There a person placed about a hundred pages by hand; a
+  collection of hundreds cannot be placed by hand, so the order places them
+  (`front=`, as for the cloud; collection order without it). Rows are
+  justified to the slope's width. The front row is the tallest and nearest,
+  and each row behind stands further back, higher and shorter, so the end of
+  the order costs little of the view and is still there. Like the cloud it
+  encodes no value: the order is its only claim.
+  - **Hover.** The card under the pointer comes off the slope toward the
+    camera and up, half again as large, on a stick that runs back to its
+    place. It stays out when the pointer moves to empty space, and goes back
+    when another card is hovered, on Escape, or when the items are laid out
+    again. It stays because lifting a card moves it out from under the
+    pointer, and a card that dropped at once would flap.
+  - **Keys.** Left and Right walk a row. Up or PageUp goes to the row
+    behind, Down or PageDown to the row in front, landing on the item
+    nearest across. The camera looks at each item from the same side and
+    at a distance set by its size, so stepping row to row travels the slope.
 - **No palette.** Items without one wait on a labelled shelf below the space
   ("No palette · n"). They are not dropped, and not parked at the origin.
   Sphere makes one exception: when no item in the collection has a palette,
@@ -395,7 +413,7 @@ the arrow keys and jump are the ways in; free flight is for looking around.
 
 The ViewSpec gains `presentation.mode: 'float'` and
 `float: { version: 1, arrangement, axes?, front?, position, target, fitted, selection }`.
-`front` orders a cloud (`arrange=cloud`; [SHOTS.md](SHOTS.md#the-cloud-phase-2c)): a dimension id, with a leading `-` for lowest first.
+`front` orders a cloud or a mountain (`arrange=cloud`, `arrange=mountain`; alone it implies the cloud; [SHOTS.md](SHOTS.md#the-cloud-phase-2c)): a dimension id, with a leading `-` for lowest first.
 These are validated in `wall/view-schema.mjs`, which the snapshot endpoint
 shares.
 - **Axes state.** `axes` is `{ across?, up?, depth? }`: dimension ids, distinct, each a colour name or a facet key. Any slot left out takes the collection's default. The version stays 1, since links without `axes` mean what they always did.

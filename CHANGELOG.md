@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Live links gain `arrange=mountain`, and `front=` now goes with it as well as
+with `arrange=cloud`; a 0.4.0 wall refuses `arrange=mountain`.
+
+- **Mountain.** A new arrangement in the 3D view, after Data Mountain: the
+  items climb a slope in justified rows, the front of the order nearest and
+  largest, each row behind further, higher and smaller. `front=<dimension>`
+  orders it, as it orders the cloud. Hovering a card lifts it off the slope
+  toward the camera on a stick that runs back to its place, and it stays out
+  until another card is hovered or Escape. Left and Right walk a row; Up,
+  Down, PageUp and PageDown travel the slope row by row, the camera keeping
+  its side. Eleven mutations (`MUTATION_FILTER='mountain:'`), each caught.
+
 ## 0.4.0 — 2026-11-14
 
 The collection document stays version 1 and gains one optional clip field,

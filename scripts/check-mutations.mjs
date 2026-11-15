@@ -1104,6 +1104,62 @@ const cases = [
     from: '...(this.front ? { front: this.front } : {}),', to: '',
     test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   },
+  // The mountain (wall/float-space.mjs "Mountain"; the view's stick and travel): MUTATION_FILTER='mountain:'
+  {
+    name: 'mountain: every row stands at the foot of the slope', file: 'wall/float-space.mjs',
+    from: 'positions.set(place(u + w / 2, row.v, row.h), i * 3);', to: 'positions.set(place(u + w / 2, 0, row.h), i * 3);',
+    test: 'tests/float-mountain.test.mjs', pattern: 'Mountain climbs',
+  },
+  {
+    name: 'mountain: the back rows are as tall as the front', file: 'wall/float-space.mjs',
+    from: 'backH = frontH * MOUNTAIN_BACK, rows = [];', to: 'backH = frontH, rows = [];',
+    test: 'tests/float-mountain.test.mjs', pattern: 'Mountain climbs',
+  },
+  {
+    name: 'mountain: a large collection runs off the back of the slope', file: 'wall/float-space.mjs',
+    from: '  if (best.used > depth) {\n    let lo = 0.04', to: '  if (false) {\n    let lo = 0.04',
+    test: 'tests/float-mountain.test.mjs', pattern: 'Mountain fits a large collection',
+  },
+  {
+    name: 'mountain: stepping lands on items outside the scope', file: 'wall/float-space.mjs',
+    from: 'const open = m.rows[q].filter(allowed); if (!open.length) continue;', to: 'const open = m.rows[q];',
+    test: 'tests/float-mountain.test.mjs', pattern: 'mountainStep walks a row sideways',
+  },
+  {
+    name: 'mountain: front= does not order it', file: 'wall/float-view.mjs',
+    from: 'priority: isOrdered(this.arrangement) ? this.cloudPriority() : undefined,', to: "priority: this.arrangement === 'cloud' ? this.cloudPriority() : undefined,",
+    test: 'tests/float-view.test.mjs', pattern: 'float Mountain: the order climbs a slope',
+  },
+  {
+    name: 'mountain: a lifted card drops when the pointer leaves it', file: 'wall/float-view.mjs',
+    from: '          if (key) this.stick(index);\n', to: '          if (key) this.stick(index); else this.unstick();\n',
+    test: 'tests/float-view.test.mjs', pattern: 'a card comes off the slope on a stick',
+  },
+  {
+    name: 'mountain: a second lifted card leaves the first one out', file: 'wall/float-view.mjs',
+    from: '    this.unstick({ quiet: true });\n    const p = this.layout.positions, s = this.layout.sizes, seat', to: '    const p = this.layout.positions, s = this.layout.sizes, seat',
+    test: 'tests/float-view.test.mjs', pattern: 'a card comes off the slope on a stick',
+  },
+  {
+    name: 'mountain: the lifted card comes straight at the eye and hides its stick', file: 'wall/float-view.mjs',
+    from: ' at.y += h * STICK_RISE;', to: '',
+    test: 'tests/float-view.test.mjs', pattern: 'a card comes off the slope on a stick',
+  },
+  {
+    name: 'mountain: the camera dives at a lifted card instead of its place', file: 'wall/float-view.mjs',
+    from: 'const centre = mountain ? new THREE.Vector3().fromArray(this.layout.positions, index * 3) : this.centreOf(index, new THREE.Vector3());', to: 'const centre = this.centreOf(index, new THREE.Vector3());',
+    test: 'tests/float-view.test.mjs', pattern: 'float Mountain keys',
+  },
+  {
+    name: 'mountain: the camera approaches each card from wherever it was', file: 'wall/float-view.mjs',
+    from: ': mountain ? MOUNTAIN_DIRECTION.clone() : from.normalize(), position', to: ': from.normalize(), position',
+    test: 'tests/float-view.test.mjs', pattern: 'float Mountain keys',
+  },
+  {
+    name: 'mountain: a link naming front= with a mountain opens a cloud', file: 'wall/view-intent.mjs',
+    from: "view.float.arrangement = p.get('arrange') === 'mountain' ? 'mountain' : 'cloud';", to: "view.float.arrangement = 'cloud';",
+    test: 'tests/view-intent.test.mjs', pattern: 'front also orders a mountain',
+  },
   {
     name: 'sphere: a collection with no palettes is a shelf, not a sphere', file: 'wall/float-space.mjs',
     from: 'const colourless = n > 0 && placed.length === 0;', to: 'const colourless = false;',

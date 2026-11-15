@@ -110,6 +110,17 @@ test('front orders a cloud: it implies arrange=cloud, round-trips, and is refuse
   assert.throws(() => validateView({ ...v, float: { ...v.float, front: '' } }), /Invalid or unsupported view link/);
 });
 
+test('front also orders a mountain: named with arrange=mountain it stays a mountain and round-trips', () => {
+  const v = applyViewIntent(base + '&view=float&arrange=mountain&front=captured', specimen());
+  assert.equal(v.float.arrangement, 'mountain'); assert.equal(v.float.front, 'captured');
+  assert.deepEqual(decodeView(encodeView(v)).float, v.float);
+  const url = targetedViewURL(v, base); assert.equal(url.searchParams.get('arrange'), 'mountain'); assert.equal(url.searchParams.get('front'), 'captured');
+  const plain = applyViewIntent(base + '&view=float&arrange=mountain', specimen());
+  assert.equal(plain.float.arrangement, 'mountain'); assert.equal(plain.float.front ?? null, null);
+  assert.equal(targetedViewURL(plain, base).searchParams.get('front'), null, 'no order named, none in the link');
+  assert.throws(() => applyViewIntent(base + '&view=float&arrange=sphere&front=captured', specimen()), /front applies only to arrange=cloud and arrange=mountain/);
+});
+
 test('facing and cap shape a sphere: they imply arrange=sphere, round-trip, and are refused anywhere else', () => {
   const v = applyViewIntent(base + '&view=float&facing=in&cap=60', specimen());
   assert.equal(v.float.arrangement, 'sphere'); assert.deepEqual(v.float.sphere, { facing: 'in', cap: 60 });
