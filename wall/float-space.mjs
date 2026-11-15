@@ -749,6 +749,13 @@ function arrangeSphere(clips, positions, sizes, edge, options = {}) {
   const lch = clips.map(clip => { const rgb = dominantColor(clip); return rgb ? oklch(oklab(rgb)) : null; });
   const placed = [], unplaced = [];
   for (let i = 0; i < n; i++) (lch[i] ? placed : unplaced).push(i);
+  // A collection with no palette on any item (a wall embedded over plain
+  // files, say) has no colour to order by, and was still asked for a sphere.
+  // Every item takes a seat, in the order given. When some items have a
+  // palette the rest still wait on the shelf: a seat among the coloured ones
+  // would claim a lightness and a hue they do not have.
+  const colourless = n > 0 && placed.length === 0;
+  if (colourless) placed.push(...unplaced.splice(0));
   const m = placed.length;
   let area = 0; for (const i of placed) area += sizes[i * 2] * sizes[i * 2 + 1];
   // Large enough for the cards to cover SPHERE_FILL of it, and for nine in ten
@@ -764,10 +771,10 @@ function arrangeSphere(clips, positions, sizes, edge, options = {}) {
   const seam = facing === 'in' ? 1 : -1, sp = seats.positions;
   // Angle around the vertical from the seam, increasing to the viewer's right.
   const around = k => (Math.atan2(-sp[k * 3], seam * sp[k * 3 + 2]) + 2 * Math.PI) % (2 * Math.PI);
-  const hueStart = hueCut(placed.filter(i => lch[i][1] >= GREY_CHROMA).map(i => lch[i][2]));
-  const hueKey = i => lch[i][1] < GREY_CHROMA ? -1 : (lch[i][2] - hueStart + 360) % 360;
+  const hueStart = colourless ? 0 : hueCut(placed.filter(i => lch[i][1] >= GREY_CHROMA).map(i => lch[i][2]));
+  const hueKey = i => colourless ? i : lch[i][1] < GREY_CHROMA ? -1 : (lch[i][2] - hueStart + 360) % 360;
   const seatOrder = [...Array(m).keys()].sort((a, b) => sp[b * 3 + 1] - sp[a * 3 + 1] || a - b);
-  const byLightness = placed.slice().sort((a, b) => lch[b][0] - lch[a][0] || a - b);
+  const byLightness = colourless ? placed.slice() : placed.slice().sort((a, b) => lch[b][0] - lch[a][0] || a - b);
   // Band height: one seat spacing on the unit sphere, so the equator's band is one ring deep.
   const spacing = Math.sqrt(2 * Math.PI * (1 + Math.cos(cap * Math.PI / 180)) / Math.max(1, m));
   const bands = Math.max(1, Math.min(m, Math.round(2 / spacing)));
@@ -775,7 +782,7 @@ function arrangeSphere(clips, positions, sizes, edge, options = {}) {
   for (let b = 0; b < bands; b++) {
     const lo = Math.round(b * m / bands), hi = Math.round((b + 1) * m / bands);
     const ring = seatOrder.slice(lo, hi).sort((p, q) => around(p) - around(q) || p - q);
-    const items = byLightness.slice(lo, hi).sort((p, q) => hueKey(p) - hueKey(q) || lch[q][0] - lch[p][0] || p - q);
+    const items = byLightness.slice(lo, hi).sort((p, q) => hueKey(p) - hueKey(q) || (colourless ? 0 : lch[q][0] - lch[p][0]) || p - q);
     items.forEach((i, r) => {
       const k = ring[r];
       positions.set(sp.subarray(k * 3, k * 3 + 3), i * 3); rotations.set(seats.quaternions.subarray(k * 4, k * 4 + 4), i * 4);
@@ -783,7 +790,10 @@ function arrangeSphere(clips, positions, sizes, edge, options = {}) {
     });
   }
   const labels = [], guides = [], exact = positions.slice();
-  if (m) {
+  if (colourless) {
+    // Says why this globe has no colour order, where the hue label would be.
+    labels.push({ text: `No palette · ${m} in order, top to bottom`, kind: 'axis', point: [-radius, 0, 0], side: 'left', gap: 16 });
+  } else if (m) {
     // Stubs above and below the poles, outside the cards, carry the lightness range.
     const top = lch[byLightness[0]][0], bottom = lch[byLightness[m - 1]][0], reach = radius + edge * 1.2;
     const greys = placed.some(i => lch[i][1] < GREY_CHROMA) ? ' · greys first' : '';
@@ -795,7 +805,7 @@ function arrangeSphere(clips, positions, sizes, edge, options = {}) {
   if (unplaced.length) shelve(clips, unplaced, positions, exact, sizes, edge, labels);
   return { arrangement: 'sphere', edge, stretch: 1, positions, exact, sizes, rotations, order: order.concat(unplaced), labels, guides,
     unplaced: unplaced.length, declumped: { moved: 0, maxShift: 0, meanShift: 0 },
-    sphere: { facing, cap, radius, bands, hueCut: hueStart }, bounds: boundsOf(positions, sizes, n) };
+    sphere: { facing, cap, radius, bands, hueCut: hueStart, colourless }, bounds: boundsOf(positions, sizes, n) };
 }
 
 function boundsOf(positions, sizes, n) {

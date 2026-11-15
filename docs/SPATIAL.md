@@ -267,6 +267,9 @@ An item is placed by `palette[0]`, its largest median-cut colour cluster;
 - **A–Z** sorts by title with numeric collation and folded accents.
 - **No palette.** Items without one wait on a labelled shelf below the space
   ("No palette · n"). They are not dropped, and not parked at the origin.
+  Sphere makes one exception: when no item in the collection has a palette,
+  every item takes a seat on the sphere in the order given, under one label
+  that says so. A sphere with all of its items on a shelf is a flat grid.
 - **Declumping.** Identical colours are common (black covers, white
   screenshots) and would z-fight. Items closer than 0.6 of a tile edge are
   pushed apart, but never further than 0.6 of an edge from their colour. The
