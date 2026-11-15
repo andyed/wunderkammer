@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-14
 
 The collection document stays version 1 and gains one optional clip field,
 `video`; a 0.3.0 wall refuses a document that uses it. Live links gain
-`arrange=sphere`, `facing=` and `cap=`; a 0.3.0 wall refuses `arrange=sphere`
-and ignores the other two.
+`arrange=sphere`, `facing=`, `cap=` and `zoomdetail=on`; a 0.3.0 wall refuses
+`arrange=sphere` and ignores the other three. One default changes: zooming
+into a cover no longer opens its details, which `zoomdetail=on` restores.
+All 514 tests pass, and all 239 mutation cases are detected.
 
 - **Details on zoom is off by default.** Zooming into a cover on the flat wall
   no longer opens its details by itself; a click opens them as before.
