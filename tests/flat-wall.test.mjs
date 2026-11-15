@@ -422,7 +422,9 @@ test('an item opened from the context plane walks the plane: the arrows step it 
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   try {
     await contextFixture(page);
-    await page.goto(origin); await settled(page);
+    // Details on zoom is off by default and switched on here: with it running,
+    // each camera step along the plane must not hand the pane to a foreground cover.
+    await page.goto(`${origin}/?zoomdetail=on`); await settled(page);
     await page.locator('[data-facet="year"][data-value="2026"]').click(); await settled(page);
     await page.click('#zoom-out'); await settled(page);
     await page.click('#zoom-in'); await settled(page);

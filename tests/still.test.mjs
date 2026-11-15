@@ -126,7 +126,9 @@ test('lit lights exactly the named items in the floating space, frame=evidence f
 });
 
 test('a framed wall shot opens no detail pane of its own', async () => {
-  const { page, errors } = await open(`${litQuery}&frame=evidence&chrome=none`); try {
+  // Details on zoom is off by default, so it is switched on here: the shot
+  // must stay clear of a pane even on a wall that has the feature running.
+  const { page, errors } = await open(`${litQuery}&frame=evidence&chrome=none&zoomdetail=on`); try {
     await page.evaluate(() => window.wunderkammer.whenStill({ timeout: 20000 }));
     await page.waitForTimeout(600); // the zoom preview waits for the camera to rest
     assert.equal(await page.locator('#detail.open').count(), 0, 'no pane covers the shot');

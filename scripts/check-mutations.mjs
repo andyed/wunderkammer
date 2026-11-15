@@ -483,7 +483,7 @@ const cases = [
   },
   {
     name: 'sprite 3D atlas ignores cells', file: 'wall/spatial/spatial-view.mjs',
-    from: 'return spriteCovers.serves(clips[i], need) ? spriteCovers.source(clips[i], need) ?? RETRY : null;', to: 'return null;',
+    from: "return spriteCovers.has(clips[i]) && spriteCovers.serves(clips[i], 64)\n            ? spriteCovers.source(clips[i], 64) ?? RETRY : null;", to: 'return null;',
     test: 'tests/collection-view.test.mjs', pattern: 'the 3D view draws sprite-sheet cells',
   },
   {
@@ -623,14 +623,14 @@ const cases = [
   },
   {
     name: 'float arrangement change leaves items where they were', file: 'wall/float-view.mjs',
-    from: 'if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q); continue; }',
+    from: 'if (still) { this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], this.rotationOf(i)); continue; }',
     to: 'if (still) continue;',
     test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
   },
   {
     name: 'float arrangement change jumps instead of travelling', file: 'wall/float-view.mjs',
-    from: 'this.field.moveTo(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q);',
-    to: 'this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], q);',
+    from: 'this.field.moveTo(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], this.rotationOf(i));',
+    to: 'this.field.place(i, p[i * 3], p[i * 3 + 1], p[i * 3 + 2], s[i * 2], s[i * 2 + 1], this.rotationOf(i));',
     test: 'tests/float-view.test.mjs', pattern: 'float arrangement places each item',
   },
   {
@@ -696,7 +696,7 @@ const cases = [
   },
   {
     name: 'float dimmed items take clicks', file: 'wall/float-view.mjs',
-    from: '      if (!this.inScope[i]) continue;\n      this.centreOf(i, v);\n      const depth', to: '      this.centreOf(i, v);\n      const depth',
+    from: 'if (!this.inScope[i] || oriented && !this.facesCamera(i)) continue;', to: 'if (oriented && !this.facesCamera(i)) continue;',
     test: 'tests/float-view.test.mjs', pattern: 'float scope dims',
   },
   {
@@ -1101,7 +1101,7 @@ const cases = [
   },
   {
     name: 'still: cloud, the exact link loses front=', file: 'wall/float-view.mjs',
-    from: '...(this.front ? { front: this.front } : {}), ', to: '',
+    from: '...(this.front ? { front: this.front } : {}),', to: '',
     test: 'tests/still.test.mjs', pattern: 'front= orders the cloud',
   },
   {
@@ -1253,7 +1253,9 @@ const cases = [
   },
 ];
 
-const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || ''));
+// MUTATION_START=n skips the first n selected cases, to pick a full run up
+// where it stopped: the run ends at the first case that is not detected.
+const selectedCases = cases.filter(c => c.name.includes(process.env.MUTATION_FILTER || '')).slice(Number(process.env.MUTATION_START) || 0);
 if (!selectedCases.length) throw new Error('No mutation matched MUTATION_FILTER');
 for (const mutation of selectedCases) {
   const dir = await mkdtemp(path.join(tmpdir(), 'wunderkammer-mutation-'));
