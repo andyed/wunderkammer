@@ -3,6 +3,11 @@
 **Added 2026-10-14.** Peer-study ledger idea 27. Zooming into an item on the flat
 wall shows its details without a click; zooming back out hides them.
 
+**Off by default since 2026-11-14.** It was not working in use and is put away
+until that is understood; [TODO.md](../TODO.md) has the open questions. Add
+`?zoomdetail=on` to the wall's address to switch it on. The rest of this page
+describes it switched on.
+
 ## Rule
 
 Ported from PivotViewer (`seajax@0293770 v2/app/pivot/PivotViewer.js:1618-1650`,

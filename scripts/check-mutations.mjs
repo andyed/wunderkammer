@@ -290,6 +290,11 @@ const cases = [
     test: 'tests/spatial-view.test.mjs', pattern: 'GPU pixels refresh after an index is reused',
   },
   {
+    name: 'zoom detail is on again without being asked for', file: 'wall/wall.mjs',
+    from: "searchParams.get('zoomdetail') === 'on';", to: "searchParams.get('zoomdetail') !== 'off';",
+    test: 'tests/zoom-detail.test.mjs', pattern: 'by default, zooming into a cover opens nothing',
+  },
+  {
     name: 'zoom detail never opens on zoom-in', file: 'wall/zoom-detail.mjs',
     from: 'export const ZOOM_DETAIL_OPEN = 0.5;', to: 'export const ZOOM_DETAIL_OPEN = 5;',
     test: 'tests/zoom-detail.test.mjs', pattern: 'zooming into a cover shows its details',

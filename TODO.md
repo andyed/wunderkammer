@@ -5,6 +5,27 @@
   then local side-by-side previews and revision-bound agent feedback.
   Keep this separate from the spatial HTML-in-Canvas Phase 3 renderer work.
 
+- **Details on zoom: off by default, to revisit.** Switched off by Andy,
+  2026-11-14: "the auto-detail view on zoom in isn't working, can we disable
+  that and todo revisiting".
+  - **What it is.** On the flat wall, zooming in until one cover fills more
+    than half the free view opened that item in the detail pane as a preview,
+    with no click ([docs/ZOOM_DETAIL.md](docs/ZOOM_DETAIL.md)). On since 0.1.0.
+  - **Where it stands.** The code and its tests are kept. `?zoomdetail=on`
+    switches it on; without that, a zoom opens nothing and a click opens an
+    item as before.
+  - **Not yet known.** What went wrong was not recorded or reproduced when it
+    was switched off: which wall (an embedded one, such as Session
+    Cartographer's image wall, or a full page), and whether the pane opened
+    when it was not wanted, opened on the wrong item, covered what was being
+    looked at, or failed to open. Find that out first, on the wall where it
+    happened, before changing the rule.
+  - **To bring it back.** Fix what that turns up, then decide whether it
+    returns as the default or as a setting.
+  - **Where it lives.** `wall/zoom-detail.mjs` (the rule), the "Details on
+    zoom" block and the `ZOOM_DETAIL` switch in `wall/wall.mjs`,
+    `tests/zoom-detail.test.mjs`.
+
 - **Showcase: the collection flows through the visible slots (backlog).**
   Parked by Andy, 2026-10-18, when its ▶ button left the header: "nice idea,
   can go in backlog".

@@ -40,6 +40,10 @@ import { NEUTRAL_NOUNS, collectionNouns, counted } from './nouns.mjs';
 /** `?chrome=none` shows the stage alone, for stills (docs/SHOTS.md). Set
  * before the first layout, so the stage is measured at its full size. */
 const CHROMELESS = new URL(location.href).searchParams.get('chrome') === 'none';
+// Details on zoom is off unless the address asks for it. It was on from 0.1.0
+// and put away on 2026-11-14 as not working in use; TODO.md has what to settle
+// before it comes back. `?zoomdetail=on` is how its tests and that work run it.
+const ZOOM_DETAIL = new URL(location.href).searchParams.get('zoomdetail') === 'on';
 if (CHROMELESS) document.documentElement.dataset.chrome = 'none';
 /** A still's figure layer (wall/figure.mjs): a caption band under the stage, on by
  * default with chrome=none; figure=none leaves the stage alone. The band's
@@ -1997,6 +2001,8 @@ function endPreview({ silent = false } = {}) {
 }
 
 /* Details on zoom (ledger idea 27; rule in zoom-detail.mjs) ----------------
+ * OFF BY DEFAULT since 2026-11-14 (see ZOOM_DETAIL above and TODO.md).
+ *
  * Zooming in until one cover dominates the free view previews it in the pane
  * with no click; zooming out ends that preview. It is decided only once the
  * camera has been still for ZOOM_DETAIL_QUIET after a zoom lands, never per
@@ -2014,6 +2020,7 @@ let zoomDetailTimer = 0;
 let zoomDismissed = null;
 function scheduleZoomDetail() {
   clearTimeout(zoomDetailTimer); zoomDetailTimer = 0;
+  if (!ZOOM_DETAIL) return;
   if (state.spatialOn || viewport.zooming) return;          // a pinch's end calls back here once more
   const wait = Math.max(0, viewport.settlesAt - performance.now()) + ZOOM_DETAIL_QUIET;
   zoomDetailTimer = setTimeout(applyZoomDetail, wait);

@@ -76,10 +76,12 @@ after(async () => { await browser?.close(); await new Promise(r => server?.close
 
 // Longer than a wheel landing (140 ms) plus the zoom-detail quiet (120 ms).
 const land = p => p.waitForTimeout(600);
-async function open() {
+// The feature is off unless the address asks for it (TODO.md, "Details on
+// zoom"); every test but the first one below runs it switched on.
+async function open({ on = true } = {}) {
   const p = await browser.newPage({ viewport: { width: 1440, height: 950 } });
   p.on('pageerror', e => pageErrors.push(e.message));
-  await p.goto(origin);
+  await p.goto(on ? `${origin}/?zoomdetail=on` : origin);
   await p.waitForSelector('body[data-view-ready=true]');
   await land(p);
   // Count every time the pane opens or closes, and the camera at each toggle.
@@ -152,6 +154,24 @@ async function view(p) {
   return null;
 }
 const withoutCamera = spec => spec && { ...spec, flat: { ...spec.flat, view: undefined } };
+
+test('by default, zooming into a cover opens nothing', async () => {
+  const p = await open({ on: false });
+  try {
+    await zoomTo(p, 0.62);
+    assert.ok(await dominance(p) > 0.5, 'one cover fills more than half the free view, which is where the feature would open');
+    await p.waitForTimeout(600);
+    const s = await state(p);
+    assert.equal(s.open, false, 'the pane stays shut');
+    assert.equal(s.preview, false, 'and nothing is previewed');
+    assert.equal(s.log.length, 0, 'it never opened on the way in either');
+    // A click still opens the item, as it always did.
+    const f = await freeView(p);
+    await p.mouse.click(f.cx, f.cy);
+    await p.waitForFunction(() => document.querySelector('.detail').classList.contains('open'), null, { timeout: 3000 });
+    assert.equal((await state(p)).selected.length, 1, 'a click selects');
+  } finally { await p.close(); }
+});
 
 test('zooming into a cover shows its details with no click, and the camera does not move when they appear', async () => {
   const p = await open();

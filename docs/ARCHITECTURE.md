@@ -89,8 +89,8 @@ those occurrences remain one clip identity.
   and deterministic so Dive can traverse it without rebuilding a different list.
 - Item preview: temporary; does not commit a new query or rearrangement.
   A hover dwell (with a selection) or zooming in until one item dominates the
-  free view ([ZOOM_DETAIL.md](ZOOM_DETAIL.md)) both preview; neither selects,
-  moves the camera or writes focus.
+  free view ([ZOOM_DETAIL.md](ZOOM_DETAIL.md), off by default since
+  2026-11-14) both preview; neither selects, moves the camera or writes focus.
 - Relationship pivot: describe why results are related and whether the search
   is within the current subset or corpus-wide; record prior context before
   committing the new scope. Back restores that context.
