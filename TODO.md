@@ -44,6 +44,13 @@
   - **Stacks and the flat wall were not checked for the same stretch.**
   - **A card that only ever has a far tile** is shaped from 64 px, good to
     about 4% on that wall. A near tile corrects it.
+  - **A very tall or very wide strip can lose its stated shape.** `imageShape`
+    takes the stated `dims` only when the tile reading agrees within 10%
+    (`READING_TOLERANCE`). On that wall after 0.5.1, a 390×7342 image read
+    0.047 from a far tile about 3 px wide against a stated 0.053, 11% apart,
+    so the card followed the reading and was drawn 11% narrow: 1 of 471
+    cards. The tolerance should widen as the tile's short side gets fewer
+    pixels; one pixel of a 3 px side is a third.
 
 - **Showcase: the collection flows through the visible slots (backlog).**
   Parked by Andy, 2026-10-18, when its ▶ button left the header: "nice idea,
