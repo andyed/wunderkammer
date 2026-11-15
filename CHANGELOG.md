@@ -7,6 +7,10 @@ The collection document stays version 1 and gains one optional clip field,
 `arrange=sphere`, `facing=` and `cap=`; a 0.3.0 wall refuses `arrange=sphere`
 and ignores the other two.
 
+- **Details on zoom is off by default.** Zooming into a cover on the flat wall
+  no longer opens its details by itself; a click opens them as before.
+  `?zoomdetail=on` switches the behaviour back on. It was not working in use,
+  and [TODO.md](TODO.md) lists what to settle before it returns.
 - **Sphere.** `?view=float&arrange=sphere` puts every item on a sphere, a
   colour globe: the lightest items at the top, the darkest at the bottom, hue
   around. The seats are a Fibonacci lattice, so the cards cover the surface
