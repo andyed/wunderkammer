@@ -9,6 +9,11 @@ import { spawnSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cases = [
   {
+    name: 'demo Labs rebuild guard removed', file: 'scripts/build-demo.mjs',
+    from: 'assertDemoAnalytics(analyticsSource);', to: '',
+    test: 'tests/demo-bundle.test.mjs', pattern: 'old analytics route is rejected before output is cleared',
+  },
+  {
     name: 'demo analytics sends the search text', file: 'scripts/demo-analytics.js',
     from: "['searched', { query_length: next.query.length, results }]",
     to: "['searched', { query_length: next.query.length, query: next.query, results }]",

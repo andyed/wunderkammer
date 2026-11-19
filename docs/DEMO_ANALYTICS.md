@@ -1,7 +1,11 @@
 # Demo analytics
 
 The published demo (https://andyed.github.io/clipwall-demo/) reports to the
-PostHog project **Wunderkammer (673826, US Cloud)**. The engine does not:
+PostHog project **Labs (526843, US Cloud; currently named PotLuck)**, with
+`app_id=wunderkammer`, `environment=production`, and `platform=web`.
+The first canary shipped in `clipwall-demo` commit `87718cfd` on 2026-11-19 UTC.
+The old project **673826** is retained for legacy consent and rollback.
+The engine does not:
 `wall/` and `index.html` carry no analytics, so a page that embeds wunderkammer
 from the package or a CDN reports to nobody.
 
@@ -10,6 +14,32 @@ copies it into the demo as `analytics.js`, stamps `git describe` into it, and
 adds one `<script type="module">` to the demo page's head, ahead of the
 wall, so it reads the URL the visitor opened before the wall writes its view
 into the hash.
+
+The build validates its analytics contract **before fetching a corpus or
+clearing output**. `scripts/demo-analytics-contract.mjs` rejects an old route,
+changed consent namespace, or broadened local capture settings. Its public-key
+fingerprints identify the reviewed destination; they are not admin credentials.
+Ordinary builds need no destination environment variable. The source is the
+live canary module with its normal version placeholder and a Node-safe guard
+around the browser-only destination assignment.
+
+For a local preview, run the normal build against a separate existing public
+corpus: `node scripts/build-demo.mjs --reuse-corpus /path/to/published-corpus
+--out /path/to/separate-staging`. Never use the corpus directory as output.
+`node --test tests/demo-analytics.test.mjs tests/demo-bundle.test.mjs
+tests/build-demo.test.mjs` builds a six-item synthetic corpus without fetching
+private content or sending analytics. The bundle tests also prove an old route
+fails before existing output is cleared; `MUTATION_FILTER='demo Labs rebuild
+guard removed' node scripts/check-mutations.mjs` proves removing that guard
+is caught. These are local checks, not deployment authorization.
+
+The shared server was verified with IP discard ON, replay OFF and web vitals
+OFF for the canary. IP discard does not prevent transport, earlier GeoIP
+enrichment, or existing transformation logging. Recheck live settings at a
+future release. For deliberate analytics rollback, restore only the artifact's
+`analytics.js` from `clipwall-demo` commit `5f47101c`; subsequently reconcile
+this source and its build contract explicitly. Keep other app migrations
+separate and do not weaken the server privacy settings.
 
 ## Posture
 
@@ -47,6 +77,8 @@ host carry `env: dev`.
 | Property | Values |
 |---|---|
 | `app_name` | `wunderkammer` |
+| `app_id` | `wunderkammer` (shared Labs routing) |
+| `environment` / `platform` | `production` / `web` on the public demo |
 | `surface` | `demo` |
 | `env` | `production` (andyed.github.io), `dev`, `other` |
 | `app_version` | `git describe --tags --always --dirty` at build time |

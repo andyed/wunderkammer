@@ -1,3 +1,55 @@
+// Approved Wunderkammer-only Labs canary. Other source gates stay disabled.
+// Server IP discard is on; replay and web vitals stay off. Legacy consent is retained.
+if (typeof window !== 'undefined') window.__LABS_ANALYTICS_DESTINATION__ = { key: "phc_nUMn3EuwuRyrioQt3DfDEkS7baSjXPqYntuPPbNPNJQh" };
+function labsAnalytics(legacyKey, appId, options, win) {
+  const LABS_CUTOVER_READY = true;
+  const destination = win.__LABS_ANALYTICS_DESTINATION__ || {};
+  const cutover = LABS_CUTOVER_READY && destination.key !== legacyKey && typeof destination.key === 'string' && /^phc_[a-zA-Z0-9]+$/.test(destination.key);
+  const key = cutover ? destination.key : legacyKey;
+  const hostname = win.location.hostname;
+  const local = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$|\.localhost$|\.local$|^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname);
+  const environment = local ? 'development' : hostname === 'potluck-mbp.pages.dev' ? 'production' : /(?:^|\.)(?:pages\.dev|netlify\.app)$/.test(hostname) ? 'preview' : 'production';
+  const nativePlatform = win.Capacitor?.getPlatform?.();
+  const context = { app_id: appId, environment, platform: ['ios', 'android'].includes(nativePlatform) ? nativePlatform : 'web' };
+  const namespace = value => String(value).startsWith(appId + ':') ? String(value) : appId + ':' + String(value);
+  const priorLoaded = options.loaded;
+  const priorBeforeSend = options.before_send;
+  return {
+    key,
+    identity: value => cutover ? namespace(value) : value,
+    flag: value => cutover ? namespace(value) : value,
+    options: {
+      ...options,
+      ...(cutover ? {
+        api_host: 'https://us.i.posthog.com',
+        // Separate identities on shared origins such as andyed.github.io.
+        persistence_name: 'labs_' + appId,
+        get_device_id: namespace,
+        // Preserve the OLD consent record; changing a token must not grant consent.
+        // Verify this option is supported by each installed SDK before activation.
+        consent_persistence_name: '__ph_opt_in_out_' + legacyKey,
+      } : {}),
+      loaded: ph => {
+        ph.register(context);
+        if (priorLoaded) priorLoaded(ph);
+      },
+      before_send: event => {
+        let result = event;
+        for (const hook of (Array.isArray(priorBeforeSend) ? priorBeforeSend : priorBeforeSend ? [priorBeforeSend] : [])) {
+          if (!result) return null;
+          result = hook(result);
+        }
+        if (result) result.properties = { ...result.properties, ...context };
+        return result;
+      },
+    },
+  };
+}
+function labsInit(ph, legacyKey, appId, options, win = window) {
+  const configured = labsAnalytics(legacyKey, appId, options, win);
+  return ph.init(configured.key, configured.options);
+}
+
 /**
  * Demo analytics: what the published demo reports to PostHog (project 673826, US Cloud).
  *
@@ -252,7 +304,8 @@ function installPostHog(win, config) {
     stub._i.push([key, cfg, 'posthog']);
   };
   stub.__SV = 1;
-  stub.init(POSTHOG_KEY, config);
+  const configured = labsAnalytics(POSTHOG_KEY, 'wunderkammer', config, win);
+  stub.init(configured.key, configured.options);
 }
 
 // ── The page's wiring ─────────────────────────────────────────────

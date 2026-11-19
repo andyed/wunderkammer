@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { test, before, after } from 'node:test';
-import { mkdtemp, mkdir, readdir, readFile, writeFile, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, writeFile, rm, access, symlink } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assertDemoAnalytics } from '../scripts/demo-analytics-contract.mjs';
 
 // The static demo copies wall/ through a filter that leaves the comparison
 // workbench out. A module the demo loads that imports a filtered file 404s on
@@ -99,4 +100,24 @@ test('analytics ship with the demo page, stamped, and nowhere in the engine', as
   for (const file of [...engine, path.join(root, 'index.html')]) {
     assert.ok(!/posthog|phc_/i.test(await readFile(file, 'utf8')), `${path.relative(out, file)} carries analytics`);
   }
+});
+
+test('rebuilt demo retains the approved Labs route and legacy consent', async () => {
+  assertDemoAnalytics(await readFile(path.join(out, 'analytics.js'), 'utf8'));
+});
+
+test('old analytics route is rejected before output is cleared', async () => {
+  const fixture = path.join(dir, 'old-route-build');
+  await mkdir(path.join(fixture, 'scripts'), { recursive: true });
+  await symlink(path.join(root, 'wall'), path.join(fixture, 'wall'));
+  await symlink(path.join(root, 'index.html'), path.join(fixture, 'index.html'));
+  await mkdir(path.join(fixture, 'output'), { recursive: true });
+  await writeFile(path.join(fixture, 'output', 'keep.txt'), 'preserve existing output');
+  const source = await readFile(path.join(root, 'scripts/demo-analytics.js'), 'utf8');
+  await writeFile(path.join(fixture, 'scripts', 'demo-analytics.js'), source.replace('const LABS_CUTOVER_READY = true;', 'const LABS_CUTOVER_READY = false;'));
+  assert.throws(() => execFileSync(process.execPath, [path.join(root, 'scripts/build-demo.mjs'), '--reuse-corpus', path.join(dir, 'published'), '--out', 'output'], { cwd: fixture, stdio: 'pipe' }), error => {
+    assert.match(error.stderr.toString(), /Demo build would revert the approved Labs destination/);
+    return true;
+  });
+  assert.equal(await readFile(path.join(fixture, 'output', 'keep.txt'), 'utf8'), 'preserve existing output');
 });

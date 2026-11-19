@@ -20,6 +20,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { toCollection, validateCollection, collectionImages } from '../wall/collection.mjs';
+import { assertDemoAnalytics } from './demo-analytics-contract.mjs';
 const run = promisify(execFile);
 const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : fallback; };
 const from = arg('--from', 'http://127.0.0.1:4174'), out = path.resolve(arg('--out', 'dist-demo')), width = Number(arg('--width', 480));
@@ -28,6 +29,9 @@ const reuse = arg('--reuse-corpus', null);
 // collection's relative images resolve against it, as do absolute ones on it.
 const site = new URL(arg('--site', 'https://andyed.github.io/clipwall-demo/')).href.replace(/\/?$/, '/');
 const published = reuse ? path.resolve(reuse) : null;
+// Reject an old analytics template before fetching the corpus or clearing output.
+const analyticsSource = await readFile('scripts/demo-analytics.js', 'utf8');
+assertDemoAnalytics(analyticsSource);
 if (published && !path.relative(out, published).startsWith(`..${path.sep}`)) {
   throw new Error('--reuse-corpus must be outside the output directory; build to a separate staging folder');
 }
@@ -140,7 +144,7 @@ await rewrite(path.join(out, 'index.html'), [['<head>', '<head>\n<meta name="wun
 // docs/DEMO_ANALYTICS.md lists the events; the script gates itself to the demo host.
 const version = await run('git', ['describe', '--tags', '--always', '--dirty']).then(r => r.stdout.trim(), () => 'unknown');
 await writeFile(path.join(out, 'analytics.js'),
-  (await readFile('scripts/demo-analytics.js', 'utf8')).replace("'__WUNDERKAMMER_DEMO_VERSION__'", JSON.stringify(version)));
+  analyticsSource.replace("'__WUNDERKAMMER_DEMO_VERSION__'", JSON.stringify(version)));
 // Ahead of wall.mjs, so it sees the URL the visitor opened and the wall's boot errors.
 await rewrite(path.join(out, 'index.html'), [['</head>', '<script type="module" src="analytics.js"></script>\n</head>']]);
 await writeFile(path.join(out, '.nojekyll'), '');
